@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gainz Train | High-Protein Meal Prep in Utah County</title>
+  <meta name="description" content="Weekly high-protein meal prep subscriptions for gym-goers in Utah County. Fresh meals every week. From $8.50/meal. Pickup and delivery on Sundays." />
+  <meta name="robots" content="noindex" />
+  <link rel="stylesheet" href="assets/css/global-light.css" />
+
+  <style>
+    /* ================================================
+       GAINZ TRAIN — SPORTS EDITORIAL LAYOUT
+       ================================================ */
+
+    body { background: var(--surface-light); }
+
+    /* ── NAV ── */
+    .nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      padding: 1.2rem var(--gap-md);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+    .nav.scrolled {
+      background: rgba(250,250,248,0.97);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 1px 0 rgba(26,22,20,0.08);
+    }
+    .nav-logo { display: flex; flex-direction: column; line-height: 1; }
+    .nav-logo-text {
+      font-family: var(--font-head);
+      font-weight: 900;
+      font-size: 1.5rem;
+      letter-spacing: 0.05em;
+    }
+    .logo-gainz { color: #ffffff; }
+    .logo-train { color: var(--orange); }
+    .nav-logo-tagline {
+      font-family: var(--font-head);
+      font-size: 0.48rem;
+      letter-spacing: 0.35em;
+      color: rgba(255,255,255,0.5);
+      margin-top: 3px;
+      text-transform: uppercase;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: var(--gap-md);
+    }
+    .nav-links a {
+      font-family: var(--font-head);
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.75);
+      transition: color var(--transition);
+    }
+    .nav-links a:hover { color: #ffffff; }
+    .nav-cta { padding: 0.6rem 1.4rem; font-size: 0.9rem; }
+    .nav.scrolled .logo-gainz { color: var(--black); }
+    .nav.scrolled .nav-logo-tagline { color: var(--text-muted); }
+    .nav.scrolled .nav-links a { color: var(--text-muted); }
+    .nav.scrolled .nav-links a:hover { color: var(--black); }
+    .nav.scrolled .nav-toggle span { background: var(--black); }
+
+    .nav-toggle {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.5rem;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .nav-toggle span {
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: #ffffff;
+      transition: transform 0.3s ease;
+    }
+    .nav-mobile {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--white);
+      z-index: 999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--gap-md);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .nav-mobile.open { opacity: 1; pointer-events: all; }
+    .nav-mobile-close {
+      position: absolute;
+      top: var(--gap-md);
+      right: var(--gap-md);
+      background: none;
+      border: none;
+      color: var(--black);
+      font-size: 2.5rem;
+      cursor: pointer;
+    }
+    .nav-mobile a {
+      font-family: var(--font-head);
+      font-size: clamp(2.5rem, 8vw, 3.5rem);
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      transition: color var(--transition);
+    }
+    .nav-mobile a:hover { color: var(--orange); }
+    @media (max-width: 768px) {
+      .nav-links, .nav-cta { display: none; }
+      .nav-toggle { display: flex; }
+      .nav-mobile { display: flex; }
+    }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-end;
+      padding-top: 80px;
+      padding-bottom: var(--gap-xl);
+      overflow: hidden;
+      background: #0a0a0a;
+    }
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center top;
+      opacity: 0.5;
+    }
+    .hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to top,
+        rgba(10,10,10,0.97) 0%,
+        rgba(10,10,10,0.55) 50%,
+        rgba(10,10,10,0.3) 100%
+      );
+    }
+    /* Diagonal cut at bottom */
+    .hero-cut {
+      position: absolute;
+      bottom: -1px; left: 0; right: 0;
+      height: 100px;
+      background: var(--surface-light);
+      clip-path: polygon(0 100%, 100% 30%, 100% 100%);
+      z-index: 2;
+    }
+    .hero-inner {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: var(--max-width);
+      margin: 0 auto;
+      padding: 0 var(--gap-md);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: flex-end;
+      gap: var(--gap-lg);
+    }
+    .hero-left { max-width: 780px; }
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-family: var(--font-head);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 1rem;
+      opacity: 0;
+      animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.2s forwards;
+    }
+    .hero-eyebrow::before {
+      content: '';
+      display: block;
+      width: 28px;
+      height: 2px;
+      background: var(--orange);
+      flex-shrink: 0;
+    }
+    .hero h1 {
+      font-size: clamp(5rem, 11vw, 12rem);
+      line-height: 0.87;
+      color: #ffffff;
+      margin-bottom: var(--gap-md);
+      opacity: 0;
+      animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.3s forwards;
+    }
+    .hero-sub {
+      font-size: 1.1rem;
+      color: rgba(255,255,255,0.65);
+      max-width: 500px;
+      line-height: 1.7;
+      margin-bottom: var(--gap-md);
+      opacity: 0;
+      animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.45s forwards;
+    }
+    .hero-actions {
+      display: flex;
+      gap: var(--gap-sm);
+      flex-wrap: wrap;
+      opacity: 0;
+      animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.6s forwards;
+    }
+    .hero .btn-outline {
+      color: rgba(255,255,255,0.85);
+      border-color: rgba(255,255,255,0.3);
+    }
+    .hero .btn-outline:hover {
+      background: rgba(255,255,255,0.1);
+      border-color: rgba(255,255,255,0.7);
+    }
+    /* Vertical stat block in hero — right side */
+    .hero-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2rem;
+      opacity: 0;
+      animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.7s forwards;
+    }
+    .hero-stat {
+      text-align: right;
+      border-right: 3px solid var(--orange);
+      padding-right: 1.2rem;
+    }
+    .hero-stat-num {
+      font-family: var(--font-head);
+      font-size: 2.8rem;
+      font-weight: 900;
+      color: #ffffff;
+      line-height: 1;
+      display: block;
+    }
+    .hero-stat-label {
+      font-family: var(--font-head);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.4);
+      display: block;
+      margin-top: 0.2rem;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @media (max-width: 900px) {
+      .hero { align-items: center; padding-bottom: 120px; }
+      .hero-inner { grid-template-columns: 1fr; }
+      .hero-right { flex-direction: row; align-items: flex-start; }
+      .hero-stat { text-align: left; border-right: none; border-left: 3px solid var(--orange); padding-right: 0; padding-left: 1.2rem; }
+      .hero h1 { font-size: clamp(4rem, 14vw, 7rem); }
+    }
+
+    /* ── MARQUEE ── */
+    .marquee {
+      background: var(--orange);
+      padding: 0.9rem 0;
+      overflow: hidden;
+      white-space: nowrap;
+      position: relative;
+      z-index: 1;
+    }
+    .marquee-track {
+      display: inline-flex;
+      align-items: center;
+      animation: marqueeScroll 28s linear infinite;
+      width: max-content;
+    }
+    .marquee-item {
+      font-family: var(--font-head);
+      font-weight: 800;
+      font-size: 0.85rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.95);
+      padding: 0 0.5rem;
+    }
+    .marquee-sep {
+      color: rgba(255,255,255,0.4);
+      font-size: 1rem;
+      padding: 0 1.5rem;
+    }
+    @keyframes marqueeScroll {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    /* ── EDITORIAL STATS ── */
+    .stats-section {
+      padding: var(--gap-xl) 0 var(--gap-lg);
+      background: var(--surface-light);
+    }
+    .stats-editorial {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-top: 2px solid var(--black);
+      border-left: 2px solid var(--black);
+    }
+    .stat-block {
+      padding: var(--gap-md) var(--gap-md) var(--gap-lg);
+      border-right: 2px solid var(--black);
+      border-bottom: 2px solid var(--black);
+    }
+    .stat-block-num {
+      font-family: var(--font-head);
+      font-size: clamp(4.5rem, 7vw, 7.5rem);
+      font-weight: 900;
+      color: var(--orange);
+      line-height: 0.9;
+      display: block;
+      margin-bottom: 0.75rem;
+    }
+    .stat-block-label {
+      font-family: var(--font-head);
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--black);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    .stat-block-desc {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    @media (max-width: 768px) {
+      .stats-editorial { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 480px) {
+      .stats-editorial { grid-template-columns: 1fr; }
+    }
+
+    /* ── FEATURED QUOTE ── */
+    .quote-section {
+      background: var(--black);
+      padding: var(--gap-xl) 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .quote-bg-mark {
+      position: absolute;
+      top: -4rem;
+      left: -3rem;
+      font-family: var(--font-head);
+      font-size: 38rem;
+      font-weight: 900;
+      line-height: 1;
+      color: rgba(255,107,53,0.05);
+      pointer-events: none;
+      user-select: none;
+    }
+    .quote-inner {
+      max-width: var(--max-width);
+      margin: 0 auto;
+      padding: 0 var(--gap-md);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: var(--gap-xl);
+      align-items: center;
+    }
+    .quote-text {
+      font-family: var(--font-head);
+      font-size: clamp(1.8rem, 3.5vw, 3.2rem);
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.12;
+      position: relative;
+      z-index: 1;
+    }
+    .quote-text .highlight { color: var(--orange); }
+    .quote-attribution {
+      position: relative;
+      z-index: 1;
+      min-width: 220px;
+      border-left: 3px solid var(--orange);
+      padding-left: var(--gap-md);
+    }
+    .quote-result-badge {
+      display: inline-block;
+      background: rgba(255,107,53,0.15);
+      color: var(--orange);
+      border: 1px solid rgba(255,107,53,0.35);
+      font-family: var(--font-head);
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 0.35rem 0.85rem;
+      border-radius: 2rem;
+      margin-bottom: 1rem;
+      display: block;
+      width: fit-content;
+    }
+    .quote-name {
+      font-family: var(--font-head);
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: #ffffff;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .quote-meta {
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.4);
+      margin-top: 0.25rem;
+    }
+    @media (max-width: 768px) {
+      .quote-inner { grid-template-columns: 1fr; gap: var(--gap-lg); }
+      .quote-attribution { border-left: none; border-top: 3px solid var(--orange); padding-left: 0; padding-top: var(--gap-md); }
+    }
+
+    /* ── WHY GAINZ TRAIN — EDITORIAL ── */
+    .why-section {
+      padding: var(--gap-xl) 0;
+      background: var(--surface-light);
+    }
+    .why-editorial {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--gap-xl);
+      align-items: start;
+    }
+    .why-left { position: sticky; top: 120px; }
+    .why-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-family: var(--font-head);
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: var(--gap-sm);
+    }
+    .why-eyebrow::before {
+      content: '';
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: var(--orange);
+    }
+    .why-left h2 {
+      font-size: clamp(3rem, 5.5vw, 5.5rem);
+      line-height: 0.9;
+      margin-bottom: var(--gap-md);
+    }
+    .why-left p {
+      font-size: 1rem;
+      line-height: 1.75;
+      max-width: 420px;
+    }
+    .why-items {
+      display: flex;
+      flex-direction: column;
+    }
+    .why-item {
+      display: grid;
+      grid-template-columns: 3rem 1fr;
+      gap: var(--gap-sm);
+      padding: var(--gap-md) 0;
+      border-bottom: 1px solid var(--surface-dark);
+      align-items: start;
+    }
+    .why-item:first-child { border-top: 1px solid var(--surface-dark); }
+    .why-item-num {
+      font-family: var(--font-head);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      color: var(--orange);
+      padding-top: 0.3rem;
+    }
+    .why-item h4 {
+      font-size: 1.15rem;
+      margin-bottom: 0.35rem;
+      color: var(--black);
+    }
+    .why-item p { font-size: 0.92rem; margin: 0; }
+    @media (max-width: 768px) {
+      .why-editorial { grid-template-columns: 1fr; }
+      .why-left { position: static; }
+    }
+
+    /* ── MEALS — ASYMMETRIC GRID ── */
+    .meals-section {
+      background: var(--surface-mid);
+      padding: var(--gap-xl) 0;
+    }
+    .meals-header {
+      margin-bottom: var(--gap-lg);
+    }
+    .meals-header .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-family: var(--font-head);
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: var(--gap-sm);
+    }
+    .meals-header .section-label::before {
+      content: '';
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: var(--orange);
+    }
+    .meals-header h2 { margin-bottom: 0.5rem; }
+
+    .meals-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: var(--gap-sm);
+      height: 580px;
+      margin-bottom: var(--gap-lg);
+    }
+    .meal-feature {
+      grid-row: 1 / 3;
+      position: relative;
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+    }
+    .meal-feature img,
+    .meal-secondary img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.6s ease;
+    }
+    .meal-feature:hover img,
+    .meal-secondary:hover img {
+      transform: scale(1.04);
+    }
+    .meal-feature-info {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: var(--gap-md);
+      background: linear-gradient(transparent, rgba(10,10,10,0.88));
+      z-index: 1;
+    }
+    .meal-feature-name {
+      font-family: var(--font-head);
+      font-size: 1.6rem;
+      font-weight: 900;
+      color: #ffffff;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      line-height: 1;
+      margin-bottom: 0.5rem;
+    }
+    .meal-macros-dark {
+      display: flex;
+      gap: var(--gap-sm);
+      flex-wrap: wrap;
+    }
+    .macro-tag {
+      font-family: var(--font-head);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+    }
+    .macro-tag strong { color: var(--orange); }
+
+    .meal-secondary {
+      position: relative;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .meal-secondary-info {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: var(--gap-sm) var(--gap-md);
+      background: linear-gradient(transparent, rgba(10,10,10,0.85));
+    }
+    .meal-secondary-name {
+      font-family: var(--font-head);
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: #ffffff;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    @media (max-width: 768px) {
+      .meals-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: 320px 200px 200px;
+        height: auto;
+      }
+      .meal-feature { grid-row: auto; }
+    }
+
+    /* ── HOW IT WORKS — EDITORIAL ── */
+    .steps-section {
+      padding: var(--gap-xl) 0;
+      background: var(--white);
+    }
+    .steps-editorial {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      border-top: 2px solid var(--surface-dark);
+      margin-top: var(--gap-lg);
+    }
+    .step-ed {
+      padding: var(--gap-md);
+      border-right: 2px solid var(--surface-dark);
+      position: relative;
+      overflow: hidden;
+    }
+    .step-ed:last-child { border-right: none; }
+    .step-ghost-num {
+      position: absolute;
+      top: -2rem;
+      right: -1rem;
+      font-family: var(--font-head);
+      font-size: 10rem;
+      font-weight: 900;
+      color: rgba(255,107,53,0.07);
+      line-height: 1;
+      pointer-events: none;
+      user-select: none;
+    }
+    .step-ed-num {
+      display: inline-block;
+      font-family: var(--font-head);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      color: var(--orange);
+      border: 2px solid var(--orange);
+      padding: 0.2rem 0.6rem;
+      margin-bottom: var(--gap-sm);
+      text-transform: uppercase;
+    }
+    .step-ed h4 {
+      font-size: 1.15rem;
+      margin-bottom: 0.5rem;
+      position: relative;
+      z-index: 1;
+    }
+    .step-ed p {
+      font-size: 0.9rem;
+      position: relative;
+      z-index: 1;
+    }
+    @media (max-width: 768px) {
+      .steps-editorial { grid-template-columns: 1fr 1fr; }
+      .step-ed { border-bottom: 2px solid var(--surface-dark); }
+    }
+    @media (max-width: 480px) {
+      .steps-editorial { grid-template-columns: 1fr; }
+    }
+
+    /* ── ABOUT TEASER ── */
+    .about-section {
+      padding: var(--gap-xl) 0;
+      background: var(--surface-mid);
+    }
+    .about-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--gap-xl);
+      align-items: center;
+    }
+    .about-image {
+      position: relative;
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      aspect-ratio: 4/5;
+    }
+    .about-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    /* Orange accent corner */
+    .about-image::after {
+      content: '';
+      position: absolute;
+      bottom: 0; right: 0;
+      width: 80px;
+      height: 80px;
+      background: var(--orange);
+      clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    }
+    .about-content .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-family: var(--font-head);
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: var(--gap-sm);
+    }
+    .about-content .section-label::before {
+      content: '';
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: var(--orange);
+    }
+    .about-content h2 { margin-bottom: var(--gap-md); }
+    .about-content p { margin-bottom: var(--gap-sm); }
+    @media (max-width: 768px) {
+      .about-split { grid-template-columns: 1fr; }
+    }
+
+    /* ── GUARANTEE STRIP ── */
+    .guarantee-section {
+      background: var(--white);
+      padding: var(--gap-lg) 0;
+      border-top: 2px solid var(--surface-dark);
+      border-bottom: 2px solid var(--surface-dark);
+    }
+    .guarantee-inner {
+      display: flex;
+      align-items: center;
+      gap: var(--gap-lg);
+      flex-wrap: wrap;
+    }
+    .guarantee-icon {
+      font-size: 3rem;
+      flex-shrink: 0;
+    }
+    .guarantee-text { flex: 1; min-width: 240px; }
+    .guarantee-text h3 { font-size: clamp(1.4rem, 2.5vw, 2rem); margin-bottom: 0.4rem; }
+    .guarantee-text p { margin: 0; }
+
+    /* ── CTA — FULL ORANGE ── */
+    .cta-orange {
+      background: var(--orange);
+      padding: var(--gap-xl) 0;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-orange::before {
+      content: 'FUEL';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: var(--font-head);
+      font-size: 28vw;
+      font-weight: 900;
+      color: rgba(255,255,255,0.04);
+      pointer-events: none;
+      white-space: nowrap;
+      line-height: 1;
+    }
+    .cta-orange .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-family: var(--font-head);
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: var(--gap-sm);
+      justify-content: center;
+    }
+    .cta-orange .section-label::before {
+      content: '';
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: rgba(255,255,255,0.7);
+    }
+    .cta-orange h2 {
+      color: #ffffff;
+      font-size: clamp(3rem, 8vw, 8rem);
+      line-height: 0.88;
+      margin-bottom: var(--gap-md);
+      position: relative;
+    }
+    .cta-orange p {
+      color: rgba(255,255,255,0.75);
+      font-size: 1.1rem;
+      margin-bottom: var(--gap-lg);
+      position: relative;
+    }
+    .cta-actions {
+      display: flex;
+      gap: var(--gap-sm);
+      justify-content: center;
+      flex-wrap: wrap;
+      position: relative;
+    }
+    .cta-orange .btn-primary {
+      background: #ffffff;
+      color: var(--orange);
+      box-shadow: none;
+    }
+    .cta-orange .btn-primary:hover {
+      background: rgba(255,255,255,0.9);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    }
+    .cta-orange .btn-outline {
+      color: #ffffff;
+      border-color: rgba(255,255,255,0.5);
+    }
+    .cta-orange .btn-outline:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.9);
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      background: var(--black);
+      color: rgba(255,255,255,0.55);
+      padding: var(--gap-xl) 0 var(--gap-md);
+    }
+    .footer-top {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: var(--gap-xl);
+      padding-bottom: var(--gap-lg);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      margin-bottom: var(--gap-md);
+    }
+    .footer-logo-text {
+      font-family: var(--font-head);
+      font-weight: 900;
+      font-size: 2rem;
+      letter-spacing: 0.05em;
+      line-height: 1;
+      display: block;
+      margin-bottom: 0.3rem;
+    }
+    .footer-logo-text .logo-gainz { color: rgba(255,255,255,0.6); }
+    .footer-logo-text .logo-train { color: var(--orange); }
+    .footer-logo-tagline {
+      font-family: var(--font-head);
+      font-size: 0.6rem;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+      display: block;
+      margin-bottom: var(--gap-sm);
+    }
+    .footer-brand p { font-size: 0.88rem; line-height: 1.65; max-width: 320px; }
+    .footer-col h5 {
+      font-family: var(--font-head);
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.35);
+      margin-bottom: var(--gap-sm);
+    }
+    .footer-col ul { display: flex; flex-direction: column; gap: 0.5rem; }
+    .footer-col a {
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.55);
+      transition: color 0.2s ease;
+    }
+    .footer-col a:hover { color: var(--orange); }
+    .footer-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .footer-copy { font-size: 0.8rem; }
+    .footer-social a {
+      color: rgba(255,255,255,0.35);
+      transition: color 0.2s ease;
+    }
+    .footer-social a:hover { color: var(--orange); }
+    @media (max-width: 768px) {
+      .footer-top { grid-template-columns: 1fr; gap: var(--gap-md); }
+    }
+
+    /* ── SCROLL ANIMATIONS ── */
+    .fade-up {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .fade-up.visible { opacity: 1; transform: translateY(0); }
+    .fade-up:nth-child(1) { transition-delay: 0s; }
+    .fade-up:nth-child(2) { transition-delay: 0.08s; }
+    .fade-up:nth-child(3) { transition-delay: 0.16s; }
+    .fade-up:nth-child(4) { transition-delay: 0.24s; }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav" role="navigation">
+    <a href="/" class="nav-logo">
+      <span class="nav-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></span>
+      <span class="nav-logo-tagline">Fuel Your Engine</span>
+    </a>
+    <div class="nav-links">
+      <a href="/meals/">Meals</a>
+      <a href="/how-it-works/">How It Works</a>
+      <a href="/subscribe/">Pricing</a>
+      <a href="/about/">About</a>
+      <a href="/subscribe/" class="btn btn-primary nav-cta">Start Today</a>
+    </div>
+    <button class="nav-toggle" aria-label="Open menu">
+      <span></span><span></span><span></span>
+    </button>
+  </nav>
+
+  <!-- MOBILE NAV -->
+  <div class="nav-mobile">
+    <button class="nav-mobile-close">&times;</button>
+    <a href="/meals/">Meals</a>
+    <a href="/how-it-works/">How It Works</a>
+    <a href="/subscribe/">Pricing</a>
+    <a href="/about/">About</a>
+    <a href="/contact/">Contact</a>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg" style="background-image: url('assets/images/meals/meal-trio.png');"></div>
+    <div class="hero-overlay"></div>
+    <div class="hero-cut"></div>
+    <div class="hero-inner">
+      <div class="hero-left">
+        <div class="hero-eyebrow">Utah County's Performance Meal Prep</div>
+        <h1>Eat Like<br>You <span class="highlight">Train.</span></h1>
+        <p class="hero-sub">130+ fresh meals prepped every week for people who actually show up. Hit your protein. Skip the cooking. Stay consistent.</p>
+        <div class="hero-actions">
+          <a href="/subscribe/" class="btn btn-primary btn-pulse">See Plans &rarr;</a>
+          <a href="https://menu.gainztrainprep.com" target="_blank" rel="noopener" class="btn btn-outline">This Week's Menu</a>
+        </div>
+      </div>
+      <div class="hero-right">
+        <div class="hero-stat">
+          <span class="hero-stat-num">130+</span>
+          <span class="hero-stat-label">Meals / Week</span>
+        </div>
+        <div class="hero-stat">
+          <span class="hero-stat-num">$8.50</span>
+          <span class="hero-stat-label">Starting / Meal</span>
+        </div>
+        <div class="hero-stat">
+          <span class="hero-stat-num">Sun</span>
+          <span class="hero-stat-label">Pickup Day</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MARQUEE -->
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track">
+      <!-- Set 1 -->
+      <span class="marquee-item">High Protein</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Fresh Every Week</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">From $8.50 / Meal</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Never Frozen</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Utah County</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Macro Transparent</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Sunday Pickup</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Built for the Gym</span>
+      <span class="marquee-sep">·</span>
+      <!-- Set 2 (duplicate for seamless loop) -->
+      <span class="marquee-item">High Protein</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Fresh Every Week</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">From $8.50 / Meal</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Never Frozen</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Utah County</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Macro Transparent</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Sunday Pickup</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Built for the Gym</span>
+      <span class="marquee-sep">·</span>
+    </div>
+  </div>
+
+  <!-- EDITORIAL STATS -->
+  <section class="stats-section">
+    <div class="container">
+      <div class="stats-editorial">
+        <div class="stat-block fade-up">
+          <span class="stat-block-num">130+</span>
+          <span class="stat-block-label">Meals Every Week</span>
+          <p class="stat-block-desc">Not a side project. A real system, prepped fresh every Saturday in Utah County.</p>
+        </div>
+        <div class="stat-block fade-up">
+          <span class="stat-block-num">$8.50</span>
+          <span class="stat-block-label">Starting Per Meal</span>
+          <p class="stat-block-desc">Factor charges $11–15. Trifecta $13+. You get the same macros, fresher food, no shipping.</p>
+        </div>
+        <div class="stat-block fade-up">
+          <span class="stat-block-num">40g+</span>
+          <span class="stat-block-label">Protein Per Meal</span>
+          <p class="stat-block-desc">Every meal is built around protein first. Know exactly what you're eating every single day.</p>
+        </div>
+        <div class="stat-block fade-up">
+          <span class="stat-block-num">1 Day</span>
+          <span class="stat-block-label">Freshness Window</span>
+          <p class="stat-block-desc">Prepped Saturday. In your hands Sunday. Not frozen, not shipped across the country.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURED QUOTE -->
+  <section class="quote-section">
+    <div class="quote-bg-mark">&ldquo;</div>
+    <div class="quote-inner">
+      <p class="quote-text fade-up">
+        &ldquo;Down 18 lbs in 3 months. I finally stopped eating out every night. Knowing my meals are ready every Sunday is the <span class="highlight">only reason I stayed consistent.</span>&rdquo;
+      </p>
+      <div class="quote-attribution fade-up">
+        <span class="quote-result-badge">&#10003; Down 18 lbs</span>
+        <p class="quote-name">Jake M.</p>
+        <p class="quote-meta">Athlete Plan &bull; 12 meals/week</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHY GAINZ TRAIN — EDITORIAL -->
+  <section class="why-section">
+    <div class="container">
+      <div class="why-editorial">
+        <div class="why-left fade-up">
+          <div class="why-eyebrow">The Difference</div>
+          <h2>Built for <span class="highlight">Performance.</span><br>Not a Diet Trend.</h2>
+          <p>Every decision we make is built around one thing: helping you hit your goals without adding friction to your week. No wellness speak. No frozen boxes. Just real food that works.</p>
+        </div>
+        <div class="why-items">
+          <div class="why-item fade-up">
+            <span class="why-item-num">01</span>
+            <div>
+              <h4>High Protein, Every Meal</h4>
+              <p>Protein first, always. No fillers, no fluff. Every meal is engineered around what actually moves the needle in the gym.</p>
+            </div>
+          </div>
+          <div class="why-item fade-up">
+            <span class="why-item-num">02</span>
+            <div>
+              <h4>Macro Transparent</h4>
+              <p>Exact protein, carbs, fat, and calories on every meal. Track with confidence. No more guessing what's actually in your food.</p>
+            </div>
+          </div>
+          <div class="why-item fade-up">
+            <span class="why-item-num">03</span>
+            <div>
+              <h4>30–50% Less Than Factor</h4>
+              <p>From $8.50/meal vs. $11–15 nationally. Same macros, fresher prep, zero shipping cost. Local always wins.</p>
+            </div>
+          </div>
+          <div class="why-item fade-up">
+            <span class="why-item-num">04</span>
+            <div>
+              <h4>New Menu Every Week</h4>
+              <p>You pick exactly what you want from a rotating weekly menu. We cook Saturday. You pick up Sunday. Simple.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MEALS — ASYMMETRIC GRID -->
+  <section class="meals-section">
+    <div class="container">
+      <div class="meals-header fade-up">
+        <div class="section-label">The Menu</div>
+        <h2>Food That <span class="highlight">Actually</span> Tastes Good.</h2>
+      </div>
+      <div class="meals-grid">
+        <!-- Big feature meal -->
+        <div class="meal-feature fade-up">
+          <img src="assets/images/meals/meal-rice-bowl.png" alt="Brotatoe Bowl high-protein meal prep" />
+          <div class="meal-feature-info">
+            <p class="meal-feature-name">Brotatoe Bowl</p>
+            <div class="meal-macros-dark">
+              <span class="macro-tag"><strong>38g</strong> Protein</span>
+              <span class="macro-tag"><strong>45g</strong> Carbs</span>
+              <span class="macro-tag"><strong>10g</strong> Fat</span>
+              <span class="macro-tag"><strong>418</strong> Cal</span>
+            </div>
+          </div>
+        </div>
+        <!-- Top right -->
+        <div class="meal-secondary fade-up">
+          <img src="assets/images/meals/meal-chicken-herbs.png" alt="Grilled Chicken high-protein meal" />
+          <div class="meal-secondary-info">
+            <p class="meal-secondary-name">Grilled Chicken &amp; Rice</p>
+          </div>
+        </div>
+        <!-- Bottom right -->
+        <div class="meal-secondary fade-up">
+          <img src="assets/images/meals/meal-chicken-asparagus.png" alt="Chicken and Asparagus meal prep" />
+          <div class="meal-secondary-info">
+            <p class="meal-secondary-name">Chicken &amp; Asparagus</p>
+          </div>
+        </div>
+      </div>
+      <div style="text-align: center;">
+        <a href="/meals/" class="btn btn-dark">See Full Meal Catalog &rarr;</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS — EDITORIAL STEPS -->
+  <section class="steps-section">
+    <div class="container">
+      <div class="section-header fade-up">
+        <div class="section-label" style="display:inline-flex;align-items:center;gap:.75rem;font-family:var(--font-head);font-size:.8rem;font-weight:800;letter-spacing:.25em;text-transform:uppercase;color:var(--orange);margin-bottom:var(--gap-sm);">
+          <span style="display:block;width:24px;height:2px;background:var(--orange);"></span>The Process
+        </div>
+        <h2>How It <span class="highlight">Works.</span></h2>
+        <p>Simpler than cooking. Cheaper than eating out. Better than frozen.</p>
+      </div>
+      <div class="steps-editorial">
+        <div class="step-ed fade-up">
+          <span class="step-ghost-num">1</span>
+          <span class="step-ed-num">Step 01</span>
+          <h4>Pick Your Plan</h4>
+          <p>Choose 6–16 meals/week based on your goals. Starter, Athlete, or Elite — all flexible, cancel anytime.</p>
+        </div>
+        <div class="step-ed fade-up">
+          <span class="step-ghost-num">2</span>
+          <span class="step-ed-num">Step 02</span>
+          <h4>Choose Your Meals</h4>
+          <p>Every week, browse the rotating menu at menu.gainztrainprep.com and lock in your picks before Friday cutoff.</p>
+        </div>
+        <div class="step-ed fade-up">
+          <span class="step-ghost-num">3</span>
+          <span class="step-ed-num">Step 03</span>
+          <h4>We Prep Saturday</h4>
+          <p>Fresh, never frozen. Portioned to your goal — Cut, Maintain, or Build. Prepped in a commercial kitchen.</p>
+        </div>
+        <div class="step-ed fade-up">
+          <span class="step-ghost-num">4</span>
+          <span class="step-ed-num">Step 04</span>
+          <h4>Pick Up &amp; Fuel</h4>
+          <p>Sunday pickup or delivery in Utah County. Your week of food handled. Go train.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT TEASER -->
+  <section class="about-section">
+    <div class="container">
+      <div class="about-split">
+        <div class="about-image fade-up">
+          <img src="assets/images/meals/meal-prep-bowl.png" alt="Gainz Train meal prep" />
+        </div>
+        <div class="about-content fade-up">
+          <div class="section-label">Our Story</div>
+          <h2>Built by Guys Who <span class="highlight">Actually</span> Train.</h2>
+          <p>We were tired of eating dry chicken out of a Ziploc bag or spending $14 on a frozen meal that tasted like cardboard.</p>
+          <p>Jayson has been prepping his own meals for 4 years — counting macros, training hard, figuring out what actually works. He built this system for himself first. Now it feeds 130+ people every week in Utah County.</p>
+          <a href="/about/" class="btn btn-dark" style="margin-top:var(--gap-sm);">Meet the Team &rarr;</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GUARANTEE -->
+  <section class="guarantee-section">
+    <div class="container">
+      <div class="guarantee-inner fade-up">
+        <div class="guarantee-icon">&#128293;</div>
+        <div class="guarantee-text">
+          <h3>Try Your First Week — <span class="highlight">Risk Free.</span></h3>
+          <p>Not happy with your first week? We'll make it right. No hoops, no headaches. We stand behind every meal we prep.</p>
+        </div>
+        <a href="/subscribe/" class="btn btn-primary" style="flex-shrink:0;">Get Started &rarr;</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA — FULL ORANGE -->
+  <div class="cta-orange">
+    <div class="container">
+      <div class="section-label">Ready to Board?</div>
+      <h2>Stop Guessing.<br>Start <span style="color:rgba(255,255,255,0.5);">Fueling.</span></h2>
+      <p>Pick your plan, choose your meals, and show up to Sunday pickup ready to win your week.</p>
+      <div class="cta-actions">
+        <a href="/subscribe/" class="btn btn-primary btn-pulse">See All Plans &rarr;</a>
+        <a href="/how-it-works/" class="btn btn-outline">How It Works</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <span class="footer-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></span>
+          <span class="footer-logo-tagline">Fuel Your Engine</span>
+          <p>High-protein weekly meal prep for people serious about their goals. Fresh every Saturday. Pickup and delivery on Sundays in Utah County.</p>
+        </div>
+        <div class="footer-col">
+          <h5>Pages</h5>
+          <ul>
+            <li><a href="/meals/">Meal Catalog</a></li>
+            <li><a href="/how-it-works/">How It Works</a></li>
+            <li><a href="/subscribe/">Pricing &amp; Plans</a></li>
+            <li><a href="/about/">About Us</a></li>
+            <li><a href="/contact/">Contact</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Get Started</h5>
+          <ul>
+            <li><a href="https://menu.gainztrainprep.com" target="_blank" rel="noopener">This Week's Menu</a></li>
+            <li><a href="/subscribe/">Athlete Plan</a></li>
+            <li><a href="/subscribe/">Elite Plan</a></li>
+            <li><a href="tel:+13853278045">(385) 327-8045</a></li>
+            <li><a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener">@gainztrainprep</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p class="footer-copy">&copy; 2026 Gainz Train. All rights reserved. &bull; Utah County, UT</p>
+        <div class="footer-social">
+          <a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener" aria-label="Instagram">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>

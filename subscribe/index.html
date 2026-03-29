@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pricing &amp; Plans | Gainz Train Meal Prep Subscriptions</title>
+  <meta name="description" content="Choose your Gainz Train meal prep plan. Starter from $10.50/meal, Athlete from $9.50/meal, Elite from $8.50/meal. 6-16 meals/week. Cancel anytime." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://gainztrainprep.com/subscribe/" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "OfferCatalog",
+    "name": "Gainz Train Meal Prep Plans",
+    "url": "https://gainztrainprep.com/subscribe/",
+    "itemListElement": [
+      {
+        "@type": "Offer",
+        "name": "Starter Plan",
+        "description": "6-9 meals per week at $10.50 per meal",
+        "priceCurrency": "USD",
+        "price": "10.50"
+      },
+      {
+        "@type": "Offer",
+        "name": "Athlete Plan",
+        "description": "10-13 meals per week at $9.50 per meal",
+        "priceCurrency": "USD",
+        "price": "9.50"
+      },
+      {
+        "@type": "Offer",
+        "name": "Elite Plan",
+        "description": "14-16 meals per week at $8.50 per meal",
+        "priceCurrency": "USD",
+        "price": "8.50"
+      }
+    ]
+  }
+  </script>
+
+  <link rel="stylesheet" href="../assets/css/global-light.css" />
+  <link rel="stylesheet" href="../assets/css/editorial.css" />
+  <style>
+    /* ── PLAN CALCULATOR ── */
+    .calc-section {
+      background: var(--black);
+      padding: var(--gap-xl) 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .calc-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 60% 50%, rgba(255,107,53,0.08) 0%, transparent 65%);
+      pointer-events: none;
+    }
+    .calc-header { margin-bottom: var(--gap-lg); }
+    .calc-header .section-label {
+      display: inline-flex; align-items: center; gap: .75rem;
+      font-family: var(--font-head); font-size: .8rem; font-weight: 800;
+      letter-spacing: .25em; text-transform: uppercase; color: var(--orange);
+      margin-bottom: var(--gap-sm);
+    }
+    .calc-header .section-label::before {
+      content: ''; display: block; width: 24px; height: 2px; background: var(--orange);
+    }
+    .calc-header h2 { color: #fff; margin-bottom: .5rem; }
+    .calc-header p { color: rgba(255,255,255,.55); }
+
+    .calc-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--gap-xl);
+      align-items: start;
+    }
+    @media (max-width: 768px) { .calc-body { grid-template-columns: 1fr; } }
+
+    /* Form */
+    .calc-form { display: flex; flex-direction: column; gap: var(--gap-md); }
+    .calc-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-md); }
+    @media (max-width: 480px) { .calc-row { grid-template-columns: 1fr; } }
+
+    .calc-field { display: flex; flex-direction: column; gap: .5rem; }
+    .calc-field label {
+      font-family: var(--font-head); font-size: .72rem; font-weight: 800;
+      letter-spacing: .2em; text-transform: uppercase; color: rgba(255,255,255,.45);
+    }
+    .calc-field input[type="number"] {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: var(--radius);
+      color: #fff;
+      font-family: var(--font-head);
+      font-size: 1.2rem;
+      font-weight: 700;
+      padding: .75rem 1rem;
+      width: 100%;
+      transition: border-color .2s ease;
+      -moz-appearance: textfield;
+    }
+    .calc-field input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .calc-field input[type="number"]:focus {
+      outline: none; border-color: var(--orange);
+    }
+    .height-row { display: flex; align-items: center; gap: .5rem; }
+    .height-row input { width: 70px; }
+    .height-row span {
+      font-family: var(--font-head); font-size: .8rem; font-weight: 700;
+      letter-spacing: .1em; color: rgba(255,255,255,.4); flex-shrink: 0;
+    }
+
+    /* Toggle (Sex) */
+    .sex-toggle { display: flex; gap: 0; border: 1px solid rgba(255,255,255,.12); border-radius: var(--radius); overflow: hidden; }
+    .sex-btn {
+      flex: 1; padding: .7rem; background: transparent;
+      border: none; cursor: pointer;
+      font-family: var(--font-head); font-size: .9rem; font-weight: 800;
+      letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.4);
+      transition: background .2s ease, color .2s ease;
+    }
+    .sex-btn.active { background: var(--orange); color: #fff; }
+
+    /* Activity buttons */
+    .activity-grid {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: .4rem;
+    }
+    @media (max-width: 600px) { .activity-grid { grid-template-columns: repeat(3, 1fr); } }
+    .activity-btn {
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: var(--radius);
+      padding: .6rem .4rem;
+      cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: .2rem;
+      transition: all .2s ease;
+    }
+    .activity-btn strong {
+      font-family: var(--font-head); font-size: .85rem; font-weight: 800;
+      letter-spacing: .05em; text-transform: uppercase; color: rgba(255,255,255,.6);
+      display: block;
+    }
+    .activity-btn small {
+      font-size: .65rem; color: rgba(255,255,255,.3); text-align: center; line-height: 1.3;
+    }
+    .activity-btn.active {
+      background: rgba(255,107,53,.18); border-color: var(--orange);
+    }
+    .activity-btn.active strong { color: var(--orange); }
+
+    /* Goal buttons */
+    .goal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
+    .goal-opt {
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: var(--radius);
+      padding: .85rem .5rem;
+      cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: .3rem;
+      transition: all .2s ease; text-align: center;
+    }
+    .goal-opt .goal-icon { font-size: 1.4rem; }
+    .goal-opt strong {
+      font-family: var(--font-head); font-size: .9rem; font-weight: 800;
+      letter-spacing: .05em; text-transform: uppercase; color: rgba(255,255,255,.6);
+      display: block;
+    }
+    .goal-opt.active {
+      background: rgba(255,107,53,.18); border-color: var(--orange);
+    }
+    .goal-opt.active strong { color: var(--orange); }
+
+    .calc-submit {
+      width: 100%; justify-content: center;
+      font-size: 1.1rem; padding: 1rem;
+    }
+
+    /* Results panel */
+    .calc-results {
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: var(--radius-lg);
+      padding: var(--gap-lg);
+      display: none;
+    }
+    .calc-results.visible { display: block; }
+    .calc-results-placeholder {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 340px; gap: var(--gap-sm);
+      text-align: center;
+    }
+    .calc-placeholder-icon {
+      font-size: 3rem; opacity: .3;
+    }
+    .calc-placeholder-text {
+      font-family: var(--font-head); font-size: .8rem; font-weight: 700;
+      letter-spacing: .2em; text-transform: uppercase;
+      color: rgba(255,255,255,.2);
+    }
+
+    .result-stats {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: var(--gap-sm); margin-bottom: var(--gap-md);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      padding-bottom: var(--gap-md);
+    }
+    .result-stat { text-align: center; }
+    .result-num {
+      display: block; font-family: var(--font-head); font-size: 2.2rem;
+      font-weight: 900; color: var(--orange); line-height: 1;
+    }
+    .result-label {
+      display: block; font-family: var(--font-head); font-size: .65rem;
+      font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+      color: rgba(255,255,255,.35); margin-top: .3rem;
+    }
+    .result-rec {
+      font-family: var(--font-head); font-size: 1.15rem; font-weight: 700;
+      color: rgba(255,255,255,.85); line-height: 1.5; margin-bottom: var(--gap-md);
+    }
+    .result-rec .highlight { color: var(--orange); }
+    .result-rec strong { color: #fff; }
+    .result-scroll-hint {
+      font-family: var(--font-head); font-size: .72rem; font-weight: 700;
+      letter-spacing: .18em; text-transform: uppercase;
+      color: rgba(255,255,255,.3); text-align: center; margin-top: var(--gap-sm);
+      animation: pulse 2s ease infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: .3; } 50% { opacity: .7; }
+    }
+    .calc-error {
+      font-family: var(--font-head); font-size: .8rem; font-weight: 700;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: #f87171; margin-top: .5rem; display: none;
+    }
+
+    /* Tier card states set by calculator */
+    .tier-card.calc-recommended {
+      border-color: var(--orange) !important;
+      box-shadow: 0 0 0 3px rgba(255,107,53,.35), var(--shadow-hover);
+      transform: translateY(-6px);
+    }
+    .tier-card.calc-dimmed { opacity: .45; transform: none; }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav" role="navigation">
+    <a href="/" class="nav-logo">
+      <span class="nav-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></span>
+      <span class="nav-logo-tagline">Fuel Your Engine</span>
+    </a>
+    <div class="nav-links">
+      <a href="/meals/">Meals</a>
+      <a href="/how-it-works/">How It Works</a>
+      <a href="/subscribe/" style="color: var(--orange);">Pricing</a>
+      <a href="/about/">About</a>
+      <a href="/subscribe/" class="btn btn-primary nav-cta">Start Today</a>
+    </div>
+    <button class="nav-toggle" aria-label="Open menu"><span></span><span></span><span></span></button>
+  </nav>
+
+  <div class="nav-mobile" role="dialog">
+    <button class="nav-mobile-close">&times;</button>
+    <a href="/meals/">Meals</a>
+    <a href="/how-it-works/">How It Works</a>
+    <a href="/subscribe/">Pricing</a>
+    <a href="/about/">About</a>
+    <a href="/contact/">Contact</a>
+  </div>
+
+  <!-- PAGE HERO -->
+  <div class="page-hero">
+    <div class="container">
+      <div class="section-label">Pricing &amp; Plans</div>
+      <h1>Pick Your <span class="highlight">Plan.</span></h1>
+      <p>6 to 16 meals a week. Cancel anytime. The more meals, the better the price — and the fewer decisions you have to make about food.</p>
+    </div>
+  </div>
+
+  <!-- MARQUEE -->
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track">
+      <span class="marquee-item">High Protein</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Fresh Every Week</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">From $8.50 / Meal</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Never Frozen</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Utah County</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Macro Transparent</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Sunday Pickup</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Cancel Anytime</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">High Protein</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Fresh Every Week</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">From $8.50 / Meal</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Never Frozen</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Utah County</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Macro Transparent</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Sunday Pickup</span>
+      <span class="marquee-sep">·</span>
+      <span class="marquee-item">Cancel Anytime</span>
+      <span class="marquee-sep">·</span>
+    </div>
+  </div>
+
+  <!-- PLAN CALCULATOR -->
+  <section class="calc-section">
+    <div class="container">
+      <div class="calc-header fade-up">
+        <div class="section-label">Plan Calculator</div>
+        <h2>What Does Your Body <span class="highlight">Actually Need?</span></h2>
+        <p>Enter your stats. We'll calculate your protein target and tell you exactly which plan covers you.</p>
+      </div>
+
+      <div class="calc-body">
+        <!-- FORM -->
+        <form class="calc-form" id="planCalc" novalidate>
+
+          <div class="calc-row">
+            <!-- Sex -->
+            <div class="calc-field">
+              <label>Sex</label>
+              <div class="sex-toggle">
+                <button type="button" class="sex-btn active" data-sex="male">Male</button>
+                <button type="button" class="sex-btn" data-sex="female">Female</button>
+              </div>
+            </div>
+            <!-- Age -->
+            <div class="calc-field">
+              <label>Age</label>
+              <input type="number" id="calcAge" min="16" max="80" placeholder="25" inputmode="numeric" />
+            </div>
+          </div>
+
+          <div class="calc-row">
+            <!-- Weight -->
+            <div class="calc-field">
+              <label>Weight (lbs)</label>
+              <input type="number" id="calcWeight" min="80" max="400" placeholder="185" inputmode="numeric" />
+            </div>
+            <!-- Height -->
+            <div class="calc-field">
+              <label>Height</label>
+              <div class="height-row">
+                <input type="number" id="calcFt" min="4" max="7" placeholder="5" inputmode="numeric" />
+                <span>ft</span>
+                <input type="number" id="calcIn" min="0" max="11" placeholder="10" inputmode="numeric" />
+                <span>in</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Activity -->
+          <div class="calc-field">
+            <label>Activity Level</label>
+            <div class="activity-grid">
+              <button type="button" class="activity-btn" data-mult="1.2">
+                <strong>Sedentary</strong>
+                <small>Desk job, little exercise</small>
+              </button>
+              <button type="button" class="activity-btn" data-mult="1.375">
+                <strong>Light</strong>
+                <small>1-3 days/week</small>
+              </button>
+              <button type="button" class="activity-btn active" data-mult="1.55">
+                <strong>Moderate</strong>
+                <small>3-5 days/week</small>
+              </button>
+              <button type="button" class="activity-btn" data-mult="1.725">
+                <strong>Active</strong>
+                <small>6-7 days/week</small>
+              </button>
+              <button type="button" class="activity-btn" data-mult="1.9">
+                <strong>Athlete</strong>
+                <small>2x/day or physical job</small>
+              </button>
+            </div>
+          </div>
+
+          <!-- Goal -->
+          <div class="calc-field">
+            <label>Your Goal</label>
+            <div class="goal-grid">
+              <button type="button" class="goal-opt" data-goal="cut" data-adj="-450" data-protein="1.0">
+                <span class="goal-icon">&#128293;</span>
+                <strong>Lose Fat</strong>
+              </button>
+              <button type="button" class="goal-opt active" data-goal="maintain" data-adj="0" data-protein="0.85">
+                <span class="goal-icon">&#127919;</span>
+                <strong>Maintain</strong>
+              </button>
+              <button type="button" class="goal-opt" data-goal="build" data-adj="300" data-protein="1.0">
+                <span class="goal-icon">&#128170;</span>
+                <strong>Build Muscle</strong>
+              </button>
+            </div>
+          </div>
+
+          <p class="calc-error" id="calcError">Please fill in all fields above.</p>
+          <button type="submit" class="btn btn-primary calc-submit">Calculate My Plan &rarr;</button>
+
+        </form>
+
+        <!-- RESULTS -->
+        <div id="calcResults">
+          <div class="calc-results-placeholder" id="calcPlaceholder">
+            <div class="calc-placeholder-icon">&#128202;</div>
+            <p class="calc-placeholder-text">Your results will appear here</p>
+          </div>
+          <div class="calc-results" id="calcOutput">
+            <div class="result-stats">
+              <div class="result-stat">
+                <span class="result-num" id="resTDEE">—</span>
+                <span class="result-label">Cal / Day</span>
+              </div>
+              <div class="result-stat">
+                <span class="result-num" id="resProtein">—</span>
+                <span class="result-label">Protein Target</span>
+              </div>
+              <div class="result-stat">
+                <span class="result-num" id="resMeals">—</span>
+                <span class="result-label">Meals / Week</span>
+              </div>
+            </div>
+            <p class="result-rec" id="resRec"></p>
+            <p class="result-scroll-hint">&#8595; Scroll down to see your plan highlighted</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING SECTION -->
+  <section>
+    <div class="container">
+
+      <!-- PRICE COMPARISON -->
+      <div class="price-compare fade-up">
+        <div class="price-compare-item">
+          <span class="compare-brand">Gainz Train</span>
+          <span class="compare-price our-price">$8.50+</span>
+          <span class="compare-note">Fresh &bull; Local &bull; Your choice</span>
+        </div>
+        <div class="compare-divider"></div>
+        <div class="price-compare-item">
+          <span class="compare-brand">Factor</span>
+          <span class="compare-price other-price">$11-15</span>
+          <span class="compare-note">Frozen &bull; Shipped</span>
+        </div>
+        <div class="compare-divider"></div>
+        <div class="price-compare-item">
+          <span class="compare-brand">Trifecta</span>
+          <span class="compare-price other-price">$13+</span>
+          <span class="compare-note">Frozen &bull; Shipped</span>
+        </div>
+        <div class="compare-badge">&#10003; 30-50% Less. Fresh, Not Frozen.</div>
+      </div>
+
+      <!-- TIER CARDS -->
+      <div class="tier-cards">
+
+        <!-- STARTER -->
+        <div class="tier-card fade-up" data-tier="starter">
+          <span class="tier-name">Starter</span>
+          <div class="tier-price">$10.50<span>/meal</span></div>
+          <p class="tier-range">From $63/week &bull; 6-9 meals</p>
+          <p class="tier-desc">Getting started. A great way to build the habit — covers lunch or dinner most days of the week.</p>
+          <span class="tier-label">Choose your meal count:</span>
+          <div class="meal-btns">
+            <a href="https://join.gainztrainprep.com/6-weekly-meals-checkout" class="meal-btn">6 meals/week <span>$63/wk</span></a>
+            <a href="https://join.gainztrainprep.com/7-weekly-meals-checkout" class="meal-btn">7 meals/week <span>$73.50/wk</span></a>
+            <a href="https://join.gainztrainprep.com/8-weekly-meals-checkout" class="meal-btn">8 meals/week <span>$84/wk</span></a>
+            <a href="https://join.gainztrainprep.com/9-weekly-meals-checkout" class="meal-btn">9 meals/week <span>$94.50/wk</span></a>
+          </div>
+        </div>
+
+        <!-- ATHLETE (featured) -->
+        <div class="tier-card tier-featured fade-up" data-tier="athlete">
+          <div class="popular-badge">Most Popular</div>
+          <span class="tier-name">Athlete</span>
+          <div class="tier-price">$9.50<span>/meal</span></div>
+          <p class="tier-range">From $95/week &bull; 10-13 meals</p>
+          <p class="tier-desc">The sweet spot. Covers lunch + dinner five or more days a week. Most members land here and never look back.</p>
+          <span class="tier-label">Choose your meal count:</span>
+          <div class="meal-btns">
+            <a href="https://join.gainztrainprep.com/10-weekly-meals-checkout" class="meal-btn">10 meals/week <span>$95/wk</span></a>
+            <a href="https://join.gainztrainprep.com/11-weekly-meals-checkout" class="meal-btn">11 meals/week <span>$104.50/wk</span></a>
+            <a href="https://join.gainztrainprep.com/12-weekly-meals-checkout" class="meal-btn">12 meals/week <span>$114/wk</span></a>
+            <a href="https://join.gainztrainprep.com/13-weekly-meals-checkout" class="meal-btn">13 meals/week <span>$123.50/wk</span></a>
+          </div>
+        </div>
+
+        <!-- ELITE -->
+        <div class="tier-card fade-up" data-tier="elite">
+          <span class="tier-name">Elite</span>
+          <div class="tier-price">$8.50<span>/meal</span></div>
+          <p class="tier-range">From $119/week &bull; 14-16 meals</p>
+          <p class="tier-desc">All in. Maximum protein, maximum results, minimum decision fatigue. For people who are serious about every meal.</p>
+          <span class="tier-label">Choose your meal count:</span>
+          <div class="meal-btns">
+            <a href="https://join.gainztrainprep.com/14-weekly-meals-checkout" class="meal-btn">14 meals/week <span>$119/wk</span></a>
+            <a href="https://join.gainztrainprep.com/15-weekly-meals-checkout" class="meal-btn">15 meals/week <span>$127.50/wk</span></a>
+            <a href="https://join.gainztrainprep.com/16-weekly-meals-checkout" class="meal-btn">16 meals/week <span>$136/wk</span></a>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- SPECIALTY NOTE -->
+      <div class="specialty-note fade-up">
+        <p>Some specialty proteins (like <strong>Braised Beef</strong>) include a small $1.50 upcharge, billed separately. All base plan pricing is shown above.</p>
+      </div>
+
+      <!-- GUARANTEE -->
+      <div class="guarantee-strip fade-up">
+        <div class="guarantee-icon">&#128293;</div>
+        <div class="guarantee-text">
+          <h3>Not Happy? <span class="highlight">We'll Make It Right.</span></h3>
+          <p>Try your first week and if you're not satisfied with the quality, we'll make it right. No hoops, no headaches.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS MINI -->
+  <section class="bg-surface">
+    <div class="container">
+      <div class="section-header" style="text-align: center;">
+        <div class="section-label" style="justify-content: center;">After You Sign Up</div>
+        <h2>What Happens <span class="highlight">Next</span></h2>
+      </div>
+      <div class="steps-grid">
+        <div class="step-item fade-up">
+          <div class="step-number">1</div>
+          <p class="step-title">Set Your Goal</p>
+          <p class="step-desc">After checkout, you'll set your goal — Cut, Maintain, or Build. This portions your meals correctly.</p>
+        </div>
+        <div class="step-item fade-up">
+          <div class="step-number">2</div>
+          <p class="step-title">Choose Meals Weekly</p>
+          <p class="step-desc">Each week, pick from the rotating menu at menu.gainztrainprep.com before Friday cutoff.</p>
+        </div>
+        <div class="step-item fade-up">
+          <div class="step-number">3</div>
+          <p class="step-title">Fresh Every Saturday</p>
+          <p class="step-desc">We prep everything fresh on Saturday. Never frozen, never old.</p>
+        </div>
+        <div class="step-item fade-up">
+          <div class="step-number">4</div>
+          <p class="step-title">Pickup or Delivery</p>
+          <p class="step-desc">Sunday window in Utah County. Grab your meals and go.</p>
+        </div>
+      </div>
+      <div style="text-align: center; margin-top: var(--gap-lg);">
+        <a href="/how-it-works/" class="btn btn-outline">Full Details &rarr;</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div class="cta-orange">
+    <div class="container">
+      <div class="section-label">Ready?</div>
+      <h2>Start This <span style="color: rgba(255,255,255,0.85);">Sunday.</span></h2>
+      <p>Takes 2 minutes to sign up. Your first pickup could be this weekend.</p>
+      <div class="cta-actions">
+        <a href="/meals/" class="btn btn-primary btn-pulse">Browse the Meals &rarr;</a>
+        <a href="/how-it-works/" class="btn btn-outline">How It Works</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></div>
+          <span class="footer-logo-tagline">Fuel Your Engine</span>
+          <p>High-protein weekly meal prep for people serious about their goals. Utah County, UT.</p>
+        </div>
+        <div class="footer-col">
+          <h5>Pages</h5>
+          <ul>
+            <li><a href="/meals/">Meal Catalog</a></li>
+            <li><a href="/how-it-works/">How It Works</a></li>
+            <li><a href="/subscribe/">Pricing</a></li>
+            <li><a href="/about/">About</a></li>
+            <li><a href="/contact/">Contact</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Contact</h5>
+          <ul>
+            <li><a href="tel:+13853278045">(385) 327-8045</a></li>
+            <li><a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener">@gainztrainprep</a></li>
+            <li><a href="https://menu.gainztrainprep.com" target="_blank" rel="noopener">This Week's Menu</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p class="footer-copy">&copy; 2026 Gainz Train. All rights reserved.</p>
+        <div class="footer-social">
+          <a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener" aria-label="Instagram">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+  <script>
+    // ── Sex toggle ──
+    document.querySelectorAll('.sex-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sex-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // ── Activity toggle ──
+    document.querySelectorAll('.activity-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.activity-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // ── Goal toggle ──
+    document.querySelectorAll('.goal-opt').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.goal-opt').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // ── Calculator ──
+    document.getElementById('planCalc').addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      const sex    = document.querySelector('.sex-btn.active')?.dataset.sex || 'male';
+      const age    = parseInt(document.getElementById('calcAge').value);
+      const weight = parseFloat(document.getElementById('calcWeight').value);
+      const ft     = parseInt(document.getElementById('calcFt').value) || 0;
+      const inches = parseInt(document.getElementById('calcIn').value) || 0;
+      const mult   = parseFloat(document.querySelector('.activity-btn.active')?.dataset.mult || 1.55);
+      const adj    = parseInt(document.querySelector('.goal-opt.active')?.dataset.adj || 0);
+      const prot   = parseFloat(document.querySelector('.goal-opt.active')?.dataset.protein || 0.85);
+      const goal   = document.querySelector('.goal-opt.active')?.dataset.goal || 'maintain';
+      const errEl  = document.getElementById('calcError');
+
+      // Validate
+      if (!age || !weight || (ft === 0 && inches === 0)) {
+        errEl.style.display = 'block';
+        return;
+      }
+      errEl.style.display = 'none';
+
+      // Unit conversions
+      const kg = weight * 0.453592;
+      const cm = (ft * 12 + inches) * 2.54;
+
+      // BMR — Mifflin-St Jeor
+      const bmr = sex === 'male'
+        ? (10 * kg) + (6.25 * cm) - (5 * age) + 5
+        : (10 * kg) + (6.25 * cm) - (5 * age) - 161;
+
+      // TDEE + goal adjustment
+      const tdee      = Math.round(bmr * mult);
+      const targetCal = Math.round(tdee + adj);
+
+      // Protein target (g/day based on body weight)
+      const proteinTarget = Math.round(weight * prot);
+
+      // Meal recommendation
+      // Assumes GT covers ~40% of daily protein needs (lunch + dinner most days)
+      const avgProtein  = 40; // g per GT meal
+      const coverage    = 0.40;
+      let mealsPerWeek  = Math.round((proteinTarget * coverage / avgProtein) * 7);
+      mealsPerWeek      = Math.max(6, Math.min(16, mealsPerWeek));
+
+      // Determine tier
+      let tier, tierName, pricePerMeal;
+      if (mealsPerWeek <= 9) {
+        tier = 'starter'; tierName = 'Starter'; pricePerMeal = 10.50;
+      } else if (mealsPerWeek <= 13) {
+        tier = 'athlete'; tierName = 'Athlete'; pricePerMeal = 9.50;
+      } else {
+        tier = 'elite'; tierName = 'Elite'; pricePerMeal = 8.50;
+      }
+
+      const weeklyCost  = (mealsPerWeek * pricePerMeal).toFixed(2);
+      const goalLabels  = { cut: 'fat loss', maintain: 'maintaining', build: 'muscle gain' };
+
+      // Display results
+      document.getElementById('resTDEE').textContent    = targetCal.toLocaleString() + ' cal';
+      document.getElementById('resProtein').textContent = proteinTarget + 'g';
+      document.getElementById('resMeals').textContent   = mealsPerWeek + '/wk';
+
+      document.getElementById('resRec').innerHTML = `
+        To hit <strong>${proteinTarget}g of protein/day</strong> for ${goalLabels[goal]},
+        the <span class="highlight">${tierName} Plan at ${mealsPerWeek} meals/week</span>
+        covers your lunch + dinner most days at
+        <strong>$${weeklyCost}/week</strong> — fresh, never frozen.
+      `;
+
+      // Show output, hide placeholder
+      document.getElementById('calcPlaceholder').style.display = 'none';
+      const output = document.getElementById('calcOutput');
+      output.classList.add('visible');
+
+      // Highlight tier cards
+      document.querySelectorAll('.tier-card').forEach(card => {
+        card.classList.remove('calc-recommended', 'calc-dimmed');
+        if (card.dataset.tier === tier) {
+          card.classList.add('calc-recommended');
+        } else {
+          card.classList.add('calc-dimmed');
+        }
+      });
+
+      // Scroll to results, then after 2s scroll to the tier cards
+      output.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      setTimeout(() => {
+        document.querySelector('.tier-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 2200);
+    });
+  </script>
+</body>
+</html>

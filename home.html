@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gainz Train | High-Protein Meal Prep Utah</title>
+<meta name="description" content="Weekly high-protein meals prepped fresh every Saturday. Pickup Sunday in Utah County. Macro-tracked, no cooking required. Plans starting at $8.50/meal.">
+<meta name="keywords" content="meal prep Utah, high protein meals Utah County, macro meal prep Provo, Orem meal prep, weekly meal prep Utah, healthy meal prep Utah">
+<link rel="canonical" href="https://gainztrainprep.com/">
+
+<!-- Open Graph (Facebook, Instagram link previews) -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://gainztrainprep.com/">
+<meta property="og:title" content="Gainz Train | High-Protein Meal Prep Utah">
+<meta property="og:description" content="Weekly high-protein meals prepped fresh every Saturday. Pickup Sunday in Utah County. Plans starting at $8.50/meal.">
+<meta property="og:image" content="https://gainztrainprep.com/og-image.jpg">
+<meta property="og:site_name" content="Gainz Train">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Gainz Train | High-Protein Meal Prep Utah">
+<meta name="twitter:description" content="Weekly high-protein meals prepped fresh every Saturday. Pickup Sunday in Utah County.">
+<meta name="twitter:image" content="https://gainztrainprep.com/og-image.jpg">
+
+<!-- Schema: Local Business -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FoodEstablishment",
+  "name": "Gainz Train",
+  "description": "Weekly high-protein meal prep service in Utah County. Fresh meals every Saturday, pickup Sunday.",
+  "url": "https://gainztrainprep.com",
+  "email": "gainztrainprep@gmail.com",
+  "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Utah County",
+    "addressRegion": "UT",
+    "addressCountry": "US"
+  },
+  "sameAs": ["https://instagram.com/gainztrainprep"],
+  "servesCuisine": "High-Protein Meal Prep",
+  "priceRange": "$$",
+  "openingHoursSpecification": {
+    "@type": "OpeningHoursSpecification",
+    "dayOfWeek": "Sunday",
+    "opens": "10:00",
+    "closes": "14:00"
+  }
+}
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--orange:#FF6B35;--black:#0A0A0A;--white:#FFFFFF;--gray:#1A1A1A;--light-gray:#2A2A2A}
+html,body{width:100%;overflow-x:hidden;background:var(--black);color:var(--white);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;width:100%;background:rgba(10,10,10,0.95);backdrop-filter:blur(10px);z-index:1000;padding:1.2rem 5%;border-bottom:1px solid var(--light-gray)}
+.nav-container{max-width:1400px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
+.logo{font-size:1.6rem;font-weight:900;color:var(--orange);text-transform:uppercase;letter-spacing:2px;text-decoration:none}
+.nav-links{display:flex;gap:2.5rem;list-style:none}
+.nav-links a{color:var(--white);text-decoration:none;font-weight:600;transition:color .3s;text-transform:uppercase;font-size:.85rem;letter-spacing:1px}
+.nav-links a:hover{color:var(--orange)}
+.nav-cta{background:var(--orange);color:var(--white);padding:.7rem 1.8rem;border-radius:4px;text-decoration:none;font-weight:700;transition:all .3s;text-transform:uppercase;letter-spacing:1px;font-size:.85rem}
+.nav-cta:hover{background:var(--white);color:var(--orange)}
+.hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:4px}
+.hamburger span{display:block;width:24px;height:2px;background:var(--white);transition:all .3s}
+.hamburger.active span:nth-child(1){transform:rotate(45deg) translate(5px,5px)}
+.hamburger.active span:nth-child(2){opacity:0}
+.hamburger.active span:nth-child(3){transform:rotate(-45deg) translate(5px,-5px)}
+.mobile-menu{display:none;position:fixed;top:64px;left:0;right:0;background:rgba(10,10,10,.98);z-index:999;padding:2rem 5%;border-bottom:2px solid var(--orange);flex-direction:column;gap:1.5rem}
+.mobile-menu.open{display:flex}
+.mobile-menu a{color:var(--white);text-decoration:none;font-weight:600;text-transform:uppercase;letter-spacing:1px;font-size:1rem;padding:.5rem 0;border-bottom:1px solid var(--light-gray)}
+.mobile-menu a:last-child{background:var(--orange);text-align:center;padding:1rem;border-radius:4px;border-bottom:none;margin-top:.5rem}
+
+/* HERO */
+.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;padding:0}
+.video-bg{position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;z-index:1}
+.video-bg iframe{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100vw;height:56.25vw;min-height:100%;min-width:177.78vh}
+.hero-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(10,10,10,.55);z-index:2}
+.hero-content{position:relative;z-index:3;text-align:center;padding:0 5%;max-width:900px;margin:0 auto;padding-top:80px}
+.hero-content h1{font-size:clamp(2.5rem,7vw,5rem);font-weight:900;line-height:1.05;text-transform:uppercase;letter-spacing:3px;margin-bottom:1.5rem}
+.hero-content h1 .highlight{color:var(--orange)}
+.hero-content p{font-size:clamp(1rem,2vw,1.25rem);line-height:1.7;color:rgba(255,255,255,.9);margin-bottom:2.5rem;max-width:650px;margin-left:auto;margin-right:auto}
+.hero-buttons{display:flex;gap:1.2rem;justify-content:center;flex-wrap:wrap}
+.btn-primary{background:var(--orange);color:var(--white);padding:1rem 2.5rem;border-radius:4px;text-decoration:none;font-weight:700;font-size:1rem;transition:all .3s;text-transform:uppercase;letter-spacing:1px;border:2px solid var(--orange)}
+.btn-primary:hover{background:transparent;transform:translateY(-3px);box-shadow:0 10px 30px rgba(255,107,53,.5)}
+.btn-secondary{background:transparent;color:var(--white);padding:1rem 2.5rem;border-radius:4px;text-decoration:none;font-weight:700;font-size:1rem;transition:all .3s;text-transform:uppercase;letter-spacing:1px;border:2px solid var(--white)}
+.btn-secondary:hover{background:var(--white);color:var(--black);transform:translateY(-3px)}
+
+/* FEATURES */
+.features{padding:100px 5%;background:var(--gray)}
+.features-inner{max-width:1400px;margin:0 auto}
+.section-title{text-align:center;font-size:clamp(2rem,4vw,3rem);font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:4rem}
+.section-title .highlight{color:var(--orange)}
+.section-title::after{content:'';display:block;width:80px;height:4px;background:var(--orange);margin:1rem auto 0}
+.features-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2.5rem}
+.feature-card{background:var(--black);padding:2.5rem 2rem;border-radius:8px;text-align:center;transition:all .4s;border:2px solid transparent}
+.feature-card:hover{border-color:var(--orange);transform:translateY(-12px);box-shadow:0 20px 40px rgba(255,107,53,.25)}
+.feature-icon{font-size:3.5rem;margin-bottom:1.2rem;display:block}
+.feature-card h3{font-size:1.3rem;margin-bottom:.8rem;text-transform:uppercase;letter-spacing:1px}
+.feature-card p{color:rgba(255,255,255,.75);line-height:1.6;font-size:.95rem}
+
+/* MEALS */
+.meals{padding:100px 5%;background:var(--black)}
+.meals-inner{max-width:1400px;margin:0 auto}
+.meals-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2.5rem;margin-top:1rem}
+.meal-card{background:var(--gray);border-radius:8px;overflow:hidden;transition:all .3s;border:2px solid transparent}
+.meal-card:hover{border-color:var(--orange);transform:translateY(-8px);box-shadow:0 15px 35px rgba(255,107,53,.25)}
+.meal-img{width:100%;height:220px;background:linear-gradient(135deg,#1a1a1a,#2a2a2a);display:flex;align-items:center;justify-content:center;font-size:5rem}
+.meal-body{padding:1.8rem}
+.meal-body h3{font-size:1.2rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:1rem}
+.macros{display:flex;gap:.5rem;margin-bottom:1rem}
+.macro{flex:1;background:var(--black);padding:.8rem .5rem;border-radius:4px;text-align:center}
+.macro-val{font-size:1.3rem;font-weight:700;color:var(--orange);display:block}
+.macro-lbl{font-size:.7rem;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.5px}
+.meal-body p{color:rgba(255,255,255,.75);font-size:.9rem;line-height:1.6}
+
+/* HOW IT WORKS */
+.how{padding:100px 5%;background:var(--gray)}
+.how-inner{max-width:1200px;margin:0 auto}
+.steps-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3rem;margin-top:1rem}
+.step{text-align:center}
+.step-num{width:72px;height:72px;background:var(--orange);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:900;margin:0 auto 1.5rem;box-shadow:0 0 0 4px var(--gray),0 0 0 8px var(--orange)}
+.step h3{font-size:1.2rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:.8rem}
+.step p{color:rgba(255,255,255,.75);line-height:1.6;font-size:.95rem}
+
+/* CTA */
+.cta{padding:100px 5%;background:linear-gradient(135deg,var(--black) 0%,#3a1a0a 50%,var(--orange) 100%);text-align:center}
+.cta-inner{max-width:700px;margin:0 auto}
+.cta h2{font-size:clamp(2rem,4vw,3.5rem);font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:1.5rem}
+.cta p{font-size:1.2rem;line-height:1.7;margin-bottom:2.5rem;color:rgba(255,255,255,.9)}
+
+/* FOOTER */
+footer{background:var(--black);padding:4rem 5% 2rem;border-top:2px solid var(--orange)}
+.footer-inner{max-width:1400px;margin:0 auto}
+.footer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:3rem;margin-bottom:3rem}
+.footer-col h4{color:var(--orange);text-transform:uppercase;letter-spacing:1px;font-size:1rem;margin-bottom:1.2rem}
+.footer-col ul{list-style:none}
+.footer-col li{margin-bottom:.7rem}
+.footer-col a{color:rgba(255,255,255,.75);text-decoration:none;transition:color .3s;font-size:.9rem}
+.footer-col a:hover{color:var(--orange)}
+.footer-col p{color:rgba(255,255,255,.75);font-size:.9rem;line-height:1.6}
+.footer-bottom{border-top:1px solid var(--light-gray);padding-top:2rem;text-align:center;color:rgba(255,255,255,.5);font-size:.85rem;max-width:1400px;margin:0 auto}
+
+/* RESPONSIVE */
+@media(max-width:1100px){.features-grid{grid-template-columns:repeat(2,1fr)}.steps-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:768px){.nav-links,.nav-cta{display:none}.hamburger{display:flex}.meals-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.features-grid{grid-template-columns:1fr}.steps-grid{grid-template-columns:1fr}.hero-content h1{font-size:2.2rem}}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-container">
+    <a href="https://gainztrainprep.com" class="logo">Gainz Train</a>
+    <ul class="nav-links">
+      <li><a href="https://gainztrainprep.com">Home</a></li>
+      <li><a href="https://gainztrainprep.com/pricing">Pricing</a></li>
+      <li><a href="https://gainztrainprep.com/how-it-works">How It Works</a></li>
+      <li><a href="https://gainztrainprep.com/faqs">FAQs</a></li>
+      <li><a href="https://gainztrainprep.com/contact">Contact</a></li>
+    </ul>
+    <a href="https://gainztrainprep.com/pricing" class="nav-cta">Get Started</a>
+    <div class="hamburger" id="hamburger">
+      <span></span><span></span><span></span>
+    </div>
+  </div>
+</nav>
+
+<div class="mobile-menu" id="mobileMenu">
+  <a href="https://gainztrainprep.com">Home</a>
+  <a href="https://gainztrainprep.com/pricing">Pricing</a>
+  <a href="https://gainztrainprep.com/how-it-works">How It Works</a>
+  <a href="https://gainztrainprep.com/faqs">FAQs</a>
+  <a href="https://gainztrainprep.com/contact">Contact</a>
+  <a href="https://gainztrainprep.com/pricing">Get Started →</a>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="video-bg">
+    <!-- Desktop video -->
+    <iframe
+      src="https://www.youtube.com/embed/E7p5lZPe8iE?autoplay=1&mute=1&loop=1&playlist=E7p5lZPe8iE&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1"
+      frameborder="0"
+      allow="autoplay; fullscreen"
+      allowfullscreen>
+    </iframe>
+  </div>
+  <div class="hero-overlay"></div>
+  <div class="hero-content">
+    <h1>Eat Like<br><span class="highlight">You Train</span></h1>
+    <p>High-protein, macro-tracked meals prepped fresh every week. Stop guessing, start fueling. Pick your plan, we handle the rest.</p>
+    <div class="hero-buttons">
+      <a href="https://gainztrainprep.com/pricing" class="btn-primary">Choose Your Plan</a>
+      <a href="https://gainztrainprep.com/how-it-works" class="btn-secondary">See How It Works</a>
+    </div>
+  </div>
+</section>
+
+<!-- WHY GAINZ TRAIN -->
+<section class="features">
+  <div class="features-inner">
+    <h2 class="section-title">Why <span class="highlight">Gainz Train</span></h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <span class="feature-icon">🥩</span>
+        <h3>High Protein</h3>
+        <p>Every meal is built around 30–50g of quality protein to fuel muscle growth and keep you full.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">📊</span>
+        <h3>Macro Tracked</h3>
+        <p>Exact macros on every meal. No more guessing. Calories, protein, carbs, and fat — all dialed in.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">🔥</span>
+        <h3>Prepped Fresh</h3>
+        <p>Meals are prepped fresh each week — no preservatives, no shortcuts. Real food, every time.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">⚡</span>
+        <h3>Zero Effort</h3>
+        <p>Pick your plan, choose your meals each week, pick up Sunday. That's it. Back to training.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- THIS WEEK'S MEALS -->
+<section class="meals" id="meals">
+  <div class="meals-inner">
+    <h2 class="section-title">This Week's <span class="highlight">Menu</span></h2>
+    <div class="meals-grid">
+      <div class="meal-card">
+        <div class="meal-img">🍗</div>
+        <div class="meal-body">
+          <h3>Teriyaki Chicken Bowl</h3>
+          <div class="macros">
+            <div class="macro"><span class="macro-val">480</span><span class="macro-lbl">Cal</span></div>
+            <div class="macro"><span class="macro-val">46g</span><span class="macro-lbl">Protein</span></div>
+            <div class="macro"><span class="macro-val">52g</span><span class="macro-lbl">Carbs</span></div>
+            <div class="macro"><span class="macro-val">10g</span><span class="macro-lbl">Fat</span></div>
+          </div>
+          <p>Grilled chicken, jasmine rice, broccoli, teriyaki glaze.</p>
+        </div>
+      </div>
+      <div class="meal-card">
+        <div class="meal-img">🥩</div>
+        <div class="meal-body">
+          <h3>Lean Beef Power Bowl</h3>
+          <div class="macros">
+            <div class="macro"><span class="macro-val">520</span><span class="macro-lbl">Cal</span></div>
+            <div class="macro"><span class="macro-val">48g</span><span class="macro-lbl">Protein</span></div>
+            <div class="macro"><span class="macro-val">45g</span><span class="macro-lbl">Carbs</span></div>
+            <div class="macro"><span class="macro-val">12g</span><span class="macro-lbl">Fat</span></div>
+          </div>
+          <p>Seasoned lean beef, sweet potato, green beans, garlic.</p>
+        </div>
+      </div>
+      <div class="meal-card">
+        <div class="meal-img">🐟</div>
+        <div class="meal-body">
+          <h3>Salmon &amp; Rice</h3>
+          <div class="macros">
+            <div class="macro"><span class="macro-val">500</span><span class="macro-lbl">Cal</span></div>
+            <div class="macro"><span class="macro-val">44g</span><span class="macro-lbl">Protein</span></div>
+            <div class="macro"><span class="macro-val">42g</span><span class="macro-lbl">Carbs</span></div>
+            <div class="macro"><span class="macro-val">14g</span><span class="macro-lbl">Fat</span></div>
+          </div>
+          <p>Atlantic salmon, white rice, asparagus, lemon herb.</p>
+        </div>
+      </div>
+      <div class="meal-card">
+        <div class="meal-img">🫙</div>
+        <div class="meal-body">
+          <h3>Turkey Taco Bowl</h3>
+          <div class="macros">
+            <div class="macro"><span class="macro-val">460</span><span class="macro-lbl">Cal</span></div>
+            <div class="macro"><span class="macro-val">42g</span><span class="macro-lbl">Protein</span></div>
+            <div class="macro"><span class="macro-val">48g</span><span class="macro-lbl">Carbs</span></div>
+            <div class="macro"><span class="macro-val">8g</span><span class="macro-lbl">Fat</span></div>
+          </div>
+          <p>Ground turkey, brown rice, black beans, pico, cilantro.</p>
+        </div>
+      </div>
+      <div class="meal-card">
+        <div class="meal-img">🍳</div>
+        <div class="meal-body">
+          <h3>Egg White Scramble</h3>
+          <div class="macros">
+            <div class="macro"><span class="macro-val">420</span><span class="macro-lbl">Cal</span></div>
+            <div class="macro"><span class="macro-val">38g</span><span class="macro-lbl">Protein</span></div>
+            <div class="macro"><span class="macro-val">40g</span><span class="macro-lbl">Carbs</span></div>
+            <div class="macro"><span class="macro-val">9g</span><span class="macro-lbl">Fat</span></div>
+          </div>
+          <p>Egg whites, oats, spinach, peppers, turkey sausage.</p>
+        </div>
+      </div>
+      <div class="meal-card">
+        <div class="meal-img">🥗</div>
+        <div class="meal-body">
+          <h3>Chicken &amp; Veggie Stir Fry</h3>
+          <div class="macros">
+            <div class="macro"><span class="macro-val">470</span><span class="macro-lbl">Cal</span></div>
+            <div class="macro"><span class="macro-val">44g</span><span class="macro-lbl">Protein</span></div>
+            <div class="macro"><span class="macro-val">46g</span><span class="macro-lbl">Carbs</span></div>
+            <div class="macro"><span class="macro-val">10g</span><span class="macro-lbl">Fat</span></div>
+          </div>
+          <p>Sliced chicken, mixed veggies, brown rice, sesame sauce.</p>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:3rem">
+      <a href="https://menu.gainztrainprep.com" class="btn-primary">Select This Week's Meals →</a>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="how-inner">
+    <h2 class="section-title">How It <span class="highlight">Works</span></h2>
+    <div class="steps-grid">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Choose Your Fuel</h3>
+        <p>Pick the plan that fits your goals — Starter, Athlete, or Elite. Lock in your weekly meal count.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>We Prep Fresh</h3>
+        <p>Every Saturday we prep your meals from scratch. Fresh ingredients, exact macros, zero shortcuts.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Pick Up Sunday</h3>
+        <p>Swing by Sunday and grab your week's worth of fuel. Ready to go, no cooking required.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <h3>Eat. Train. Win.</h3>
+        <p>Grab a meal, hit your macros, crush your session. Consistent fuel = consistent gains.</p>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:3.5rem">
+      <a href="https://gainztrainprep.com/how-it-works" class="btn-secondary">Full Details →</a>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <div class="cta-inner">
+    <h2>Ready to <span class="highlight">Board?</span></h2>
+    <p>Stop wasting time on meal prep. Choose your plan and let us fuel your engine every single week.</p>
+    <div class="hero-buttons">
+      <a href="https://gainztrainprep.com/pricing" class="btn-primary">See Pricing</a>
+      <a href="https://gainztrainprep.com/contact" class="btn-secondary">Talk to Us</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <div class="footer-col">
+        <h4>Gainz Train</h4>
+        <p>High-protein meal prep built for people who train. Fresh every week, picked up every Sunday.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Pages</h4>
+        <ul>
+          <li><a href="https://gainztrainprep.com/pricing">Pricing</a></li>
+          <li><a href="https://gainztrainprep.com/how-it-works">How It Works</a></li>
+          <li><a href="https://gainztrainprep.com/faqs">FAQs</a></li>
+          <li><a href="https://gainztrainprep.com/contact">Contact</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Weekly Menu</h4>
+        <ul>
+          <li><a href="https://menu.gainztrainprep.com">Select This Week's Meals</a></li>
+          <li><a href="https://gainztrainprep.com/pricing">Choose a Plan</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Contact</h4>
+        <p>Utah, USA</p>
+        <p style="margin-top:.5rem"><a href="mailto:gainztrainprep@gmail.com">gainztrainprep@gmail.com</a></p>
+        <p style="margin-top:.5rem"><a href="https://instagram.com/gainztrainprep" target="_blank">@gainztrainprep</a></p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 Gainz Train. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+const hamburger = document.getElementById('hamburger');
+const mobileMenu = document.getElementById('mobileMenu');
+hamburger.addEventListener('click', function() {
+  this.classList.toggle('active');
+  mobileMenu.classList.toggle('open');
+});
+document.querySelectorAll('.mobile-menu a').forEach(link => {
+  link.addEventListener('click', () => {
+    hamburger.classList.remove('active');
+    mobileMenu.classList.remove('open');
+  });
+});
+</script>
+</body>
+</html>

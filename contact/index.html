@@ -146,42 +146,20 @@
           <h3>Ask Us <span class="highlight">Anything</span></h3>
           <p style="margin-bottom: var(--gap-lg);">Curious about a plan? Have a question about the menu or pickup? Send us a message and we'll get back to you fast.</p>
 
-          <!-- GHL FORM EMBED — swap iframe src with your GHL form embed URL -->
-          <!-- <iframe src="YOUR_GHL_FORM_EMBED_URL" style="width:100%;min-height:500px;border:none;" frameborder="0"></iframe> -->
-
-          <!-- PLACEHOLDER FORM (remove when GHL embed is added) -->
-          <form id="contactForm" onsubmit="handleSubmit(event)">
-            <div class="form-group">
-              <label for="name">Your Name</label>
-              <input type="text" id="name" name="name" placeholder="First and last name" required />
-            </div>
-            <div class="form-group">
-              <label for="phone">Phone Number</label>
-              <input type="tel" id="phone" name="phone" placeholder="(801) 000-0000" />
-            </div>
-            <div class="form-group">
-              <label for="topic">What's This About?</label>
-              <select id="topic" name="topic">
-                <option value="">Select a topic</option>
-                <option value="plans">Questions about plans &amp; pricing</option>
-                <option value="menu">This week's menu</option>
-                <option value="pickup">Pickup &amp; delivery info</option>
-                <option value="subscription">My current subscription</option>
-                <option value="other">Something else</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="message">Your Message</label>
-              <textarea id="message" name="message" placeholder="What do you want to know?" required></textarea>
-            </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">Send Message &rarr;</button>
-          </form>
-
-          <div id="formSuccess" style="display:none; text-align:center; padding: var(--gap-lg);">
-            <div style="font-size:3rem; margin-bottom:var(--gap-sm);">&#10003;</div>
-            <h3 style="color: var(--green); margin-bottom: 0.5rem;">Message Sent!</h3>
-            <p>We'll get back to you soon. For the fastest response, text us at (385) 327-8045 or DM @gainztrainprep.</p>
-          </div>
+          <iframe
+            src="https://api.leadconnectorhq.com/widget/form/JXfn4UEtYbTIBrl2P3of"
+            style="width:100%;min-height:921px;border:none;border-radius:8px;"
+            id="inline-JXfn4UEtYbTIBrl2P3of"
+            data-layout="{'id':'INLINE'}"
+            data-trigger-type="alwaysShow"
+            data-activation-type="alwaysActivated"
+            data-deactivation-type="neverDeactivate"
+            data-form-name="Contact Us"
+            data-height="921"
+            data-layout-iframe-id="inline-JXfn4UEtYbTIBrl2P3of"
+            data-form-id="JXfn4UEtYbTIBrl2P3of"
+            title="Contact Us"></iframe>
+          <script src="https://link.msgsndr.com/js/form_embed.js"></script>
         </div>
 
       </div>
@@ -241,12 +219,5 @@
   </footer>
 
   <script src="../assets/js/main.js"></script>
-  <script>
-    function handleSubmit(e) {
-      e.preventDefault();
-      document.getElementById('contactForm').style.display = 'none';
-      document.getElementById('formSuccess').style.display = 'block';
-    }
-  </script>
 </body>
 </html>

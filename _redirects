@@ -1,0 +1,15 @@
+# Bounce bare checkout URLs on the root domain to the GHL funnel host.
+# These catch anyone who types or shares gainztrainprep.com/N-weekly-meals-checkout
+# (e.g. the 404 we saw before). The actual checkout pages live on the join. subdomain.
+
+/6-weekly-meals-checkout    https://join.gainztrainprep.com/6-weekly-meals-checkout    301
+/7-weekly-meals-checkout    https://join.gainztrainprep.com/7-weekly-meals-checkout    301
+/8-weekly-meals-checkout    https://join.gainztrainprep.com/8-weekly-meals-checkout    301
+/9-weekly-meals-checkout    https://join.gainztrainprep.com/9-weekly-meals-checkout    301
+/10-weekly-meals-checkout   https://join.gainztrainprep.com/10-weekly-meals-checkout   301
+/11-weekly-meals-checkout   https://join.gainztrainprep.com/11-weekly-meals-checkout   301
+/12-weekly-meals-checkout   https://join.gainztrainprep.com/12-weekly-meals-checkout   301
+/13-weekly-meals-checkout   https://join.gainztrainprep.com/13-weekly-meals-checkout   301
+/14-weekly-meals-checkout   https://join.gainztrainprep.com/14-weekly-meals-checkout   301
+/15-weekly-meals-checkout   https://join.gainztrainprep.com/15-weekly-meals-checkout   301
+/16-weekly-meals-checkout   https://join.gainztrainprep.com/16-weekly-meals-checkout   301

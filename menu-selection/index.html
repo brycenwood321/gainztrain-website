@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pick Your Meals | Gainz Train</title>
+  <meta name="description" content="Pick how many of each meal you want for the week. Subscribers only." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="canonical" href="https://gainztrainprep.com/menu-selection/" />
+  <link rel="stylesheet" href="../assets/css/global-light.css" />
+  <link rel="stylesheet" href="../assets/css/editorial.css" />
+  <style>
+    .menu-form-wrap {
+      max-width: 760px;
+      margin: 2rem auto 0;
+    }
+    .menu-form-wrap iframe {
+      width: 100%;
+      min-height: 1052px;
+      border: none;
+      border-radius: 12px;
+      background: #fff;
+    }
+    .menu-helper {
+      max-width: 720px;
+      margin: 0 auto;
+      background: rgba(0,0,0,0.04);
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      font-size: 0.94rem;
+      line-height: 1.6;
+    }
+    .menu-helper strong { color: var(--orange); }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav" role="navigation">
+    <a href="/" class="nav-logo">
+      <span class="nav-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></span>
+      <span class="nav-logo-tagline">Fuel Your Engine</span>
+    </a>
+    <div class="nav-links">
+      <a href="/meals/">Meals</a>
+      <a href="/how-it-works/">How It Works</a>
+      <a href="/subscribe/">Pricing</a>
+      <a href="/about/">About</a>
+      <a href="/contact/" class="btn btn-primary nav-cta">Contact</a>
+    </div>
+    <button class="nav-toggle" aria-label="Open menu"><span></span><span></span><span></span></button>
+  </nav>
+
+  <div class="nav-mobile">
+    <button class="nav-mobile-close">&times;</button>
+    <a href="/meals/">Meals</a>
+    <a href="/how-it-works/">How It Works</a>
+    <a href="/subscribe/">Pricing</a>
+    <a href="/about/">About</a>
+    <a href="/contact/">Contact</a>
+  </div>
+
+  <!-- PAGE HERO -->
+  <div class="page-hero">
+    <div class="container">
+      <div class="section-label">This Week</div>
+      <h1>Pick Your <span class="highlight">Meals.</span></h1>
+      <p id="menuGreeting">Choose how many of each meal you want for this week. Submit before the weekly cutoff Saturday night.</p>
+    </div>
+  </div>
+
+  <!-- HELPER + FORM -->
+  <section>
+    <div class="container">
+      <div class="menu-helper">
+        <strong>Heads up:</strong> If you don't submit by the weekly cutoff, we'll repeat last week's selection. If a meal rotated out of the menu, we'll substitute the closest match.
+      </div>
+
+      <div class="menu-form-wrap">
+        <iframe
+          src="https://api.leadconnectorhq.com/widget/form/56K5mCDwVNYUK5KqvRMf"
+          style="width:100%;min-height:1052px;border:none;border-radius:12px;"
+          id="inline-56K5mCDwVNYUK5KqvRMf"
+          data-layout="{'id':'INLINE'}"
+          data-trigger-type="alwaysShow"
+          data-activation-type="alwaysActivated"
+          data-deactivation-type="neverDeactivate"
+          data-form-name="GT — Weekly Menu Selection"
+          data-height="1052"
+          data-layout-iframe-id="inline-56K5mCDwVNYUK5KqvRMf"
+          data-form-id="56K5mCDwVNYUK5KqvRMf"
+          data-prefill
+          title="GT — Weekly Menu Selection"></iframe>
+        <script src="https://link.msgsndr.com/js/form_embed.js"></script>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></div>
+          <span class="footer-logo-tagline">Fuel Your Engine</span>
+          <p>High-protein weekly meal prep for people serious about their goals. Utah County, UT.</p>
+        </div>
+        <div class="footer-col">
+          <h5>Pages</h5>
+          <ul>
+            <li><a href="/meals/">Meal Catalog</a></li>
+            <li><a href="/how-it-works/">How It Works</a></li>
+            <li><a href="/subscribe/">Pricing</a></li>
+            <li><a href="/about/">About</a></li>
+            <li><a href="/contact/">Contact</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Legal</h5>
+          <ul>
+            <li><a href="/privacy-policy/">Privacy Policy</a></li>
+            <li><a href="/terms-of-service/">Terms of Service</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Contact</h5>
+          <ul>
+            <li><a href="tel:+13853278045">(385) 327-8045</a></li>
+            <li><a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener">@gainztrainprep</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p class="footer-copy">&copy; 2026 Gainz Train. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+  <script>
+    (function(){
+      var params = new URLSearchParams(window.location.search);
+      var fname = (params.get('fname') || params.get('first_name') || '').trim();
+      var lname = (params.get('lname') || params.get('last_name') || '').trim();
+      var email = (params.get('email') || '').trim();
+      var phone = (params.get('phone') || '').trim();
+
+      if (fname) {
+        var greet = document.getElementById('menuGreeting');
+        if (greet) greet.innerHTML = 'Hey <strong>' + escapeHtml(fname) + '</strong> — choose how many of each meal you want for this week. Submit before the weekly cutoff Saturday night.';
+      }
+
+      var iframe = document.querySelector('iframe[data-prefill]');
+      if (iframe) {
+        try {
+          var u = new URL(iframe.src);
+          if (fname) u.searchParams.set('first_name', fname);
+          if (lname) u.searchParams.set('last_name', lname);
+          if (email) u.searchParams.set('email', email);
+          if (phone) u.searchParams.set('phone', phone);
+          iframe.src = u.toString();
+        } catch(e) { /* no-op */ }
+      }
+
+      function escapeHtml(s){
+        return s.replace(/[&<>"']/g, function(c){
+          return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

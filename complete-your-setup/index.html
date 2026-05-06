@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Complete Your Setup | Gainz Train</title>
+  <meta name="description" content="Last step — pick your goal so we can portion your meals correctly." />
+  <meta name="robots" content="noindex, follow" />
+  <link rel="canonical" href="https://gainztrainprep.com/complete-your-setup/" />
+  <link rel="stylesheet" href="../assets/css/global-light.css" />
+  <link rel="stylesheet" href="../assets/css/editorial.css" />
+  <style>
+    .setup-progress {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      font-size: 0.78rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .setup-progress .step.done { color: var(--green); }
+    .setup-progress .step.current { color: var(--orange); font-weight: 700; }
+    .setup-progress .sep { opacity: 0.4; }
+
+    .setup-explainer {
+      background: rgba(0,0,0,0.04);
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 0 auto 2rem;
+      max-width: 720px;
+    }
+    .setup-explainer h4 {
+      font-size: 0.82rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin: 0 0 0.75rem;
+    }
+    .setup-explainer ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .setup-explainer li {
+      padding: 0.4rem 0;
+      padding-left: 1.6rem;
+      position: relative;
+      line-height: 1.6;
+    }
+    .setup-explainer li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: var(--green);
+      font-weight: 800;
+    }
+
+    .setup-warning {
+      background: rgba(255,165,0,0.08);
+      border-left: 3px solid var(--orange);
+      padding: 0.85rem 1.1rem;
+      border-radius: 6px;
+      margin: 1.25rem auto 0;
+      max-width: 720px;
+      font-size: 0.92rem;
+      line-height: 1.55;
+    }
+    .setup-warning strong { color: var(--orange); }
+
+    .setup-form-wrap {
+      max-width: 720px;
+      margin: 2.5rem auto 0;
+    }
+    .setup-form-wrap iframe {
+      width: 100%;
+      min-height: 432px;
+      border: none;
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .setup-greeting {
+      text-align: center;
+      margin-bottom: 0.75rem;
+      font-size: 1rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav" role="navigation">
+    <a href="/" class="nav-logo">
+      <span class="nav-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></span>
+      <span class="nav-logo-tagline">Fuel Your Engine</span>
+    </a>
+    <div class="nav-links">
+      <a href="/meals/">Meals</a>
+      <a href="/how-it-works/">How It Works</a>
+      <a href="/subscribe/">Pricing</a>
+      <a href="/about/">About</a>
+      <a href="/contact/" class="btn btn-primary nav-cta">Contact</a>
+    </div>
+    <button class="nav-toggle" aria-label="Open menu"><span></span><span></span><span></span></button>
+  </nav>
+
+  <div class="nav-mobile">
+    <button class="nav-mobile-close">&times;</button>
+    <a href="/meals/">Meals</a>
+    <a href="/how-it-works/">How It Works</a>
+    <a href="/subscribe/">Pricing</a>
+    <a href="/about/">About</a>
+    <a href="/contact/">Contact</a>
+  </div>
+
+  <!-- PAGE HERO -->
+  <div class="page-hero">
+    <div class="container">
+      <div class="setup-progress">
+        <span class="step done">1. Pay</span>
+        <span class="sep">·</span>
+        <span class="step current">2. Goal</span>
+        <span class="sep">·</span>
+        <span class="step">3. Welcome</span>
+      </div>
+      <div class="section-label">Almost There</div>
+      <h1>Complete Your <span class="highlight">Setup</span></h1>
+      <p class="setup-greeting" id="greeting">Last step — pick your goal so we can portion your meals correctly.</p>
+    </div>
+  </div>
+
+  <!-- EXPLAINER + WARNING -->
+  <section>
+    <div class="container">
+      <div class="setup-explainer">
+        <h4>How This Works</h4>
+        <ul>
+          <li>You choose your goal — <strong>Cut</strong>, <strong>Maintain</strong>, or <strong>Build</strong></li>
+          <li>We portion meals based on your goal category (not custom per person)</li>
+          <li>You can change your goal anytime</li>
+        </ul>
+      </div>
+
+      <div class="setup-warning">
+        <strong>Heads up:</strong> If you don't choose a goal, your meals may be delayed. Take 30 seconds and lock it in now.
+      </div>
+
+      <!-- GOAL TYPE FORM -->
+      <div class="setup-form-wrap">
+        <iframe
+          src="https://api.leadconnectorhq.com/widget/form/6URfNiQSlZ8kSsKfE92u"
+          style="width:100%;min-height:432px;border:none;border-radius:12px;"
+          id="inline-6URfNiQSlZ8kSsKfE92u"
+          data-layout="{'id':'INLINE'}"
+          data-trigger-type="alwaysShow"
+          data-activation-type="alwaysActivated"
+          data-deactivation-type="neverDeactivate"
+          data-form-name="Goal Type"
+          data-height="432"
+          data-layout-iframe-id="inline-6URfNiQSlZ8kSsKfE92u"
+          data-form-id="6URfNiQSlZ8kSsKfE92u"
+          data-prefill
+          title="Goal Type"></iframe>
+        <script src="https://link.msgsndr.com/js/form_embed.js"></script>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></div>
+          <span class="footer-logo-tagline">Fuel Your Engine</span>
+          <p>High-protein weekly meal prep for people serious about their goals. Utah County, UT.</p>
+        </div>
+        <div class="footer-col">
+          <h5>Pages</h5>
+          <ul>
+            <li><a href="/meals/">Meal Catalog</a></li>
+            <li><a href="/how-it-works/">How It Works</a></li>
+            <li><a href="/subscribe/">Pricing</a></li>
+            <li><a href="/about/">About</a></li>
+            <li><a href="/contact/">Contact</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Legal</h5>
+          <ul>
+            <li><a href="/privacy-policy/">Privacy Policy</a></li>
+            <li><a href="/terms-of-service/">Terms of Service</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Contact</h5>
+          <ul>
+            <li><a href="tel:+13853278045">(385) 327-8045</a></li>
+            <li><a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener">@gainztrainprep</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p class="footer-copy">&copy; 2026 Gainz Train. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+  <script>
+    (function(){
+      var params = new URLSearchParams(window.location.search);
+      var fname = (params.get('fname') || params.get('first_name') || '').trim();
+      var lname = (params.get('lname') || params.get('last_name') || '').trim();
+      var email = (params.get('email') || '').trim();
+      var phone = (params.get('phone') || '').trim();
+      var plan  = (params.get('plan')  || '').trim();
+
+      // Personalize greeting if we got a first name
+      if (fname) {
+        var greet = document.getElementById('greeting');
+        if (greet) greet.innerHTML = 'Nice work, <strong>' + escapeHtml(fname) + '</strong> — last step. Pick your goal so we can portion your meals correctly.';
+      }
+
+      // Pre-fill the GHL iframe with whatever we have so the contact links up cleanly
+      var iframe = document.querySelector('iframe[data-prefill]');
+      if (iframe) {
+        try {
+          var u = new URL(iframe.src);
+          if (fname) u.searchParams.set('first_name', fname);
+          if (lname) u.searchParams.set('last_name', lname);
+          if (email) u.searchParams.set('email', email);
+          if (phone) u.searchParams.set('phone', phone);
+          if (plan)  u.searchParams.set('plan', plan);
+          iframe.src = u.toString();
+        } catch(e) { /* no-op */ }
+      }
+
+      function escapeHtml(s){
+        return s.replace(/[&<>"']/g, function(c){
+          return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

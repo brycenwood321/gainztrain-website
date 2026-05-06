@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to Gainz Train — You're In</title>
+  <meta name="description" content="Setup complete. Welcome to Gainz Train. Here's what happens next." />
+  <meta name="robots" content="noindex, follow" />
+  <link rel="canonical" href="https://gainztrainprep.com/welcome/" />
+  <link rel="stylesheet" href="../assets/css/global-light.css" />
+  <link rel="stylesheet" href="../assets/css/editorial.css" />
+  <style>
+    .welcome-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(34, 197, 94, 0.12);
+      color: var(--green);
+      padding: 0.4rem 0.85rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+    .welcome-badge .check { font-size: 1rem; }
+
+    .next-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+      margin: 2rem 0;
+    }
+    .next-card {
+      background: rgba(0,0,0,0.04);
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 12px;
+      padding: 1.5rem;
+      position: relative;
+    }
+    .next-num {
+      display: inline-block;
+      background: var(--orange);
+      color: #fff;
+      font-weight: 800;
+      font-size: 1.1rem;
+      width: 2.25rem;
+      height: 2.25rem;
+      line-height: 2.25rem;
+      text-align: center;
+      border-radius: 999px;
+      margin-bottom: 0.75rem;
+    }
+    .next-card h3 {
+      font-size: 1.1rem;
+      margin: 0 0 0.5rem;
+    }
+    .next-card p {
+      margin: 0;
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
+    @media (max-width: 768px) {
+      .next-grid { grid-template-columns: 1fr; }
+    }
+
+    .rules-list {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0;
+      list-style: none;
+    }
+    .rules-list li {
+      padding: 0.7rem 0 0.7rem 1.6rem;
+      position: relative;
+      line-height: 1.6;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .rules-list li:last-child { border-bottom: none; }
+    .rules-list li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: var(--orange);
+      font-weight: 800;
+      font-size: 1.4rem;
+      line-height: 1.2;
+    }
+
+    .welcome-cta-row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 2rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav" role="navigation">
+    <a href="/" class="nav-logo">
+      <span class="nav-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></span>
+      <span class="nav-logo-tagline">Fuel Your Engine</span>
+    </a>
+    <div class="nav-links">
+      <a href="/meals/">Meals</a>
+      <a href="/how-it-works/">How It Works</a>
+      <a href="/subscribe/">Pricing</a>
+      <a href="/about/">About</a>
+      <a href="/contact/" class="btn btn-primary nav-cta">Contact</a>
+    </div>
+    <button class="nav-toggle" aria-label="Open menu"><span></span><span></span><span></span></button>
+  </nav>
+
+  <div class="nav-mobile">
+    <button class="nav-mobile-close">&times;</button>
+    <a href="/meals/">Meals</a>
+    <a href="/how-it-works/">How It Works</a>
+    <a href="/subscribe/">Pricing</a>
+    <a href="/about/">About</a>
+    <a href="/contact/">Contact</a>
+  </div>
+
+  <!-- PAGE HERO -->
+  <div class="page-hero">
+    <div class="container" style="text-align:center;">
+      <span class="welcome-badge"><span class="check">&#10003;</span> Setup Complete</span>
+      <h1>You're <span class="highlight">In</span><span id="welcomeFname"></span>.</h1>
+      <p>Welcome to Gainz Train. You're officially fueling your engine.</p>
+    </div>
+  </div>
+
+  <!-- WHAT HAPPENS NEXT -->
+  <section>
+    <div class="container">
+      <div class="section-label" style="text-align:center;">What Happens Next</div>
+      <h2 style="text-align:center;">Here's How <span class="highlight">It Works.</span></h2>
+
+      <div class="next-grid">
+        <div class="next-card">
+          <span class="next-num">1</span>
+          <h3>Weekly Menu Drops</h3>
+          <p>Each week we release the updated menu with that week's meal options. You'll get a notification when it's live.</p>
+        </div>
+        <div class="next-card">
+          <span class="next-num">2</span>
+          <h3>Choose Your Meals</h3>
+          <p>Pick which meals you want for the week before the weekly cutoff. Mix and match based on your goals.</p>
+        </div>
+        <div class="next-card">
+          <span class="next-num">3</span>
+          <h3>We Handle the Rest</h3>
+          <p>If you don't update your order, we'll repeat last week's selection — or substitute the closest option if a meal rotates out.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WEEKLY RULES -->
+  <section>
+    <div class="container">
+      <div class="section-label" style="text-align:center;">Weekly Rules</div>
+      <h2 style="text-align:center;">A Few Things to <span class="highlight">Remember.</span></h2>
+
+      <ul class="rules-list">
+        <li>Update your meal selection by the weekly cutoff to get exactly what you want.</li>
+        <li>No last-minute changes after the cutoff — we're already prepping.</li>
+        <li>If a meal rotates out of the menu, we'll substitute the closest option.</li>
+        <li>Pickup is Sundays. We'll text you the window and location each week.</li>
+        <li>Pause, change your goal, or cancel anytime through your account or by texting us.</li>
+      </ul>
+
+      <div class="welcome-cta-row">
+        <a href="https://menu.gainztrainprep.com" target="_blank" rel="noopener" class="btn btn-primary">See This Week's Menu &rarr;</a>
+        <a href="/how-it-works/" class="btn btn-outline">How It Works</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div class="cta-orange">
+    <div class="container">
+      <div class="section-label">Questions?</div>
+      <h2>We're <span style="color: rgba(255,255,255,0.85);">Real People.</span></h2>
+      <p>Text us at (385) 327-8045 or DM @gainztrainprep — we actually respond.</p>
+      <div class="cta-actions">
+        <a href="tel:+13853278045" class="btn btn-primary">Text Us &rarr;</a>
+        <a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener" class="btn btn-outline">DM on Instagram</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></div>
+          <span class="footer-logo-tagline">Fuel Your Engine</span>
+          <p>High-protein weekly meal prep for people serious about their goals. Utah County, UT.</p>
+        </div>
+        <div class="footer-col">
+          <h5>Pages</h5>
+          <ul>
+            <li><a href="/meals/">Meal Catalog</a></li>
+            <li><a href="/how-it-works/">How It Works</a></li>
+            <li><a href="/subscribe/">Pricing</a></li>
+            <li><a href="/about/">About</a></li>
+            <li><a href="/contact/">Contact</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Legal</h5>
+          <ul>
+            <li><a href="/privacy-policy/">Privacy Policy</a></li>
+            <li><a href="/terms-of-service/">Terms of Service</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Contact</h5>
+          <ul>
+            <li><a href="tel:+13853278045">(385) 327-8045</a></li>
+            <li><a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener">@gainztrainprep</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p class="footer-copy">&copy; 2026 Gainz Train. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+  <script>
+    (function(){
+      var params = new URLSearchParams(window.location.search);
+      var fname = (params.get('fname') || params.get('first_name') || '').trim();
+      if (fname) {
+        var el = document.getElementById('welcomeFname');
+        if (el) el.textContent = ', ' + fname.charAt(0).toUpperCase() + fname.slice(1);
+      }
+    })();
+  </script>
+</body>
+</html>

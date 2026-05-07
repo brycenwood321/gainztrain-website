@@ -103,7 +103,8 @@
       <a href="/how-it-works/">How It Works</a>
       <a href="/subscribe/">Pricing</a>
       <a href="/about/">About</a>
-      <a href="/contact/" class="btn btn-primary nav-cta">Contact</a>
+      <a href="/faqs/">FAQs</a>
+      <a href="/contact" class="btn btn-primary nav-cta">Contact</a>
     </div>
     <button class="nav-toggle" aria-label="Open menu"><span></span><span></span><span></span></button>
   </nav>
@@ -114,7 +115,8 @@
     <a href="/how-it-works/">How It Works</a>
     <a href="/subscribe/">Pricing</a>
     <a href="/about/">About</a>
-    <a href="/contact/">Contact</a>
+    <a href="/faqs/">FAQs</a>
+    <a href="/contact">Contact</a>
   </div>
 
   <!-- PAGE HERO -->
@@ -186,7 +188,8 @@
             <li><a href="/how-it-works/">How It Works</a></li>
             <li><a href="/subscribe/">Pricing</a></li>
             <li><a href="/about/">About</a></li>
-            <li><a href="/contact/">Contact</a></li>
+            <li><a href="/faqs/">FAQs</a></li>
+            <li><a href="/contact">Contact</a></li>
           </ul>
         </div>
         <div class="footer-col">
@@ -213,7 +216,11 @@
   <script src="../assets/js/main.js"></script>
   <script>
     (function(){
-      var params = new URLSearchParams(window.location.search);
+      // Preserve literal '+' in email/phone params (URLSearchParams decodes + as space).
+      // Without this, emails like 'john+meals@gmail.com' or phones like '+18015551234'
+      // get corrupted -> GHL form rejects them silently and submit hangs.
+      var safeSearch = window.location.search.replace(/\+/g, '%2B');
+      var params = new URLSearchParams(safeSearch);
       var fname = (params.get('fname') || params.get('first_name') || '').trim();
       var lname = (params.get('lname') || params.get('last_name') || '').trim();
       var email = (params.get('email') || '').trim();

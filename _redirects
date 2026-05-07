@@ -13,3 +13,14 @@
 /14-weekly-meals-checkout   https://join.gainztrainprep.com/14-weekly-meals-checkout   301
 /15-weekly-meals-checkout   https://join.gainztrainprep.com/15-weekly-meals-checkout   301
 /16-weekly-meals-checkout   https://join.gainztrainprep.com/16-weekly-meals-checkout   301
+
+# Contact: canonical is /contact (contact.html). Redirect the slashed path so old
+# links don't 404 after deleting contact/index.html.
+/contact/                   /contact                                                   301
+
+# Light theme is now canonical. Redirect old dark theme URLs to their light counterparts.
+# Old dark pages (home.html, pricing.html, how-it-works.html, faqs.html) were deleted.
+/home                       /                                                          301
+/pricing                    /subscribe/                                                301
+/how-it-works               /how-it-works/                                             301
+/faqs                       /faqs/                                                     301

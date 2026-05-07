@@ -110,7 +110,8 @@
       <a href="/how-it-works/">How It Works</a>
       <a href="/subscribe/">Pricing</a>
       <a href="/about/">About</a>
-      <a href="/contact/" class="btn btn-primary nav-cta">Contact</a>
+      <a href="/faqs/">FAQs</a>
+      <a href="/contact" class="btn btn-primary nav-cta">Contact</a>
     </div>
     <button class="nav-toggle" aria-label="Open menu"><span></span><span></span><span></span></button>
   </nav>
@@ -121,7 +122,8 @@
     <a href="/how-it-works/">How It Works</a>
     <a href="/subscribe/">Pricing</a>
     <a href="/about/">About</a>
-    <a href="/contact/">Contact</a>
+    <a href="/faqs/">FAQs</a>
+    <a href="/contact">Contact</a>
   </div>
 
   <!-- PAGE HERO -->
@@ -174,8 +176,8 @@
       </ul>
 
       <div class="welcome-cta-row">
-        <a href="https://menu.gainztrainprep.com" target="_blank" rel="noopener" class="btn btn-primary">See This Week's Menu &rarr;</a>
-        <a href="/how-it-works/" class="btn btn-outline">How It Works</a>
+        <a id="seeMenuBtn" href="/menu-selection/" target="_blank" rel="noopener" class="btn btn-primary">See This Week's Menu &rarr;</a>
+        <a href="/how-it-works/" target="_blank" rel="noopener" class="btn btn-outline">How It Works</a>
       </div>
     </div>
   </section>
@@ -209,7 +211,8 @@
             <li><a href="/how-it-works/">How It Works</a></li>
             <li><a href="/subscribe/">Pricing</a></li>
             <li><a href="/about/">About</a></li>
-            <li><a href="/contact/">Contact</a></li>
+            <li><a href="/faqs/">FAQs</a></li>
+            <li><a href="/contact">Contact</a></li>
           </ul>
         </div>
         <div class="footer-col">
@@ -236,11 +239,29 @@
   <script src="../assets/js/main.js"></script>
   <script>
     (function(){
-      var params = new URLSearchParams(window.location.search);
+      // Preserve literal '+' in email/phone params (URLSearchParams decodes + as space).
+      var safeSearch = window.location.search.replace(/\+/g, '%2B');
+      var params = new URLSearchParams(safeSearch);
       var fname = (params.get('fname') || params.get('first_name') || '').trim();
+      var email = (params.get('email') || '').trim();
       if (fname) {
         var el = document.getElementById('welcomeFname');
         if (el) el.textContent = ', ' + fname.charAt(0).toUpperCase() + fname.slice(1);
+      }
+      // Forward all useful params (fname/email/meals/phone) to the menu link
+      // so the menu page knows who they are AND what subscription tier to enforce.
+      var menuBtn = document.getElementById('seeMenuBtn');
+      if (menuBtn) {
+        try {
+          var u = new URL(menuBtn.href, window.location.origin);
+          var phone = (params.get('phone') || '').trim();
+          var meals = (params.get('meals') || params.get('plan') || params.get('subscription_meals') || '').trim();
+          if (fname) u.searchParams.set('fname', fname);
+          if (email) u.searchParams.set('email', email);
+          if (phone) u.searchParams.set('phone', phone);
+          if (meals) u.searchParams.set('meals', meals);
+          menuBtn.href = u.toString();
+        } catch(e) { /* no-op */ }
       }
     })();
   </script>

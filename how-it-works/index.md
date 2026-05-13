@@ -93,7 +93,7 @@ Currently we run one menu for everyone — no gluten-free or dairy-free variatio
 
 What are the specialty meal upcharges?
 
-Some premium proteins (like Braised Beef) cost $1.50 more per meal due to ingredient cost. When you select a specialty item from the menu, we'll note the upcharge and invoice separately. Your base subscription stays the same.
+Some premium proteins (like steak or premium beef cuts) cost $1.50 more per meal due to ingredient cost. When you select a specialty item from the menu, we'll note the upcharge and invoice separately. Your base subscription stays the same.
 
 Where exactly is pickup?
 

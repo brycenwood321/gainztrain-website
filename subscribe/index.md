@@ -155,7 +155,7 @@ Choose your meal count:
 [15 meals/week $127.50/wk](https://join.gainztrainprep.com/15-weekly-meals-checkout)
 [16 meals/week $136/wk](https://join.gainztrainprep.com/16-weekly-meals-checkout)
 
-Some specialty proteins (like **Braised Beef**) include a small $1.50 upcharge, billed separately. All base plan pricing is shown above.
+Some specialty proteins (like **steak or premium beef cuts**) include a small $1.50 upcharge, billed separately. All base plan pricing is shown above.
 
 🔥
 

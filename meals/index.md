@@ -2,7 +2,7 @@
 title: "Meal Catalog | High-Protein Meal Prep | Gainz Train Utah"
 description: "Browse Gainz Train's high-protein meal catalog. Exact macros on every meal. Menu rotates weekly — choose your meals at menu.gainztrainprep.com each Friday."
 url: https://gainztrainprep.com/meals/
-last_updated: 2026-05-11
+last_updated: 2026-05-12
 ---
 The Catalog
 
@@ -18,14 +18,6 @@ Utah County
 Macro Transparent
 Sunday Pickup
 Built for the Gym
-High Protein
-Fresh Every Week
-From $8.50 / Meal
-Never Frozen
-Utah County
-Macro Transparent
-Sunday Pickup
-Built for the Gym
 
 ### Want to See This Week's Menu?
 
@@ -33,119 +25,53 @@ The catalog below shows all meals we rotate through. To see what's available thi
 
 [This Week's Menu →](https://menu.gainztrainprep.com)
 
-⚠ Macros below are placeholders — swap in real numbers before going live.
+![Chicken Bro-Tato Bowl high-protein meal prep with roasted potatoes and carrots](../assets/images/meals/chicken-bro-tato-bowl.jpg)
 
-![Brotatoe Bowl high-protein meal prep](../assets/images/meals/meal-rice-bowl.png)
+Chicken Bro-Tato Bowl
 
-Brotatoe Bowl
+55g Protein
 
-38gProtein
+29g Carbs
 
-45gCarbs
+24g Fat
 
-10gFat
+520 Cal
 
-418Cal
+![Beef Fajita Bowl meal prep with ground beef, peppers, onions, and rice](../assets/images/meals/beef-fajita-bowl.jpg)
 
-![Chicken Alfredo Pasta high-protein meal prep](../assets/images/meals/meal-chicken-herbs.png)
+Beef Fajita Bowl
 
-Chicken Alfredo Pasta
+45g Protein
 
-40gProtein
+45g Carbs
 
-52gCarbs
+18g Fat
 
-12gFat
+520 Cal
 
-468Cal
+![Teriyaki Turkey Bowl meal prep with ground turkey, zucchini, and rice](../assets/images/meals/teriyaki-turkey-bowl.jpg)
 
-![Steak rice bowl meal prep](../assets/images/meals/meal-chicken-asparagus.png)
+Teriyaki Turkey Bowl
 
-Steak & Rice Bowl
+42g Protein
 
-42gProtein
+58g Carbs
 
-38gCarbs
+14g Fat
 
-14gFat
+480 Cal
 
-450Cal
+![Chicken Broccoli and Rice meal prep with marinated chicken bites and steamed broccoli](../assets/images/meals/chicken-broccoli-rice.jpg)
 
-★ Specialty Protein (+$1.50)
+Chicken Broccoli & Rice
 
-![Breakfast Power Bowl meal prep](../assets/images/meals/meal-prep-bowl.png)
+56g Protein
 
-Breakfast Power Bowl
+45g Carbs
 
-35gProtein
+10g Fat
 
-30gCarbs
-
-15gFat
-
-395Cal
-
-![Turkey Taco Bowl high protein](../assets/images/meals/meal-trio.png)
-
-Turkey Taco Bowl
-
-36gProtein
-
-40gCarbs
-
-9gFat
-
-385Cal
-
-![Braised Beef and Rice meal prep](../assets/images/meals/meal-1.png)
-
-Braised Beef & Rice
-
-45gProtein
-
-42gCarbs
-
-16gFat
-
-492Cal
-
-★ Specialty Protein (+$1.50)
-
-![Ground Turkey and Sweet Potato meal prep](../assets/images/meals/meal-2.png)
-
-Ground Turkey & Sweet Potato
-
-37gProtein
-
-48gCarbs
-
-7gFat
-
-403Cal
-
-![Shredded Chicken Wrap Bowl meal prep](../assets/images/meals/meal-3.png)
-
-Shredded Chicken Wrap Bowl
-
-41gProtein
-
-35gCarbs
-
-11gFat
-
-407Cal
-
-![Herb Chicken and Roasted Potatoes meal prep](../assets/images/meals/meal-potatoes.png)
-
-Herb Chicken & Roasted Potatoes
-
-39gProtein
-
-44gCarbs
-
-9gFat
-
-413Cal
+490 Cal
 
 Weekly Rotation
 

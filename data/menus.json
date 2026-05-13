@@ -2,52 +2,52 @@
   "$schema": "menu-selection page reads this. Add new weeks by appending to the menus[] array. The page picks the menu whose week_of date is the next upcoming Sunday from today; if none match, falls back to the most recent.",
   "menus": [
     {
-      "week_of": "2026-05-10",
+      "week_of": "2026-05-17",
       "label": "This Week",
       "meals": [
         {
           "position": 1,
-          "name": "Brotatoe Bowl",
-          "description": "Loaded baked potato topped with seasoned shredded chicken, greek yogurt, sharp cheddar, and chives.",
-          "calories": 580,
-          "protein": 45,
-          "carbs": 60,
-          "fat": 12,
-          "image": null,
+          "name": "Chicken Bro-Tato Bowl",
+          "description": "Seasoned grilled chicken with herb-roasted potatoes and caramelized carrots. Comfort food that still hits your protein.",
+          "calories": 520,
+          "protein": 55,
+          "carbs": 29,
+          "fat": 24,
+          "image": "/assets/images/meals/chicken-bro-tato-bowl.jpg",
           "emoji": "🥔"
         },
         {
           "position": 2,
-          "name": "Steak & Rice Bowl",
-          "description": "Marinated sirloin steak over jasmine rice with roasted broccoli and a lime-cilantro drizzle.",
-          "calories": 620,
-          "protein": 50,
-          "carbs": 65,
-          "fat": 14,
-          "image": null,
-          "emoji": "🥩"
+          "name": "Beef Fajita Bowl",
+          "description": "Seasoned ground beef over jasmine rice with sautéed bell peppers and onions — fajita-style, fork-ready.",
+          "calories": 520,
+          "protein": 45,
+          "carbs": 45,
+          "fat": 18,
+          "image": "/assets/images/meals/beef-fajita-bowl.jpg",
+          "emoji": "🌶️"
         },
         {
           "position": 3,
-          "name": "Chicken Alfredo Protein Pasta",
-          "description": "Grilled chicken breast over high-protein penne in a light alfredo with parmesan and parsley.",
-          "calories": 540,
-          "protein": 48,
-          "carbs": 50,
-          "fat": 10,
-          "image": null,
-          "emoji": "🍝"
+          "name": "Teriyaki Turkey Bowl",
+          "description": "Teriyaki-glazed ground turkey over jasmine rice with grilled zucchini and yellow squash.",
+          "calories": 480,
+          "protein": 42,
+          "carbs": 58,
+          "fat": 14,
+          "image": "/assets/images/meals/teriyaki-turkey-bowl.jpg",
+          "emoji": "🍱"
         },
         {
           "position": 4,
-          "name": "Turkey Taco Bowl",
-          "description": "Seasoned ground turkey with black beans, brown rice, fresh salsa, and a dollop of greek yogurt.",
-          "calories": 510,
-          "protein": 45,
-          "carbs": 55,
-          "fat": 9,
-          "image": null,
-          "emoji": "🌮"
+          "name": "Chicken Broccoli & Rice",
+          "description": "Marinated chicken bites over jasmine rice with steamed broccoli. The classic gym meal, done right.",
+          "calories": 490,
+          "protein": 56,
+          "carbs": 45,
+          "fat": 10,
+          "image": "/assets/images/meals/chicken-broccoli-rice.jpg",
+          "emoji": "🥦"
         }
       ]
     }

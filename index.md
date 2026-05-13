@@ -95,22 +95,22 @@ The Menu
 
 ## Food That Actually Tastes Good.
 
-![Brotatoe Bowl high-protein meal prep](assets/images/meals/meal-rice-bowl.png)
+![Chicken Bro-Tato Bowl high-protein meal prep](assets/images/meals/chicken-bro-tato-bowl.jpg)
 
-Brotatoe Bowl
+Chicken Bro-Tato Bowl
 
-**38g** Protein
-**45g** Carbs
-**10g** Fat
-**418** Cal
+**55g** Protein
+**29g** Carbs
+**24g** Fat
+**520** Cal
 
-![Grilled Chicken high-protein meal](assets/images/meals/meal-chicken-herbs.png)
+![Beef Fajita Bowl high-protein meal prep](assets/images/meals/beef-fajita-bowl.jpg)
 
-Grilled Chicken & Rice
+Beef Fajita Bowl
 
-![Chicken and Asparagus meal prep](assets/images/meals/meal-chicken-asparagus.png)
+![Chicken Broccoli and Rice high-protein meal prep](assets/images/meals/chicken-broccoli-rice.jpg)
 
-Chicken & Asparagus
+Chicken Broccoli & Rice
 
 [See Full Meal Catalog →](/meals/)
 
@@ -148,7 +148,7 @@ Step 04
 
 Sunday pickup or delivery in Utah County. Your week of food handled. Go train.
 
-![Gainz Train meal prep](assets/images/meals/meal-prep-bowl.png)
+![Teriyaki Turkey Bowl meal prep](assets/images/meals/teriyaki-turkey-bowl.jpg)
 
 Our Story
 

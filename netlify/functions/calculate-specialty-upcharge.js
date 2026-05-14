@@ -195,7 +195,7 @@ exports.handler = async function (event) {
       const r = await fetch(`${GHL_API}/contacts/${contactId}/notes`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${ghlToken}`, Version: GHL_VERSION, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: noteBody, contactId, userId: 'BVSNQpzruUHLvWgKX4NJ' }),
+        body: JSON.stringify({ body: noteBody, userId: 'BVSNQpzruUHLvWgKX4NJ' }),
       });
       const d = await r.json();
       noteResult = r.ok ? { ok: true, noteId: d.note?.id || d.id } : { ok: false, error: d.message || d.error };

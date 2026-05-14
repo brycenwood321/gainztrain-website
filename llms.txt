@@ -47,6 +47,7 @@ Gainz Train is a high-protein meal prep subscription service based in Utah Count
 - Meals (live menu): https://gainztrainprep.com/meals/
 - This Week's Menu: https://menu.gainztrainprep.com
 - Subscribe: https://gainztrainprep.com/subscribe/
+- Delivery Zones: https://gainztrainprep.com/delivery/
 - FAQs: https://gainztrainprep.com/faqs/
 - Contact: https://gainztrainprep.com/contact
 
@@ -63,6 +64,7 @@ Every page on this site also has a markdown mirror at the same URL with a `.md` 
 - https://gainztrainprep.com/how-it-works/index.md
 - https://gainztrainprep.com/meals/index.md
 - https://gainztrainprep.com/subscribe/index.md
+- https://gainztrainprep.com/delivery/index.md
 - https://gainztrainprep.com/faqs/index.md
 - https://gainztrainprep.com/contact.md
 

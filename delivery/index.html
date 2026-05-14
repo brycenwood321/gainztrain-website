@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delivery Zones | Gainz Train Meal Prep Utah</title>
+  <meta name="description" content="Sunday delivery across Utah County. Distance-based flat-rate zones from $10–$25/week, or free pickup at our Orem kitchen. Same fee every week, no surprises." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://gainztrainprep.com/delivery/" />
+  <link rel="stylesheet" href="../assets/css/global-light.css" />
+  <link rel="stylesheet" href="../assets/css/editorial.css" />
+  <style>
+    .delivery-zones-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.25rem;
+      margin: 2.5rem 0;
+    }
+    .zone-card {
+      background: #fff;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 12px;
+      padding: 1.75rem 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .zone-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+    }
+    .zone-card.pickup {
+      background: linear-gradient(135deg, #fff5ec 0%, #ffe7d0 100%);
+      border-color: rgba(247, 127, 0, 0.25);
+    }
+    .zone-eyebrow {
+      font-family: var(--font-head, inherit);
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-weight: 800;
+      color: var(--orange);
+      margin-bottom: 0.4rem;
+    }
+    .zone-price {
+      font-family: var(--font-head, inherit);
+      font-size: 2rem;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 0.25rem;
+    }
+    .zone-price .per { font-size: 0.95rem; font-weight: 600; color: rgba(0,0,0,0.5); letter-spacing: 0; }
+    .zone-distance {
+      font-size: 0.78rem;
+      color: rgba(0,0,0,0.55);
+      margin-bottom: 1rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .zone-cities {
+      font-size: 0.95rem;
+      line-height: 1.55;
+      color: rgba(0,0,0,0.78);
+    }
+    .zone-cities strong { color: var(--text, #111); font-weight: 700; }
+    .delivery-note-box {
+      background: #fafafa;
+      border-left: 4px solid var(--orange);
+      padding: 1.25rem 1.5rem;
+      border-radius: 6px;
+      margin: 2rem auto;
+      max-width: 720px;
+    }
+    .delivery-note-box h4 {
+      margin: 0 0 0.5rem 0;
+      font-size: 0.95rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--orange);
+    }
+    .delivery-note-box p { margin: 0; font-size: 0.95rem; line-height: 1.6; color: rgba(0,0,0,0.75); }
+    .how-it-works-steps {
+      max-width: 720px;
+      margin: 3rem auto 1rem;
+      display: grid;
+      gap: 1rem;
+    }
+    .hiw-step {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+      padding: 1rem 0;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .hiw-step:last-child { border-bottom: none; }
+    .hiw-num {
+      flex: 0 0 36px;
+      height: 36px;
+      width: 36px;
+      border-radius: 50%;
+      background: var(--orange);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1rem;
+    }
+    .hiw-content h4 { margin: 0 0 0.3rem 0; font-size: 1.05rem; }
+    .hiw-content p { margin: 0; color: rgba(0,0,0,0.7); font-size: 0.95rem; line-height: 1.55; }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav" role="navigation">
+    <a href="/" class="nav-logo">
+      <span class="nav-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></span>
+      <span class="nav-logo-tagline">Fuel Your Engine</span>
+    </a>
+    <div class="nav-links">
+      <a href="/meals/">Meals</a>
+      <a href="/how-it-works/">How It Works</a>
+      <a href="/subscribe/">Pricing</a>
+      <a href="/about/">About</a>
+      <a href="/faqs/">FAQs</a>
+      <a href="/contact">Contact</a>
+      <a href="/subscribe/" class="btn btn-primary nav-cta">Start Today</a>
+    </div>
+    <button class="nav-toggle" aria-label="Open menu"><span></span><span></span><span></span></button>
+  </nav>
+
+  <div class="nav-mobile">
+    <button class="nav-mobile-close">&times;</button>
+    <a href="/meals/">Meals</a>
+    <a href="/how-it-works/">How It Works</a>
+    <a href="/subscribe/">Pricing</a>
+    <a href="/about/">About</a>
+    <a href="/faqs/">FAQs</a>
+    <a href="/contact">Contact</a>
+  </div>
+
+  <!-- PAGE HERO -->
+  <div class="page-hero">
+    <div class="container">
+      <div class="section-label">Sunday Delivery</div>
+      <h1>Delivery <span class="highlight">Zones.</span></h1>
+      <p>We deliver every Sunday across Utah County. Your weekly fee is based on driving distance from our Orem kitchen &mdash; same flat rate every week, no surprises.</p>
+    </div>
+  </div>
+
+  <!-- MARQUEE -->
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track">
+      <span class="marquee-item">Sunday Delivery</span>
+      <span class="marquee-sep">&middot;</span>
+      <span class="marquee-item">Flat Weekly Rate</span>
+      <span class="marquee-sep">&middot;</span>
+      <span class="marquee-item">No Surprises</span>
+      <span class="marquee-sep">&middot;</span>
+      <span class="marquee-item">Free Pickup at Orem</span>
+      <span class="marquee-sep">&middot;</span>
+      <span class="marquee-item">Distance-Based</span>
+      <span class="marquee-sep">&middot;</span>
+      <span class="marquee-item">Utah County</span>
+      <span class="marquee-sep">&middot;</span>
+      <span class="marquee-item">Sunday Delivery</span>
+      <span class="marquee-sep">&middot;</span>
+      <span class="marquee-item">Flat Weekly Rate</span>
+      <span class="marquee-sep">&middot;</span>
+      <span class="marquee-item">No Surprises</span>
+      <span class="marquee-sep">&middot;</span>
+      <span class="marquee-item">Free Pickup at Orem</span>
+      <span class="marquee-sep">&middot;</span>
+      <span class="marquee-item">Distance-Based</span>
+      <span class="marquee-sep">&middot;</span>
+      <span class="marquee-item">Utah County</span>
+      <span class="marquee-sep">&middot;</span>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <section>
+    <div class="container">
+
+      <div class="delivery-zones-grid">
+
+        <!-- Pickup -->
+        <div class="zone-card pickup fade-up">
+          <div class="zone-eyebrow">&#9733; Pickup</div>
+          <div class="zone-price">FREE<span class="per"> / week</span></div>
+          <div class="zone-distance">At our Orem kitchen</div>
+          <p class="zone-cities">Skip the fee. Grab your meals Sunday afternoon. Address shared with all active members after signup.</p>
+        </div>
+
+        <!-- Zone 1 -->
+        <div class="zone-card fade-up">
+          <div class="zone-eyebrow">Zone 1</div>
+          <div class="zone-price">$10<span class="per"> / week</span></div>
+          <div class="zone-distance">Within 5 miles</div>
+          <p class="zone-cities"><strong>Orem</strong>, <strong>Provo</strong>, <strong>Lindon</strong>, <strong>Vineyard</strong>, <strong>Pleasant Grove</strong></p>
+        </div>
+
+        <!-- Zone 2 -->
+        <div class="zone-card fade-up">
+          <div class="zone-eyebrow">Zone 2</div>
+          <div class="zone-price">$15<span class="per"> / week</span></div>
+          <div class="zone-distance">5&ndash;10 miles</div>
+          <p class="zone-cities"><strong>American Fork</strong>, <strong>Springville</strong>, <strong>Cedar Hills</strong>, <strong>Highland</strong>, <strong>Alpine</strong>, <strong>Mapleton</strong></p>
+        </div>
+
+        <!-- Zone 3 -->
+        <div class="zone-card fade-up">
+          <div class="zone-eyebrow">Zone 3</div>
+          <div class="zone-price">$20<span class="per"> / week</span></div>
+          <div class="zone-distance">10&ndash;15 miles</div>
+          <p class="zone-cities"><strong>Lehi</strong>, <strong>Spanish Fork</strong>, <strong>Salem</strong>, <strong>Saratoga Springs</strong>, <strong>Eagle Mountain</strong></p>
+        </div>
+
+        <!-- Zone 4 -->
+        <div class="zone-card fade-up">
+          <div class="zone-eyebrow">Zone 4</div>
+          <div class="zone-price">$25<span class="per"> / week</span></div>
+          <div class="zone-distance">15&ndash;25 miles</div>
+          <p class="zone-cities"><strong>Draper</strong>, <strong>Payson</strong>, <strong>Santaquin</strong>, <strong>Bluffdale</strong>, <strong>Riverton</strong></p>
+        </div>
+
+      </div>
+
+      <!-- "Not in zones" safety valve -->
+      <div class="delivery-note-box fade-up">
+        <h4>Not in any zone?</h4>
+        <p>Text us at <a href="tel:+13853278045" style="color: var(--orange); font-weight: 700;">(385) 327-8045</a> or DM <a href="https://instagram.com/gainztrainprep" target="_blank" rel="noopener" style="color: var(--orange); font-weight: 700;">@gainztrainprep</a> &mdash; we deliver case-by-case to nearby spots we haven't formally zoned yet.</p>
+      </div>
+
+      <!-- How It Works for Delivery -->
+      <div style="margin-top: 4rem;">
+        <div style="text-align: center;">
+          <div class="section-label">How Delivery Works</div>
+          <h2>Just Show Up at Your <span class="highlight">Front Door.</span></h2>
+        </div>
+
+        <div class="how-it-works-steps">
+
+          <div class="hiw-step">
+            <div class="hiw-num">1</div>
+            <div class="hiw-content">
+              <h4>Sign up &amp; enter your address</h4>
+              <p>At checkout, you enter your delivery address like any other order. We automatically detect your zone from your zip code.</p>
+            </div>
+          </div>
+
+          <div class="hiw-step">
+            <div class="hiw-num">2</div>
+            <div class="hiw-content">
+              <h4>We confirm your zone by email</h4>
+              <p>Right after signup, you get an email confirming your zone and weekly delivery fee. If something's off, just reply and we'll fix it.</p>
+            </div>
+          </div>
+
+          <div class="hiw-step">
+            <div class="hiw-num">3</div>
+            <div class="hiw-content">
+              <h4>Pick your meals each week</h4>
+              <p>Choose your meals at <a href="https://menu.gainztrainprep.com" target="_blank" rel="noopener" style="color: var(--orange); font-weight: 600;">menu.gainztrainprep.com</a> before Saturday cutoff. We prep Sunday morning.</p>
+            </div>
+          </div>
+
+          <div class="hiw-step">
+            <div class="hiw-num">4</div>
+            <div class="hiw-content">
+              <h4>Delivered Sunday afternoon</h4>
+              <p>We text you a delivery time window the day before. Your meals show up at your door &mdash; ready for the week.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Pickup alternative call-out -->
+      <div class="delivery-note-box fade-up" style="border-left-color: #16a34a; margin-top: 3rem;">
+        <h4 style="color: #16a34a;">Want to skip the delivery fee?</h4>
+        <p>Pickup at our Orem kitchen is always free. Once you've signed up, reply <strong>PICKUP</strong> to your welcome email and we'll switch you over. You'll get the pickup address and time window the day before.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div class="cta-orange">
+    <div class="container">
+      <div class="section-label">Ready?</div>
+      <h2>Pick Your <span style="color: rgba(255,255,255,0.85);">Plan.</span></h2>
+      <p>Sign up takes 2 minutes. Your first delivery could be this Sunday.</p>
+      <div class="cta-actions">
+        <a href="/subscribe/" class="btn btn-primary btn-pulse">See Plans &rarr;</a>
+        <a href="/how-it-works/" class="btn btn-outline">How It Works</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></div>
+          <span class="footer-logo-tagline">Fuel Your Engine</span>
+          <p>High-protein weekly meal prep for people serious about their goals. Utah County, UT.</p>
+        </div>
+        <div class="footer-col">
+          <h5>Pages</h5>
+          <ul>
+            <li><a href="/meals/">Meal Catalog</a></li>
+            <li><a href="/how-it-works/">How It Works</a></li>
+            <li><a href="/subscribe/">Pricing</a></li>
+            <li><a href="/delivery/">Delivery Zones</a></li>
+            <li><a href="/about/">About</a></li>
+            <li><a href="/faqs/">FAQs</a></li>
+            <li><a href="/contact">Contact</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Contact</h5>
+          <ul>
+            <li><a href="tel:+13853278045">(385) 327-8045</a></li>
+            <li><a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener">@gainztrainprep</a></li>
+            <li><a href="https://menu.gainztrainprep.com" target="_blank" rel="noopener">This Week's Menu</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p class="footer-copy">&copy; 2026 Gainz Train. All rights reserved.</p>
+        <div class="footer-social">
+          <a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener" aria-label="Instagram">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

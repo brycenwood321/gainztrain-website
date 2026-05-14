@@ -1,5 +1,5 @@
 {
-  "$schema": "menu-selection page reads this. Add new weeks by appending to the menus[] array. The page picks the menu whose week_of date is the next upcoming Sunday from today; if none match, falls back to the most recent.",
+  "$schema": "menu-selection page reads this. Add new weeks by appending to the menus[] array. The page picks the menu whose week_of date is the next upcoming Sunday from today; if none match, falls back to the most recent. The `upcharge_per_meal` field is read by calculate-specialty-upcharge.js — leave at 0 for standard meals, set to $1.00 (beef), $3.00 (steak), etc. for specialty proteins.",
   "menus": [
     {
       "week_of": "2026-05-17",
@@ -14,7 +14,8 @@
           "carbs": 29,
           "fat": 24,
           "image": "/assets/images/meals/chicken-bro-tato-bowl.jpg",
-          "emoji": "🥔"
+          "emoji": "🥔",
+          "upcharge_per_meal": 0
         },
         {
           "position": 2,
@@ -25,7 +26,8 @@
           "carbs": 45,
           "fat": 18,
           "image": "/assets/images/meals/beef-fajita-bowl.jpg",
-          "emoji": "🌶️"
+          "emoji": "🌶️",
+          "upcharge_per_meal": 1.00
         },
         {
           "position": 3,
@@ -36,7 +38,8 @@
           "carbs": 58,
           "fat": 14,
           "image": "/assets/images/meals/teriyaki-turkey-bowl.jpg",
-          "emoji": "🍱"
+          "emoji": "🍱",
+          "upcharge_per_meal": 0
         },
         {
           "position": 4,
@@ -47,7 +50,8 @@
           "carbs": 45,
           "fat": 10,
           "image": "/assets/images/meals/chicken-broccoli-rice.jpg",
-          "emoji": "🥦"
+          "emoji": "🥦",
+          "upcharge_per_meal": 0
         }
       ]
     }

@@ -65,7 +65,9 @@ exports.handler = async function (event) {
     const sub = payload.sub;
     const couponId = payload.coupon;
     if (!sub || !couponId) return json(400, { ok: false, error: 'sub_and_coupon_required' });
-    const body = new URLSearchParams({ coupon: couponId });
+    // New Stripe API uses discounts[] array instead of singular coupon param
+    const body = new URLSearchParams();
+    body.append('discounts[0][coupon]', couponId);
     const r = await fetch(`https://api.stripe.com/v1/subscriptions/${sub}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -76,9 +78,7 @@ exports.handler = async function (event) {
     return json(200, {
       ok: true,
       sub_id: data.id,
-      coupon: data.discount?.coupon?.id,
-      duration: data.discount?.coupon?.duration,
-      percent_off: data.discount?.coupon?.percent_off,
+      discounts: (data.discounts || []).map((d) => ({ id: d.id, coupon: d.coupon })),
     });
   }
 

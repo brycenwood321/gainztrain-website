@@ -172,6 +172,11 @@ async function createAndChargeInvoice({ token, contactId, contactEmail, contactN
     altId: GHL_LOCATION,
     altType: 'location',
     name: `Specialty upcharge — week of ${week_of}`,
+    businessDetails: {
+      name: 'Gainz Train',
+      website: 'https://gainztrainprep.com',
+      phoneNo: '+13853278045',
+    },
     contactDetails: {
       id: contactId,
       name: contactName || undefined,

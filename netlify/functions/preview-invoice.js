@@ -18,9 +18,14 @@ exports.handler = async function (event) {
   const sub = await subRes.json();
   const customerId = sub.customer;
 
-  // 2. Get upcoming invoice for this customer
-  const invRes = await fetch(`https://api.stripe.com/v1/invoices/upcoming?customer=${customerId}&subscription=${subId}`, {
-    headers: { Authorization: `Bearer ${key}` },
+  // 2. Get preview of next invoice (newer Stripe API)
+  const previewBody = new URLSearchParams();
+  previewBody.append('customer', customerId);
+  previewBody.append('subscription', subId);
+  const invRes = await fetch(`https://api.stripe.com/v1/invoices/create_preview`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: previewBody,
   });
   if (!invRes.ok) {
     const body = await invRes.text();

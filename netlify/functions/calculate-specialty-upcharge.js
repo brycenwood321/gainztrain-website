@@ -230,6 +230,7 @@ async function createAndChargeInvoice({ token, contactId, contactEmail, contactN
       body: JSON.stringify({
         altId: GHL_LOCATION,
         altType: 'location',
+        userId: 'BVSNQpzruUHLvWgKX4NJ', // GT account owner — required by GHL invoice send
         action: 'send_manually',
         liveMode: process.env.STRIPE_MODE === 'live',
       }),

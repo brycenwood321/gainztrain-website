@@ -212,11 +212,37 @@ async function createAndChargeInvoice({ token, contactId, contactEmail, contactN
   }
 
   const invoice = await res.json();
+  const invoiceId = invoice._id || invoice.id;
 
-  // Auto-charge attempt: GHL has a "record payment" or "send + auto-pay" flow.
-  // Returns the invoice. Brycen will verify auto-charge actually fires in
-  // real-world testing — if it doesn't, we add a separate Stripe charge step.
-  return { ok: true, invoiceId: invoice._id || invoice.id, raw: invoice };
+  // Step 2: send the invoice (changes status from "draft" → "sent", emails the
+  // customer with a payment link). GHL one-time invoices don't auto-charge
+  // saved cards by default — customer clicks the link to pay. Once we have
+  // Stripe API access (post bank-verify), upgrade this to add the line item
+  // directly to the customer's recurring sub for automatic collection.
+  try {
+    const sendRes = await fetch(`${GHL_API}/invoices/${invoiceId}/send`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Version: GHL_VERSION,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        altId: GHL_LOCATION,
+        altType: 'location',
+        action: 'send_manually',
+        liveMode: process.env.STRIPE_MODE === 'live',
+      }),
+    });
+    return {
+      ok: true,
+      invoiceId,
+      sent: sendRes.ok,
+      send_status: sendRes.status,
+    };
+  } catch (e) {
+    return { ok: true, invoiceId, sent: false, send_error: String(e).slice(0, 200) };
+  }
 }
 
 function json(status, payload) {

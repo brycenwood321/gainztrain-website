@@ -178,6 +178,32 @@ exports.handler = async function (event) {
     }
   }
 
+  // 7. Add a GHL note on the contact with the weekly breakdown
+  //    (gives Marissa + Brycen visibility into upcharge history without needing Stripe access)
+  let noteResult = null;
+  if (failed.length === 0) {
+    try {
+      const noteBody = [
+        `🌶️ Specialty upcharge — week of ${menu.week_of}`,
+        '',
+        ...lineItems.map((li) => `• ${li.name} × ${li.qty} @ $${li.unit_price.toFixed(2)} = $${li.subtotal.toFixed(2)}`),
+        '',
+        `Total upcharge: $${total.toFixed(2)}`,
+        `Auto-billed on next subscription invoice (Sunday).`,
+        `Stripe items: ${created.map((c) => c.id).join(', ')}`,
+      ].join('\n');
+      const r = await fetch(`${GHL_API}/contacts/${contactId}/notes`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${ghlToken}`, Version: GHL_VERSION, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: noteBody, contactId, userId: 'BVSNQpzruUHLvWgKX4NJ' }),
+      });
+      const d = await r.json();
+      noteResult = r.ok ? { ok: true, noteId: d.note?.id || d.id } : { ok: false, error: d.message || d.error };
+    } catch (e) {
+      noteResult = { ok: false, error: String(e).slice(0, 200) };
+    }
+  }
+
   return json(200, {
     ok: failed.length === 0,
     action: 'invoice_items_created',
@@ -189,6 +215,7 @@ exports.handler = async function (event) {
     stripeCustomerId,
     created,
     failed,
+    ghl_note: noteResult,
   });
 };
 

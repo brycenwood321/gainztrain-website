@@ -11,7 +11,7 @@ exports.handler = async function (event) {
   if (!subId) return json(400, { ok: false, error: 'sub_param_required' });
 
   try {
-    const r = await fetch(`https://api.stripe.com/v1/subscriptions/${subId}?expand[]=discount.coupon`, {
+    const r = await fetch(`https://api.stripe.com/v1/subscriptions/${subId}?expand[]=discounts.coupon&expand[]=discount.coupon`, {
       headers: { Authorization: `Bearer ${stripeKey}` },
     });
     if (!r.ok) {
@@ -44,6 +44,14 @@ exports.handler = async function (event) {
             valid: sub.discount.coupon?.valid,
           }
         : null,
+      discounts: (sub.discounts || []).map((d) => ({
+        discount_id: d.id,
+        coupon_id: d.coupon?.id,
+        coupon_name: d.coupon?.name,
+        duration: d.coupon?.duration,
+        percent_off: d.coupon?.percent_off,
+        valid: d.coupon?.valid,
+      })),
       latest_invoice: sub.latest_invoice,
     });
   } catch (e) {

@@ -82,7 +82,38 @@ exports.handler = async function (event) {
     });
   }
 
-  return json(400, { ok: false, error: 'unknown_action', valid: ['list_coupons', 'create_coupons', 'attach'] });
+  if (action === 'list_pending_invoiceitems') {
+    const customer = payload.customer || event.queryStringParameters?.customer;
+    if (!customer) return json(400, { ok: false, error: 'customer_required' });
+    const r = await fetch(`https://api.stripe.com/v1/invoiceitems?customer=${customer}&limit=50&pending=true`, {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const data = await r.json();
+    return json(200, {
+      ok: r.ok,
+      items: (data.data || []).map((i) => ({
+        id: i.id,
+        amount: i.amount / 100,
+        currency: i.currency,
+        description: i.description,
+        invoice: i.invoice,
+        proration: i.proration,
+      })),
+    });
+  }
+
+  if (action === 'delete_invoiceitem') {
+    const itemId = payload.itemId || event.queryStringParameters?.itemId;
+    if (!itemId) return json(400, { ok: false, error: 'itemId_required' });
+    const r = await fetch(`https://api.stripe.com/v1/invoiceitems/${itemId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const data = await r.json();
+    return json(200, { ok: r.ok, deleted: data.deleted, id: data.id });
+  }
+
+  return json(400, { ok: false, error: 'unknown_action', valid: ['list_coupons', 'create_coupons', 'attach', 'list_pending_invoiceitems', 'delete_invoiceitem'] });
 };
 
 function json(status, payload) {

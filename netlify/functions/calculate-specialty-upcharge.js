@@ -2,23 +2,24 @@
 //
 // Universal specialty-protein upcharge calculator. Called by GHL workflow at
 // Saturday cutoff. Reads this week's menu from menus.json, sums each customer's
-// per-meal upcharges, and creates a single invoice + auto-charges the saved
-// payment method.
+// per-meal upcharges, and adds each upcharge as a Stripe invoice item against
+// the customer (auto-billed on next subscription invoice on Sunday).
 //
 // Adding a new specialty meal = edit menus.json to set `upcharge_per_meal`. No
 // workflow change required.
 //
-// Body:  { "contactId": "..." }
-// or query string: ?contactId=...
+// Body:   { "contactId": "...", "dryRun": true|false }
 //
 // Required env vars:
 //   GAINZ_GHL_TOKEN     - GHL Private Integration Token
+//   STRIPE_SECRET_KEY   - Stripe Secret Key (live or test)
 
 const GHL_API = 'https://services.leadconnectorhq.com';
+const STRIPE_API = 'https://api.stripe.com/v1';
 const GHL_LOCATION = 'tyF96Dl8uAXn5ZD5tZ3p';
 const GHL_VERSION = '2021-07-28';
 
-// Meal count custom field IDs (position 1-4 maps to these GHL fields)
+// Meal count custom field IDs (position 1-4 → GHL custom field)
 const CF_MEAL_COUNTS = {
   1: '4RBRbxwC7DlTZQLZS6eq', // Meal 1 Count
   2: 'fCeBeqOGkM2fPF1WPiou', // Meal 2 Count
@@ -29,124 +30,174 @@ const CF_MEAL_COUNTS = {
 const MENU_URL = 'https://gainztrainprep.com/data/menus.json';
 
 exports.handler = async function (event) {
-  const token = process.env.GAINZ_GHL_TOKEN;
-  if (!token) return json(500, { ok: false, error: 'ghl_token_not_configured' });
+  const ghlToken = process.env.GAINZ_GHL_TOKEN;
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (!ghlToken) return json(500, { ok: false, error: 'ghl_token_not_configured' });
 
-  // Get contactId from body or query string
-  let contactId;
-  try {
-    const body = event.body ? JSON.parse(event.body) : {};
-    contactId = body.contactId || body.contact_id || event.queryStringParameters?.contactId;
-  } catch (e) {
-    contactId = event.queryStringParameters?.contactId;
-  }
+  // Parse input
+  let payload = {};
+  try { payload = JSON.parse(event.body || '{}'); } catch (_) {}
+  const contactId = payload.contactId || payload.contact_id || event.queryStringParameters?.contactId;
+  const dryRun = payload.dryRun === true || event.queryStringParameters?.dryRun === '1';
   if (!contactId) return json(400, { ok: false, error: 'contact_id_required' });
 
-  // 1) Load this week's menu
+  // 1. Load this week's menu
   let menu;
   try {
-    const menuRes = await fetch(MENU_URL, { headers: { 'Cache-Control': 'no-cache' } });
-    if (!menuRes.ok) return json(502, { ok: false, error: 'menu_fetch_failed' });
-    const data = await menuRes.json();
+    const r = await fetch(MENU_URL, { headers: { 'Cache-Control': 'no-cache' } });
+    if (!r.ok) return json(502, { ok: false, error: 'menu_fetch_failed' });
+    const data = await r.json();
     menu = pickCurrentMenu(data.menus || []);
     if (!menu) return json(502, { ok: false, error: 'no_current_menu' });
   } catch (e) {
-    return json(500, { ok: false, error: 'menu_fetch_exception', detail: String(e).slice(0, 200) });
+    return json(500, { ok: false, error: 'menu_exception', detail: String(e).slice(0, 200) });
   }
 
-  // 2) Fetch contact custom fields from GHL
+  // 2. Get contact custom fields from GHL
   let contact;
   try {
-    const contactRes = await fetch(`${GHL_API}/contacts/${contactId}`, {
-      headers: { Authorization: `Bearer ${token}`, Version: GHL_VERSION },
+    const r = await fetch(`${GHL_API}/contacts/${contactId}`, {
+      headers: { Authorization: `Bearer ${ghlToken}`, Version: GHL_VERSION },
     });
-    if (!contactRes.ok) {
-      return json(502, { ok: false, error: 'ghl_contact_fetch_failed', status: contactRes.status });
-    }
-    contact = (await contactRes.json()).contact;
+    if (!r.ok) return json(502, { ok: false, error: 'ghl_contact_fetch_failed', status: r.status });
+    contact = (await r.json()).contact;
   } catch (e) {
     return json(500, { ok: false, error: 'ghl_fetch_exception', detail: String(e).slice(0, 200) });
   }
 
-  // 3) Build upcharge breakdown — for each meal position, multiply count × upcharge
+  // 3. Calculate breakdown: for each meal position with upcharge_per_meal > 0,
+  //    multiply by the customer's count for that position.
   const lineItems = [];
   let total = 0;
-
   for (const mealDef of menu.meals) {
     const upcharge = parseFloat(mealDef.upcharge_per_meal || 0);
     if (upcharge <= 0) continue;
-
     const cfId = CF_MEAL_COUNTS[mealDef.position];
     if (!cfId) continue;
-
     const count = parseInt(readCustomField(contact, cfId), 10);
     if (!Number.isFinite(count) || count <= 0) continue;
-
     const subtotal = round2(count * upcharge);
     total = round2(total + subtotal);
     lineItems.push({
-      name: `${mealDef.name} × ${count} @ $${upcharge.toFixed(2)}/meal`,
+      name: mealDef.name,
       qty: count,
       unit_price: upcharge,
       subtotal,
+      description: `${mealDef.name} × ${count} @ $${upcharge.toFixed(2)}/meal — week of ${menu.week_of}`,
     });
   }
 
-  // No upcharges this week → no action
   if (total === 0) {
     return json(200, {
       ok: true,
       action: 'no_upcharge',
       contactId,
       week_of: menu.week_of,
-      reason: 'customer_picked_no_specialty_meals_or_no_specialty_on_menu',
+      reason: 'no_specialty_picks_or_no_specialty_on_menu',
     });
   }
 
-  // 4) Create the GHL invoice + auto-charge
-  // TODO once verified: this uses GHL's invoice API. If GHL doesn't auto-charge
-  // saved cards reliably, fall back to direct Stripe API.
-  let invoiceResult;
+  // 4. Find Stripe subscription + customer for this contact
+  let stripeSubId = null;
   try {
-    invoiceResult = await createAndChargeInvoice({
-      token,
-      contactId,
-      contactEmail: contact.email,
-      contactName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
-      lineItems,
-      total,
-      week_of: menu.week_of,
-    });
-  } catch (e) {
-    return json(500, {
+    const subUrl = `${GHL_API}/payments/subscriptions/?altId=${GHL_LOCATION}&altType=location&contactId=${contactId}&limit=5`;
+    const r = await fetch(subUrl, { headers: { Authorization: `Bearer ${ghlToken}`, Version: GHL_VERSION } });
+    if (r.ok) {
+      const subs = (await r.json()).data || [];
+      const active = subs.find((s) => s.status === 'active' && s.subscriptionId);
+      stripeSubId = active?.subscriptionId || null;
+    }
+  } catch (_) {}
+
+  if (!stripeSubId) {
+    return json(200, {
       ok: false,
-      error: 'invoice_create_exception',
-      detail: String(e).slice(0, 200),
-      breakdown: { total, lineItems },
+      error: 'no_active_stripe_sub_found',
+      contactId,
+      total, lineItems,
     });
+  }
+
+  if (!stripeKey) {
+    return json(200, {
+      ok: false,
+      error: 'stripe_key_missing',
+      contactId,
+      total, lineItems,
+    });
+  }
+
+  // 5. Get Stripe customer ID + period_end from the subscription
+  let stripeCustomerId, periodEnd;
+  try {
+    const r = await fetch(`${STRIPE_API}/subscriptions/${stripeSubId}`, {
+      headers: { Authorization: `Bearer ${stripeKey}` },
+    });
+    const d = await r.json();
+    stripeCustomerId = d.customer;
+    periodEnd = d.current_period_end;
+  } catch (e) {
+    return json(500, { ok: false, error: 'stripe_sub_fetch_exception', detail: String(e).slice(0, 200) });
+  }
+
+  // 6. Create Stripe invoice items — added to customer's next invoice automatically
+  if (dryRun) {
+    return json(200, {
+      ok: true,
+      action: 'dry_run',
+      contactId, total, lineItems,
+      stripeSubId, stripeCustomerId,
+      would_create_invoice_items: lineItems.length,
+    });
+  }
+
+  const created = [];
+  const failed = [];
+  for (const li of lineItems) {
+    const body = new URLSearchParams({
+      customer: stripeCustomerId,
+      subscription: stripeSubId,
+      currency: 'usd',
+      amount: String(Math.round(li.subtotal * 100)), // cents
+      description: li.description,
+    });
+    try {
+      const r = await fetch(`${STRIPE_API}/invoiceitems`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${stripeKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      });
+      const d = await r.json();
+      if (r.ok) {
+        created.push({ id: d.id, amount: d.amount / 100, description: d.description });
+      } else {
+        failed.push({ name: li.name, error: d.error?.message });
+      }
+    } catch (e) {
+      failed.push({ name: li.name, error: String(e).slice(0, 200) });
+    }
   }
 
   return json(200, {
-    ok: true,
-    action: 'upcharge_invoiced',
+    ok: failed.length === 0,
+    action: 'invoice_items_created',
     contactId,
     week_of: menu.week_of,
     total,
     lineItems,
-    invoice: invoiceResult,
+    stripeSubId,
+    stripeCustomerId,
+    created,
+    failed,
   });
 };
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
 function pickCurrentMenu(menus) {
-  // Pick the menu whose week_of is the next upcoming Sunday from today.
-  // If none match, fall back to the most recent.
   if (!menus.length) return null;
   const today = new Date().toISOString().slice(0, 10);
-  const upcoming = menus
-    .filter((m) => m.week_of >= today)
-    .sort((a, b) => a.week_of.localeCompare(b.week_of));
+  const upcoming = menus.filter((m) => m.week_of >= today).sort((a, b) => a.week_of.localeCompare(b.week_of));
   if (upcoming.length) return upcoming[0];
   return menus.slice().sort((a, b) => b.week_of.localeCompare(a.week_of))[0];
 }
@@ -163,87 +214,6 @@ function readCustomField(contact, fieldId) {
 
 function round2(n) {
   return Math.round(n * 100) / 100;
-}
-
-async function createAndChargeInvoice({ token, contactId, contactEmail, contactName, lineItems, total, week_of }) {
-  // GHL's v2 invoice creation endpoint. Body shape per GHL docs.
-  // If GHL rejects this payload shape, we may need to switch to direct Stripe charge.
-  const payload = {
-    altId: GHL_LOCATION,
-    altType: 'location',
-    name: `Specialty upcharge — week of ${week_of}`,
-    businessDetails: {
-      name: 'Gainz Train',
-      website: 'https://gainztrainprep.com',
-      phoneNo: '+13853278045',
-    },
-    contactDetails: {
-      id: contactId,
-      name: contactName || undefined,
-      email: contactEmail || undefined,
-    },
-    currency: 'USD',
-    items: lineItems.map((li) => ({
-      name: li.name,
-      description: '',
-      currency: 'USD',
-      amount: li.unit_price,
-      qty: li.qty,
-    })),
-    issueDate: new Date().toISOString().slice(0, 10),
-    dueDate: new Date().toISOString().slice(0, 10),
-    liveMode: process.env.STRIPE_MODE === 'live',
-    automaticTaxesCalculation: false,
-  };
-
-  const res = await fetch(`${GHL_API}/invoices/`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Version: GHL_VERSION,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const errBody = await res.text();
-    return { ok: false, status: res.status, error: errBody.slice(0, 400) };
-  }
-
-  const invoice = await res.json();
-  const invoiceId = invoice._id || invoice.id;
-
-  // Step 2: send the invoice (changes status from "draft" → "sent", emails the
-  // customer with a payment link). GHL one-time invoices don't auto-charge
-  // saved cards by default — customer clicks the link to pay. Once we have
-  // Stripe API access (post bank-verify), upgrade this to add the line item
-  // directly to the customer's recurring sub for automatic collection.
-  try {
-    const sendRes = await fetch(`${GHL_API}/invoices/${invoiceId}/send`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Version: GHL_VERSION,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        altId: GHL_LOCATION,
-        altType: 'location',
-        userId: 'BVSNQpzruUHLvWgKX4NJ', // GT account owner — required by GHL invoice send
-        action: 'send_manually',
-        liveMode: process.env.STRIPE_MODE === 'live',
-      }),
-    });
-    return {
-      ok: true,
-      invoiceId,
-      sent: sendRes.ok,
-      send_status: sendRes.status,
-    };
-  } catch (e) {
-    return { ok: true, invoiceId, sent: false, send_error: String(e).slice(0, 200) };
-  }
 }
 
 function json(status, payload) {

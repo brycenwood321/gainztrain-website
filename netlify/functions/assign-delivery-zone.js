@@ -93,8 +93,9 @@ exports.handler = async function (event) {
 
   const zone = ZONE_DATA[zoneNum];
 
-  // Find customer's Stripe subscription via GHL
+  // Find customer's Stripe subscription via GHL — and capture coupon code used at checkout
   let stripeSubId = null;
+  let ghlCouponCode = null;
   try {
     const subUrl = `${GHL_API}/payments/subscriptions/?altId=${GHL_LOCATION}&altType=location&contactId=${contactId}&limit=5`;
     const r = await fetch(subUrl, { headers: { Authorization: `Bearer ${ghlToken}`, Version: GHL_VERSION } });
@@ -102,8 +103,42 @@ exports.handler = async function (event) {
       const subs = (await r.json()).data || [];
       const active = subs.find((s) => s.status === 'active' && s.subscriptionId);
       stripeSubId = active?.subscriptionId || null;
+      ghlCouponCode = active?.couponCode || null;
     }
   } catch (_) {}
+
+  // Coupon attach: critical workaround for GHL bug where coupons don't sync as
+  // "forever" discounts to Stripe. If the customer checked out with a coupon
+  // code, attach the corresponding Stripe coupon to their subscription so all
+  // future recurring charges get discounted.
+  let couponResult = null;
+  if (stripeSubId && stripeKey && ghlCouponCode && !dryRun) {
+    try {
+      // Check if discount is already on the sub
+      const checkRes = await fetch(`${STRIPE_API}/subscriptions/${stripeSubId}`, {
+        headers: { Authorization: `Bearer ${stripeKey}` },
+      });
+      const checkData = await checkRes.json();
+      const hasDiscount = (checkData.discounts || []).length > 0 || checkData.discount;
+      if (hasDiscount) {
+        couponResult = { ok: true, action: 'already_has_discount', coupon: ghlCouponCode };
+      } else {
+        const body = new URLSearchParams();
+        body.append('discounts[0][coupon]', ghlCouponCode);
+        const r = await fetch(`${STRIPE_API}/subscriptions/${stripeSubId}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${stripeKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body,
+        });
+        const d = await r.json();
+        couponResult = r.ok
+          ? { ok: true, action: 'coupon_attached', coupon: ghlCouponCode }
+          : { ok: false, error: d.error?.message || 'coupon_attach_failed', coupon: ghlCouponCode };
+      }
+    } catch (e) {
+      couponResult = { ok: false, error: 'coupon_exception', detail: String(e).slice(0, 200) };
+    }
+  }
 
   // Stripe operations: add the delivery zone as a subscription item
   let stripeResult = null;
@@ -170,6 +205,8 @@ exports.handler = async function (event) {
     ok: true, action: 'delivery_zone_assigned', dryRun,
     contactId, zip, zone: zone.name, fee: zone.fee,
     stripeSubId,
+    ghlCouponCode,
+    coupon: couponResult,
     stripe: stripeResult,
   });
 };

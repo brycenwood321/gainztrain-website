@@ -140,7 +140,33 @@ async function mainLogic(event) {
     return json(500, { ok: false, error: 'stripe_sub_fetch_exception', detail: String(e).slice(0, 200) });
   }
 
-  // 6. Create Stripe invoice items — added to customer's next invoice automatically
+  // 6. Idempotency check: query existing pending invoiceitems for this customer,
+  //    filter by metadata.week_of. If items already exist for this week, skip creation.
+  let alreadyProcessed = false;
+  try {
+    const r = await fetch(`${STRIPE_API}/invoiceitems?customer=${stripeCustomerId}&pending=true&limit=100`, {
+      headers: { Authorization: `Bearer ${stripeKey}` },
+    });
+    const d = await r.json();
+    const existing = (d.data || []).filter(
+      (it) => it.metadata?.upcharge_week === menu.week_of && it.metadata?.type === 'specialty_upcharge'
+    );
+    if (existing.length > 0) {
+      alreadyProcessed = true;
+      return json(200, {
+        ok: true,
+        action: 'already_processed',
+        reason: `${existing.length} invoiceitem(s) for week ${menu.week_of} already exist`,
+        contactId,
+        week_of: menu.week_of,
+        existing_items: existing.map((it) => ({ id: it.id, amount: it.amount / 100, description: it.description })),
+      });
+    }
+  } catch (e) {
+    // Non-fatal — proceed with creation
+    console.log('idempotency check failed, proceeding:', String(e).slice(0, 100));
+  }
+
   if (dryRun) {
     return json(200, {
       ok: true,
@@ -151,6 +177,7 @@ async function mainLogic(event) {
     });
   }
 
+  // 7. Create Stripe invoice items — tagged with metadata for idempotency
   const created = [];
   const failed = [];
   for (const li of lineItems) {
@@ -161,6 +188,10 @@ async function mainLogic(event) {
       amount: String(Math.round(li.subtotal * 100)), // cents
       description: li.description,
     });
+    // Idempotency metadata — lets future runs detect this was already processed
+    body.append('metadata[type]', 'specialty_upcharge');
+    body.append('metadata[upcharge_week]', menu.week_of);
+    body.append('metadata[meal_name]', li.name);
     try {
       const r = await fetch(`${STRIPE_API}/invoiceitems`, {
         method: 'POST',

@@ -1,4 +1,4 @@
-// POST /.netlify/functions/calculate-specialty-upcharge
+// POST /api/calculate-specialty-upcharge
 //
 // Universal specialty-protein upcharge calculator. Called by GHL workflow at
 // Saturday cutoff. Reads this week's menu from menus.json, sums each customer's

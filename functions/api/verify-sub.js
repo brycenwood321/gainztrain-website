@@ -1,4 +1,4 @@
-// GET /.netlify/functions/verify-sub?sub=sub_xxx
+// GET /api/verify-sub?sub=sub_xxx
 // Diagnostic: returns line items + discount info for a Stripe subscription.
 // Used to verify OWNERS100/FAMFRIENDS15 forever-discount status + sub state.
 // Doesn't expose sensitive payment data. DELETE after launch verification done.

@@ -1,4 +1,4 @@
-// GET /.netlify/functions/get-subscription?email=foo@bar.com
+// GET /api/get-subscription?email=foo@bar.com
 // Returns the contact's subscription_meals value so the menu page can
 // render the counter even when the URL-param-passing chain misses it
 // (e.g. race condition between order submission and the GT - Set

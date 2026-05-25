@@ -1,4 +1,4 @@
-// GET /.netlify/functions/preview-invoice?sub=sub_xxx
+// GET /api/preview-invoice?sub=sub_xxx
 // Returns what Stripe would charge on the customer's next invoice for a given sub.
 // Confirms forever-discount is actually being applied to recurring charges.
 // DELETE after launch verification.

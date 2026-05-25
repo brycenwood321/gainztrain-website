@@ -1,4 +1,4 @@
-// /.netlify/functions/coupon-admin
+// /api/coupon-admin
 // One-shot admin endpoint for fixing the missing Stripe coupons on our 3 live subs.
 //
 // GET ?action=list_coupons         → list Stripe coupons

@@ -1,4 +1,4 @@
-// POST /.netlify/functions/assign-delivery-zone
+// POST /api/assign-delivery-zone
 //
 // Triggered by GHL webhook when a customer signs up for a meal subscription.
 // 1. Reads contact postalCode → maps to zone via ZIP_TO_ZONE table

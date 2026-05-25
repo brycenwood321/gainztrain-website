@@ -1,4 +1,4 @@
-// POST /.netlify/functions/switch-to-pickup
+// POST /api/switch-to-pickup
 //
 // Flips a customer from Delivery → Pickup. Triggered manually when customer
 // replies "PICKUP" to the welcome email, OR via GHL workflow.

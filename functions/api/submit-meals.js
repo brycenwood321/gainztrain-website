@@ -1,4 +1,4 @@
-// POST /.netlify/functions/submit-meals
+// POST /api/submit-meals
 // Body: { email, name, phone, meal_1, meal_2, meal_3, meal_4 }
 //
 // Looks up the GHL contact by email, updates their meal_X_count custom fields,

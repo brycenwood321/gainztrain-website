@@ -3,7 +3,7 @@
   "menus": [
     {
       "week_of": "2026-05-17",
-      "label": "This Week",
+      "label": "Past Week",
       "meals": [
         {
           "position": 1,
@@ -51,6 +51,60 @@
           "fat": 10,
           "image": "/assets/images/meals/chicken-broccoli-rice.jpg",
           "emoji": "🥦",
+          "upcharge_per_meal": 0
+        }
+      ]
+    },
+    {
+      "week_of": "2026-05-31",
+      "label": "This Week",
+      "meals": [
+        {
+          "position": 1,
+          "name": "Chicken Bro-Tato Bowl",
+          "description": "Oven-roasted chicken with herb-seasoned potatoes and tender carrots. Comfort food that still hits your protein.",
+          "calories": 520,
+          "protein": 55,
+          "carbs": 29,
+          "fat": 24,
+          "image": "/assets/images/meals/chicken-bro-tato-bowl.jpg",
+          "emoji": "🥔",
+          "upcharge_per_meal": 0
+        },
+        {
+          "position": 2,
+          "name": "Beef Sweet Potato Bowl",
+          "description": "Seasoned ground beef over roasted sweet potatoes with caramelized onions and a drizzle of hot honey. Savory meets a little kick.",
+          "calories": 560,
+          "protein": 45,
+          "carbs": 55,
+          "fat": 18,
+          "image": "/assets/images/meals/beef-sweet-potato-bowl.jpg",
+          "emoji": "🍠",
+          "upcharge_per_meal": 1.00
+        },
+        {
+          "position": 3,
+          "name": "Teriyaki Chicken Bowl",
+          "description": "Teriyaki-glazed chicken over steamed jasmine rice with broccoli. Sweet, savory, stupidly easy to eat.",
+          "calories": 520,
+          "protein": 55,
+          "carbs": 55,
+          "fat": 10,
+          "image": "/assets/images/meals/chicken-broccoli-rice.jpg",
+          "emoji": "🥦",
+          "upcharge_per_meal": 0
+        },
+        {
+          "position": 4,
+          "name": "Teriyaki Turkey Bowl",
+          "description": "Teriyaki-glazed ground turkey over jasmine rice with grilled zucchini.",
+          "calories": 480,
+          "protein": 42,
+          "carbs": 58,
+          "fat": 14,
+          "image": "/assets/images/meals/teriyaki-turkey-bowl.jpg",
+          "emoji": "🍱",
           "upcharge_per_meal": 0
         }
       ]

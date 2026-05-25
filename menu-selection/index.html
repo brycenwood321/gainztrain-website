@@ -518,7 +518,7 @@
         // Handles the race condition where the URL chain dropped the value
         // (e.g. order workflow hadn't finished writing the field when the
         // Goal Type form submitted).
-        fetch('/.netlify/functions/get-subscription?email=' + encodeURIComponent(email))
+        fetch('/api/get-subscription?email=' + encodeURIComponent(email))
           .then(function(r){ return r.json(); })
           .then(function(d){
             if (d && d.ok && Number.isFinite(d.subscription_meals) && d.subscription_meals > 0) {
@@ -722,7 +722,7 @@
         btn.textContent = 'Submitting...';
 
         try {
-          var res = await fetch('/.netlify/functions/submit-meals', {
+          var res = await fetch('/api/submit-meals', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

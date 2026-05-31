@@ -3,30 +3,41 @@ import { ok, fail, readJson } from '../../_lib/respond.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 import { randomToken, hashPassword } from '../../_lib/crypto.js';
 import { createSession } from '../../_lib/auth.js';
+import { str, normEmail, toE164 } from '../../_lib/validate.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
   const body = await readJson(request);
-  const email = (body.email || '').trim().toLowerCase();
-  const password = body.password || '';
-  const firstName = (body.first_name || '').trim();
-  const lastName = (body.last_name || '').trim();
-  const phone = (body.phone || '').trim();
+  // Type-safe coercion: a non-string value can never reach a string method (no 500 leak) and
+  // a non-string password can never silently corrupt the stored hash.
+  const email = normEmail(body.email);
+  const password = str(body.password);
+  const firstName = str(body.first_name).trim();
+  const lastName = str(body.last_name).trim();
+  const phoneRaw = str(body.phone).trim();
 
   if (!email || !email.includes('@')) return fail(400, 'invalid_email', 'Enter a valid email address.');
   if (password && password.length < 8) return fail(400, 'weak_password', 'Password must be at least 8 characters.');
+  // Normalize phone to E.164 so it matches the OTP-login lookup; reject garbage rather than store it.
+  const phone = phoneRaw ? toE164(phoneRaw) : '';
+  if (phoneRaw && !phone) return fail(400, 'invalid_phone', 'Enter a valid phone number.');
 
   const existing = await one(env.DB, `SELECT id FROM customers WHERE email = ?`, email);
   if (existing) return fail(409, 'email_exists', 'An account with that email already exists — try logging in.');
 
   const id = randomToken(16);
   const now = nowIso();
-  await run(
-    env.DB,
-    `INSERT INTO customers (id, email, first_name, last_name, phone, role, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'customer', ?, ?)`,
-    id, email, firstName, lastName, phone, now, now,
-  );
+  try {
+    await run(
+      env.DB,
+      `INSERT INTO customers (id, email, first_name, last_name, phone, role, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'customer', ?, ?)`,
+      id, email, firstName, lastName, phone || null, now, now,
+    );
+  } catch {
+    // UNIQUE(email) race: another request registered the same email between our check + insert.
+    return fail(409, 'email_exists', 'An account with that email already exists — try logging in.');
+  }
 
   if (password) {
     const { hash, salt, iterations } = await hashPassword(password);

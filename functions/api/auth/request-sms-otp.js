@@ -4,14 +4,7 @@ import { ok, fail, readJson } from '../../_lib/respond.js';
 import { one, all, run, nowIso, addMinutesIso } from '../../_lib/db.js';
 import { randomToken, randomDigits, sha256hex } from '../../_lib/crypto.js';
 import { ghlSend } from '../../_lib/ghl.js';
-
-function toE164(raw) {
-  const digits = (raw || '').replace(/[^0-9]/g, '');
-  if (!digits) return '';
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
-  return raw.startsWith('+') ? raw : `+${digits}`;
-}
+import { toE164 } from '../../_lib/validate.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -27,12 +20,17 @@ export async function onRequestPost(context) {
   const customer = await one(env.DB, `SELECT id, ghl_contact_id FROM customers WHERE phone = ?`, phone);
   if (!customer) return generic();
 
-  const recent = await all(
+  // Hourly send cap counts ALL codes minted (consumed or not), so brute-force can't reset the
+  // lockout by spamming fresh codes — bounding total guesses to ~5 codes x 5 tries / hour.
+  const lastHour = await all(
     env.DB,
-    `SELECT id FROM auth_tokens WHERE customer_id = ? AND kind = 'sms_otp' AND consumed_at IS NULL AND expires_at > ?`,
-    customer.id, nowIso(),
+    `SELECT id FROM auth_tokens WHERE customer_id = ? AND kind = 'sms_otp' AND created_at > ?`,
+    customer.id, addMinutesIso(-60),
   );
-  if (recent.length >= 5) return generic();
+  if (lastHour.length >= 5) return generic();
+
+  // One live code at a time: retire any prior unconsumed codes before issuing a new one.
+  await run(env.DB, `UPDATE auth_tokens SET consumed_at = ? WHERE customer_id = ? AND kind = 'sms_otp' AND consumed_at IS NULL`, nowIso(), customer.id);
 
   const code = randomDigits(6);
   const tokenHash = await sha256hex(`${code}:${phone}`);

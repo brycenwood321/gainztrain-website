@@ -3,12 +3,13 @@ import { ok, fail, readJson } from '../../_lib/respond.js';
 import { one } from '../../_lib/db.js';
 import { verifyPassword } from '../../_lib/crypto.js';
 import { createSession } from '../../_lib/auth.js';
+import { str, normEmail } from '../../_lib/validate.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
   const body = await readJson(request);
-  const email = (body.email || '').trim().toLowerCase();
-  const password = body.password || '';
+  const email = normEmail(body.email);
+  const password = str(body.password);
   if (!email || !password) return fail(400, 'missing_credentials', 'Enter your email and password.');
 
   const generic = () => fail(401, 'invalid_login', 'Email or password is incorrect.');

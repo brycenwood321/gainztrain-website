@@ -24,7 +24,12 @@ export async function onRequestGet(context) {
     return pageError('This login link is invalid or has expired. Please request a new one.');
   }
 
-  await run(env.DB, `UPDATE auth_tokens SET consumed_at = ? WHERE id = ?`, now, row.id);
+  // Atomic single-use: only the first request that flips consumed_at wins. 0 rows changed =
+  // already used (or an email-scanner prefetch beat the human) — reject, don't mint a 2nd session.
+  const claim = await run(env.DB, `UPDATE auth_tokens SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL`, now, row.id);
+  if (!claim?.meta?.changes) {
+    return pageError('This login link was already used. Please request a new one.');
+  }
   const { cookie } = await createSession(env, row.customer_id, request);
   return new Response(null, { status: 302, headers: { Location: '/app/', 'Set-Cookie': cookie } });
 }

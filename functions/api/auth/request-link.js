@@ -4,11 +4,12 @@ import { ok, fail, readJson } from '../../_lib/respond.js';
 import { one, all, run, nowIso, addMinutesIso } from '../../_lib/db.js';
 import { randomToken, sha256hex } from '../../_lib/crypto.js';
 import { ghlSend } from '../../_lib/ghl.js';
+import { normEmail } from '../../_lib/validate.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
   const body = await readJson(request);
-  const email = (body.email || '').trim().toLowerCase();
+  const email = normEmail(body.email);
   if (!email || !email.includes('@')) return fail(400, 'invalid_email', 'Enter a valid email address.');
 
   const devExpose = (env.APP_BASE_URL || '').includes('localhost');

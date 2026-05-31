@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Account | Gainz Train</title>
+  <meta name="description" content="Log in to view your Gainz Train subscription, meals, and billing." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="canonical" href="https://gainztrainprep.com/app/" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --black:#1a1614; --surface:#fff; --surface-mid:#f5f2ee; --surface-light:#fafaf8;
+      --gray:#4a4440; --muted:#7a7270; --line:#ede9e3;
+      --orange:#ff6b35; --orange-dark:#cc5520; --green:#16a34a; --red:#dc2626;
+      --font-head:'Barlow Condensed',sans-serif; --font-body:'Inter',sans-serif;
+      --radius:10px;
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:var(--font-body); background:var(--surface-light); color:var(--black); line-height:1.5; -webkit-font-smoothing:antialiased; }
+    h1,h2,h3 { font-family:var(--font-head); font-weight:700; line-height:1.05; letter-spacing:-0.01em; }
+    a { color:var(--orange-dark); }
+    .wrap { max-width:760px; margin:0 auto; padding:1.5rem 1.25rem 4rem; }
+
+    /* ── Header ── */
+    .topbar { display:flex; align-items:center; justify-content:space-between; padding:1rem 1.25rem; border-bottom:1px solid var(--line); background:var(--surface); }
+    .brand { font-family:var(--font-head); font-weight:700; font-size:1.4rem; letter-spacing:0.01em; }
+    .brand .t { color:var(--orange); }
+    .btn { font-family:var(--font-body); font-weight:600; font-size:0.95rem; border:none; border-radius:var(--radius); padding:0.8rem 1.2rem; cursor:pointer; transition:transform .04s, background .15s; }
+    .btn:active { transform:translateY(1px); }
+    .btn-primary { background:var(--orange); color:#fff; width:100%; }
+    .btn-primary:hover { background:var(--orange-dark); }
+    .btn-ghost { background:transparent; color:var(--gray); border:1px solid var(--line); padding:0.5rem 0.9rem; }
+    .btn-ghost:hover { background:var(--surface-mid); }
+
+    /* ── Login card ── */
+    .card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:1.75rem; box-shadow:0 6px 24px rgba(0,0,0,0.04); }
+    .login-card { max-width:420px; margin:3rem auto 0; }
+    .login-card h1 { font-size:2rem; margin-bottom:0.25rem; }
+    .login-card .sub { color:var(--muted); margin-bottom:1.5rem; font-size:0.95rem; }
+    .tabs { display:flex; gap:0.5rem; margin-bottom:1.25rem; }
+    .tab { flex:1; text-align:center; padding:0.6rem; border-radius:var(--radius); font-weight:600; font-size:0.9rem; cursor:pointer; background:var(--surface-mid); color:var(--gray); border:1px solid transparent; }
+    .tab.active { background:#fff; color:var(--black); border-color:var(--orange); }
+    label { display:block; font-size:0.85rem; font-weight:600; color:var(--gray); margin:0.9rem 0 0.35rem; }
+    input { width:100%; font-family:var(--font-body); font-size:1rem; padding:0.8rem 0.9rem; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface-light); }
+    input:focus { outline:none; border-color:var(--orange); background:#fff; }
+    .form-actions { margin-top:1.25rem; }
+    .switch-link { margin-top:1rem; text-align:center; font-size:0.9rem; color:var(--muted); }
+    .switch-link a { cursor:pointer; font-weight:600; }
+    .msg { margin-top:1rem; padding:0.75rem 0.9rem; border-radius:var(--radius); font-size:0.9rem; display:none; }
+    .msg.show { display:block; }
+    .msg.err { background:#fef2f2; color:var(--red); border:1px solid #fecaca; }
+    .msg.ok  { background:#f0fdf4; color:var(--green); border:1px solid #bbf7d0; }
+    .msg.info{ background:var(--surface-mid); color:var(--gray); border:1px solid var(--line); }
+    .hidden { display:none !important; }
+
+    /* ── Dashboard ── */
+    .dash h1 { font-size:2.2rem; }
+    .dash .hello { color:var(--muted); margin-bottom:1.5rem; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem; }
+    @media (max-width:560px){ .grid { grid-template-columns:1fr; } }
+    .card h2 { font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:0.75rem; }
+    .stat { font-size:2rem; font-family:var(--font-head); font-weight:700; }
+    .stat-sub { color:var(--muted); font-size:0.9rem; }
+    .badge { display:inline-block; padding:0.2rem 0.6rem; border-radius:999px; font-size:0.78rem; font-weight:600; text-transform:capitalize; }
+    .badge.active{ background:#f0fdf4; color:var(--green); } .badge.paused{ background:#fffbeb; color:#b45309; }
+    .badge.canceled,.badge.past_due{ background:#fef2f2; color:var(--red); } .badge.incomplete{ background:var(--surface-mid); color:var(--gray); }
+    .row { display:flex; justify-content:space-between; padding:0.6rem 0; border-bottom:1px solid var(--line); font-size:0.92rem; }
+    .row:last-child { border-bottom:none; }
+    .row .k { color:var(--gray); } .row .v { font-weight:600; text-align:right; }
+    .meal-pill { display:inline-flex; gap:0.4rem; align-items:center; background:var(--surface-mid); border-radius:999px; padding:0.35rem 0.8rem; margin:0.25rem 0.25rem 0 0; font-size:0.9rem; }
+    .meal-pill .q { background:var(--orange); color:#fff; border-radius:999px; padding:0 0.45rem; font-size:0.8rem; font-weight:700; }
+    .empty { color:var(--muted); font-size:0.9rem; padding:0.5rem 0; }
+    .full { grid-column:1 / -1; }
+    .loading { text-align:center; padding:4rem 1rem; color:var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">GAINZ<span class="t">TRAIN</span></div>
+    <button id="logoutBtn" class="btn btn-ghost hidden">Log out</button>
+  </div>
+
+  <div class="wrap">
+    <div id="loading" class="loading">Loading…</div>
+
+    <!-- ── LOGIN ── -->
+    <div id="loginView" class="login-card card hidden">
+      <h1>Your account</h1>
+      <p class="sub">Log in to see your subscription, meals, and billing.</p>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="password">Password</div>
+        <div class="tab" data-tab="link">Email me a link</div>
+      </div>
+
+      <!-- Password / register -->
+      <form id="pwForm" class="tabpane" data-pane="password">
+        <div id="nameFields" class="hidden">
+          <label for="firstName">First name</label>
+          <input id="firstName" type="text" autocomplete="given-name" />
+        </div>
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="email" required />
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="pwSubmit">Log in</button>
+        </div>
+        <div class="switch-link" id="switchMode">
+          New here? <a id="toRegister">Create an account</a>
+        </div>
+      </form>
+
+      <!-- Magic link -->
+      <form id="linkForm" class="tabpane hidden" data-pane="link">
+        <label for="linkEmail">Email</label>
+        <input id="linkEmail" type="email" autocomplete="email" required />
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Send login link</button>
+        </div>
+      </form>
+
+      <div id="loginMsg" class="msg"></div>
+    </div>
+
+    <!-- ── DASHBOARD ── -->
+    <div id="dashView" class="dash hidden">
+      <h1 id="dashTitle">Welcome back</h1>
+      <p class="hello" id="dashEmail"></p>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Subscription</h2>
+          <div id="subStatus"></div>
+        </div>
+        <div class="card">
+          <h2>Total spent</h2>
+          <div class="stat" id="totalSpent">$0</div>
+          <div class="stat-sub" id="deliveryLine"></div>
+        </div>
+      </div>
+
+      <div class="card full" style="margin-bottom:1rem;">
+        <h2>This week's meals</h2>
+        <div id="thisWeek"></div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Recent orders</h2>
+          <div id="orders"></div>
+        </div>
+        <div class="card">
+          <h2>Recent invoices</h2>
+          <div id="invoices"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const api = (path, opts={}) => fetch(path, { credentials:'same-origin', headers:{'Content-Type':'application/json'}, ...opts }).then(async r => ({ status:r.status, body: await r.json().catch(()=>({})) }));
+    const money = (cents) => '$' + ((cents||0)/100).toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+    const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('en-US',{month:'short', day:'numeric', year:'numeric'}) : '—';
+
+    let mode = 'login'; // or 'register'
+
+    function showMsg(text, kind){ const m=$('loginMsg'); m.textContent=text; m.className='msg show '+kind; }
+    function clearMsg(){ $('loginMsg').className='msg'; }
+
+    // ── Tab + mode switching ──
+    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      const pane = t.dataset.tab;
+      document.querySelectorAll('.tabpane').forEach(p => p.classList.toggle('hidden', p.dataset.pane !== pane));
+      clearMsg();
+    }));
+
+    function toggleMode(){
+      mode = mode === 'login' ? 'register' : 'login';
+      const reg = mode === 'register';
+      $('nameFields').classList.toggle('hidden', !reg);
+      $('pwSubmit').textContent = reg ? 'Create account' : 'Log in';
+      $('password').setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
+      $('switchMode').innerHTML = reg
+        ? 'Already have an account? <a id="toRegister">Log in</a>'
+        : 'New here? <a id="toRegister">Create an account</a>';
+      $('toRegister').addEventListener('click', toggleMode);
+      clearMsg();
+    }
+    $('toRegister').addEventListener('click', toggleMode);
+
+    // ── Password login / register ──
+    $('pwForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearMsg();
+      const email = $('email').value.trim();
+      const password = $('password').value;
+      const path = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
+      const payload = mode === 'register'
+        ? { email, password, first_name: $('firstName').value.trim() }
+        : { email, password };
+      $('pwSubmit').disabled = true;
+      const { status, body } = await api(path, { method:'POST', body: JSON.stringify(payload) });
+      $('pwSubmit').disabled = false;
+      if (status === 200 && body.ok) { loadAccount(); return; }
+      showMsg(body.detail || 'Something went wrong. Try again.', 'err');
+    });
+
+    // ── Magic link ──
+    $('linkForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearMsg();
+      const email = $('linkEmail').value.trim();
+      const { body } = await api('/api/auth/request-link', { method:'POST', body: JSON.stringify({ email }) });
+      showMsg(body.message || 'If that email is on file, a login link is on its way.', 'ok');
+      if (body.dev_magic_link) {
+        const m=$('loginMsg'); m.innerHTML += `<br><br><strong>Dev link:</strong> <a href="${body.dev_magic_link}">${body.dev_magic_link}</a>`;
+      }
+    });
+
+    // ── Logout ──
+    $('logoutBtn').addEventListener('click', async () => {
+      await api('/api/auth/logout', { method:'POST' });
+      location.reload();
+    });
+
+    // ── Render dashboard ──
+    function render(d){
+      const c = d.customer, s = d.subscription;
+      $('dashTitle').textContent = c.first_name ? `Welcome back, ${c.first_name}` : 'Welcome back';
+      $('dashEmail').textContent = c.email;
+
+      // subscription
+      if (s) {
+        const tier = s.meals_per_week ? `${s.meals_per_week} meals/week` : '';
+        const price = s.tier_price_cents ? ` · ${money(s.tier_price_cents)}/meal` : '';
+        const coupon = s.coupon_code ? `<div class="row"><span class="k">Discount</span><span class="v">${s.coupon_code}${s.discount_active?'':' (inactive)'}</span></div>` : '';
+        const renews = s.cancel_at_period_end
+          ? `<div class="row"><span class="k">Ends</span><span class="v">${fmtDate(s.current_period_end)}</span></div>`
+          : (s.current_period_end ? `<div class="row"><span class="k">Renews</span><span class="v">${fmtDate(s.current_period_end)}</span></div>` : '');
+        $('subStatus').innerHTML =
+          `<div style="margin-bottom:0.6rem;"><span class="badge ${s.status}">${s.status.replace('_',' ')}</span></div>` +
+          `<div class="stat" style="font-size:1.5rem;">${tier}</div><div class="stat-sub">${price.replace(' · ','')}</div>` +
+          renews + coupon;
+      } else {
+        $('subStatus').innerHTML = `<div class="empty">No active subscription. <a href="/subscribe/">Start one →</a></div>`;
+      }
+
+      // total spent + delivery
+      $('totalSpent').textContent = money(d.total_spent_cents);
+      const dm = c.delivery_method === 'delivery' ? `Delivery (zone ${c.delivery_zone ?? '—'})` : 'Pickup';
+      $('deliveryLine').textContent = dm;
+
+      // this week meals
+      if (d.this_week && d.this_week.length) {
+        const week = d.this_week[0].week_of;
+        $('thisWeek').innerHTML =
+          `<div class="stat-sub" style="margin-bottom:0.5rem;">Week of ${fmtDate(week)}</div>` +
+          d.this_week.map(m => `<span class="meal-pill"><span class="q">${m.qty}</span>${m.meal_name}</span>`).join('');
+      } else {
+        $('thisWeek').innerHTML = `<div class="empty">No meals selected for this week yet. <a href="/menu-selection/">Pick your meals →</a></div>`;
+      }
+
+      // orders
+      $('orders').innerHTML = (d.orders && d.orders.length)
+        ? d.orders.map(o => `<div class="row"><span class="k">${fmtDate(o.week_of)}</span><span class="v">${o.total_meals} meals · <span class="badge ${o.status.includes('skip')?'canceled':(o.status==='prepped'?'active':'incomplete')}">${o.status.replace('_',' ')}</span></span></div>`).join('')
+        : `<div class="empty">No orders yet.</div>`;
+
+      // invoices
+      $('invoices').innerHTML = (d.invoices && d.invoices.length)
+        ? d.invoices.map(i => {
+            const amt = money(i.status==='paid' ? i.amount_paid_cents : i.amount_due_cents);
+            const link = i.hosted_invoice_url ? ` <a href="${i.hosted_invoice_url}" target="_blank" rel="noopener">view</a>` : '';
+            return `<div class="row"><span class="k">${fmtDate(i.created_at)}</span><span class="v">${amt} · <span class="badge ${i.status==='paid'?'active':'incomplete'}">${i.status||'—'}</span>${link}</span></div>`;
+          }).join('')
+        : `<div class="empty">No invoices yet.</div>`;
+    }
+
+    // ── Boot: are we logged in? ──
+    async function loadAccount(){
+      const { status, body } = await api('/api/me');
+      $('loading').classList.add('hidden');
+      if (status === 200 && body.ok) {
+        $('loginView').classList.add('hidden');
+        $('dashView').classList.remove('hidden');
+        $('logoutBtn').classList.remove('hidden');
+        render(body);
+      } else {
+        $('dashView').classList.add('hidden');
+        $('logoutBtn').classList.add('hidden');
+        $('loginView').classList.remove('hidden');
+      }
+    }
+
+    // Configure visible methods, then boot.
+    (async () => {
+      try {
+        const { body } = await api('/api/auth/config');
+        // (SMS tab intentionally only added when sms_enabled; magic_link + password always shown.)
+      } catch {}
+      loadAccount();
+    })();
+  </script>
+</body>
+</html>

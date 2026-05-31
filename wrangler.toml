@@ -1,0 +1,16 @@
+# Cloudflare Pages config for gainztrain-website.
+# Adds the D1 database binding that becomes Gainz Train's single source of truth.
+# The static site + Pages Functions in functions/ are served as before; D1 is new.
+name = "gainztrain-website"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "."
+
+# Single source of truth database. database_id is filled in after the remote DB is
+# created (`wrangler d1 create gainztrain`). Local dev/tests use --local and a
+# placeholder id is fine; remote deploy requires the real id.
+[[d1_databases]]
+binding = "DB"
+database_name = "gainztrain"
+database_id = "7af83afe-7758-4981-aecc-61da132e2571"
+migrations_dir = "migrations"

@@ -1,0 +1,19 @@
+{
+  "name": "gainztrain-website",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Gainz Train website + customer app (Cloudflare Pages + D1)",
+  "engines": {
+    "node": ">=20 <23"
+  },
+  "scripts": {
+    "db:migrate:local": "wrangler d1 migrations apply gainztrain --local",
+    "db:migrate:remote": "wrangler d1 migrations apply gainztrain --remote",
+    "dev": "wrangler pages dev",
+    "tail": "wrangler pages deployment tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.95.0"
+  }
+}

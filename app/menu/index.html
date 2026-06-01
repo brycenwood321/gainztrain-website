@@ -132,6 +132,11 @@
         $('empty').innerHTML='You don\'t have an active plan yet. <a href="/start/">Start one →</a>';
         return;
       }
+      if(!body.has_menu||!body.meals||!body.meals.length){
+        $('empty').classList.remove('hidden');
+        $('empty').innerHTML='Next week\'s menu isn\'t posted yet — check back soon. We\'ll text and email you when it\'s ready to pick.';
+        return;
+      }
       MENU=body.meals;MENU_WEEK=body.week_of;need=body.meals_per_week;locked=body.locked;
       (body.selections||[]).forEach(s=>{qty[s.meal_position]=s.qty;});
       const d=new Date(body.week_of+'T00:00:00Z');

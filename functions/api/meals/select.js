@@ -31,7 +31,12 @@ export async function onRequestPost(context) {
   const menuRow = await one(env.DB, `SELECT meals_json FROM weekly_menus WHERE week_of = ?`, weekOf);
   if (!menuRow) return fail(404, 'no_menu', 'No menu is published for this week yet.');
   const menu = JSON.parse(menuRow.meals_json);
+  if (!Array.isArray(menu) || menu.length === 0) return fail(404, 'no_menu', 'No menu is published for this week yet.');
   const byPos = new Map(menu.map((m) => [m.position, m]));
+
+  // Don't let a late save overwrite an order that lock-week already locked (cutoff TOCTOU race).
+  const existingOrder = await one(env.DB, `SELECT status FROM orders WHERE subscription_id = ? AND week_of = ?`, sub.id, weekOf);
+  if (existingOrder && existingOrder.status === 'locked') return fail(409, 'ordering_locked', 'Ordering for this week has closed.');
 
   // Normalize + validate submitted quantities.
   const qtyByPos = new Map();
@@ -48,6 +53,8 @@ export async function onRequestPost(context) {
 
   const now = nowIso();
   let upchargeTotal = 0;
+  // Clear any prior rows for this week first (drops positions from an old menu), then write fresh.
+  await run(env.DB, `DELETE FROM meal_selections WHERE subscription_id = ? AND week_of = ?`, sub.id, weekOf);
   // Upsert one row per menu position (qty 0 for unpicked) so the week's picks are fully represented.
   for (const m of menu) {
     const qty = qtyByPos.get(m.position) || 0;

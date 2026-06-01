@@ -12,14 +12,25 @@ export function upcomingSunday(now = new Date()) {
   return iso(d);
 }
 
-// Order cutoff for a given week: the Friday night before the Sunday week_of.
-// We use Saturday 06:00 UTC ≈ Friday ~11pm Mountain as the lock moment.
+// The America/Denver UTC offset (in hours, negative) on a given date — handles MST (-7) / MDT (-6).
+function denverOffsetHours(date) {
+  try {
+    const name = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Denver', timeZoneName: 'shortOffset' })
+      .formatToParts(date).find((p) => p.type === 'timeZoneName').value; // e.g. "GMT-6"
+    const m = name.match(/GMT([+-]\d+)/);
+    return m ? parseInt(m[1], 10) : -7;
+  } catch { return -7; }
+}
+
+// Order cutoff for a given week: FRIDAY 11pm Mountain (groceries are bought Saturday).
+// Computed as Friday 23:00 America/Denver → UTC, DST-correct (Sat 05:00Z in summer, 06:00Z in winter).
 export function cutoffForWeek(weekOfISO) {
-  const sunday = new Date(`${weekOfISO}T00:00:00Z`);
-  const cutoff = new Date(sunday);
-  cutoff.setUTCDate(cutoff.getUTCDate() - 1); // Saturday 00:00Z
-  cutoff.setUTCHours(6, 0, 0, 0);             // ~Fri 11pm Mountain
-  return cutoff;
+  const sunday = new Date(`${weekOfISO}T12:00:00Z`);            // noon avoids date rollover
+  const friday = new Date(sunday);
+  friday.setUTCDate(friday.getUTCDate() - 2);
+  const off = denverOffsetHours(friday);                        // -7 or -6
+  // 23:00 local Denver → UTC hour = 23 - offset (Date.UTC rolls the +1 day automatically)
+  return new Date(Date.UTC(friday.getUTCFullYear(), friday.getUTCMonth(), friday.getUTCDate(), 23 - off, 0, 0));
 }
 
 export function isLocked(weekOfISO, now = new Date()) {

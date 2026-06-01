@@ -10,12 +10,16 @@ export function proteinOf(name) {
   return 'other';
 }
 
-// Macro distance — protein weighted heaviest (it's the whole point), then calories, carbs, fat.
+// Distance from previous meal `a` to candidate `b` — protein weighted heaviest (it's the whole
+// point), then calories, carbs, fat. A small penalty on a candidate that carries a specialty
+// upcharge breaks near-ties toward the free option, so auto-fill never silently bills an upcharge
+// the customer didn't pick.
 function macroDistance(a, b) {
   return 6 * Math.abs((a.protein || 0) - (b.protein || 0))
     + 1 * Math.abs((a.calories || 0) - (b.calories || 0))
     + 2 * Math.abs((a.carbs || 0) - (b.carbs || 0))
-    + 2 * Math.abs((a.fat || 0) - (b.fat || 0));
+    + 2 * Math.abs((a.fat || 0) - (b.fat || 0))
+    + ((b.upcharge_per_meal || 0) > 0 ? 25 : 0);
 }
 
 // Map a previous-week meal onto THIS week's menu. Exact name match wins; else same protein +

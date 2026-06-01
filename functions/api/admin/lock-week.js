@@ -45,6 +45,7 @@ export async function onRequestPost(context) {
   const menuRow = await one(env.DB, `SELECT meals_json FROM weekly_menus WHERE week_of = ?`, weekOf);
   if (!menuRow) return fail(404, 'no_menu', `No menu published for ${weekOf}.`);
   const menu = JSON.parse(menuRow.meals_json);
+  if (!Array.isArray(menu) || menu.length === 0) return fail(422, 'empty_menu', `Menu for ${weekOf} has no meals — fix the menu before locking.`);
 
   const subs = await all(env.DB,
     `SELECT id, customer_id, meals_per_week FROM subscriptions WHERE status IN (${ACTIVE.map(() => '?').join(',')})`,
@@ -61,10 +62,17 @@ export async function onRequestPost(context) {
       const pickedTotal = picked.reduce((s, r) => s + r.qty, 0);
 
       if (pickedTotal === sub.meals_per_week) {
-        await run(env.DB, `UPDATE orders SET status='locked', locked_at=?, updated_at=? WHERE subscription_id=? AND week_of=?`,
-          now, now, sub.id, weekOf);
-        // ensure an order row exists even if they selected without an order row (defensive)
-        await writeSelectionsAndOrderIfMissing(env, sub, weekOf, picked, now);
+        // Lock their order, recomputing total + upcharge from the actual picks (don't trust a
+        // possibly-stale order row, and write one if it's somehow missing).
+        const upRow = await one(env.DB,
+          `SELECT COALESCE(SUM(qty * upcharge_per_meal_cents), 0) AS up FROM meal_selections WHERE subscription_id = ? AND week_of = ?`,
+          sub.id, weekOf);
+        await run(env.DB,
+          `INSERT INTO orders (id, subscription_id, customer_id, week_of, status, total_meals, upcharge_total_cents, locked_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'locked', ?, ?, ?, ?, ?)
+           ON CONFLICT(subscription_id, week_of) DO UPDATE SET status='locked', total_meals=excluded.total_meals,
+             upcharge_total_cents=excluded.upcharge_total_cents, locked_at=excluded.locked_at, updated_at=excluded.updated_at`,
+          `${sub.id}:${weekOf}`, sub.id, sub.customer_id, weekOf, pickedTotal, upRow?.up || 0, now, now, now);
         summary.locked_as_picked++;
         continue;
       }
@@ -97,15 +105,4 @@ export async function onRequestPost(context) {
     }
   }
   return ok({ summary });
-}
-
-// If a complete picked order somehow has no order row, create the locked order from the picks.
-async function writeSelectionsAndOrderIfMissing(env, sub, weekOf, picked, now) {
-  const existing = await one(env.DB, `SELECT id FROM orders WHERE subscription_id=? AND week_of=?`, sub.id, weekOf);
-  if (existing) return;
-  const total = picked.reduce((s, r) => s + r.qty, 0);
-  await run(env.DB,
-    `INSERT INTO orders (id, subscription_id, customer_id, week_of, status, total_meals, upcharge_total_cents, locked_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'locked', ?, 0, ?, ?, ?)`,
-    `${sub.id}:${weekOf}`, sub.id, sub.customer_id, weekOf, total, now, now, now);
 }

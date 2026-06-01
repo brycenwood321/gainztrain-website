@@ -12,12 +12,12 @@ export async function onRequestGet(context) {
   const { env } = context;
   const { customer } = auth;
 
+  // Always key everything to the ORDERABLE week. If its menu isn't published yet, say so
+  // (has_menu:false) — never fall back to a past week (that produced an unsaveable / falsely-locked
+  // picker). The cutoff/locked state below always reflects the real orderable week.
   const week = orderableWeek();
-  // The orderable week's menu, else the most recent published menu as a fallback.
-  let menuRow = await one(env.DB, `SELECT week_of, label, meals_json FROM weekly_menus WHERE week_of = ?`, week);
-  if (!menuRow) menuRow = await one(env.DB, `SELECT week_of, label, meals_json FROM weekly_menus ORDER BY week_of DESC LIMIT 1`);
+  const menuRow = await one(env.DB, `SELECT label, meals_json FROM weekly_menus WHERE week_of = ?`, week);
   const meals = menuRow ? JSON.parse(menuRow.meals_json) : [];
-  const weekOf = menuRow ? menuRow.week_of : week;
 
   const sub = await one(env.DB,
     `SELECT id, status, meals_per_week FROM subscriptions
@@ -27,17 +27,18 @@ export async function onRequestGet(context) {
   const selections = sub
     ? await all(env.DB,
         `SELECT meal_position, qty FROM meal_selections WHERE subscription_id = ? AND week_of = ?`,
-        sub.id, weekOf)
+        sub.id, week)
     : [];
 
   return ok({
-    week_of: weekOf,
+    week_of: week,
     label: menuRow?.label || null,
+    has_menu: !!menuRow,
     meals,
     meals_per_week: sub?.meals_per_week ?? null,
     has_active_sub: !!sub,
     selections,                                  // [{meal_position, qty}]
-    cutoff: cutoffForWeek(weekOf).toISOString(),
-    locked: isLocked(weekOf),
+    cutoff: cutoffForWeek(week).toISOString(),
+    locked: isLocked(week),
   });
 }

@@ -20,8 +20,13 @@ export async function onRequestPost(context) {
 
   const now = nowIso();
   let published = 0;
+  const skipped = [];
   for (const m of menus) {
-    if (!m.week_of || !Array.isArray(m.meals)) continue;
+    // Validate: week_of must be a YYYY-MM-DD that is a Sunday; meals must be a non-empty array.
+    const okDate = typeof m.week_of === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(m.week_of)
+      && new Date(`${m.week_of}T12:00:00Z`).getUTCDay() === 0;
+    if (!okDate) { skipped.push({ week_of: m.week_of ?? null, reason: 'week_of not a Sunday (YYYY-MM-DD)' }); continue; }
+    if (!Array.isArray(m.meals) || m.meals.length === 0) { skipped.push({ week_of: m.week_of, reason: 'meals empty/missing' }); continue; }
     await run(env.DB,
       `INSERT INTO weekly_menus (week_of, label, meals_json, published_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)
@@ -30,5 +35,5 @@ export async function onRequestPost(context) {
       m.week_of, m.label || null, JSON.stringify(m.meals), now, now, now);
     published++;
   }
-  return ok({ published });
+  return ok({ published, skipped });
 }

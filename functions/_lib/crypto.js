@@ -1,7 +1,9 @@
 // WebCrypto helpers — crypto.subtle + crypto.getRandomValues are global in the Workers runtime.
 // Secrets are always stored HASHED, never raw. Comparisons are constant-time.
 const enc = new TextEncoder();
-const PBKDF2_ITERATIONS = 150000;
+// Cloudflare Workers caps PBKDF2 at 100,000 iterations — anything higher throws at runtime in prod
+// (but not in local miniflare). Keep at the max.
+const PBKDF2_ITERATIONS = 100000;
 
 function bufToHex(buf) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');

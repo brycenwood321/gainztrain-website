@@ -3,15 +3,21 @@
 // Body: { meals: 6..16, delivery_method: 'pickup'|'delivery', address?, city?, zip? }
 // Returns { url } to redirect the browser to Stripe.
 //
-// Stamps meals_per_week into the subscription (line quantity AND metadata) so the webhook
-// records the meal tier correctly with zero GHL dependency. Delivery is a second line item
-// priced by the customer's zip → zone fee (from the delivery_zones table = our source of truth).
+// Stamps meals_per_week into the subscription (line quantity AND metadata) so the webhook records
+// the meal tier with zero GHL dependency. Delivery is a second line item priced by zip → zone fee.
+//
+// DOUBLE-BILLING GUARD: refuses to start a new subscription if the customer already has a live one
+// (checks Stripe directly — authoritative even before the webhook is registered). Stripe idempotency
+// keys make rapid double-clicks/retries collapse to one customer/session.
 import { ok, fail, readJson } from '../../_lib/respond.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
 import { str } from '../../_lib/validate.js';
 import { tierForMeals, ensureStripePrice, ensureDeliveryPrice, MIN_MEALS, MAX_MEALS } from '../../_lib/plans.js';
+
+// Stripe statuses that mean "this person already has a plan" — block a second subscription.
+const LIVE_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -30,8 +36,8 @@ export async function onRequestPost(context) {
   let zone = 0, feeCents = 0, zip = '', address = '', city = '';
   if (deliveryMethod === 'delivery') {
     zip = str(body.zip).replace(/[^0-9]/g, '').slice(0, 5);
-    address = str(body.address).trim();
-    city = str(body.city).trim();
+    address = str(body.address).trim().slice(0, 200);
+    city = str(body.city).trim().slice(0, 80);
     if (!zip || zip.length !== 5 || !address) {
       return fail(400, 'address_required', 'Enter your delivery address and a valid zip code.');
     }
@@ -39,28 +45,34 @@ export async function onRequestPost(context) {
     if (!z) return fail(400, 'zip_not_served', "We don't deliver to that zip yet — choose pickup, or contact us.");
     zone = z.zone;
     const dz = await one(env.DB, `SELECT fee_cents FROM delivery_zones WHERE zone = ?`, zone);
-    feeCents = dz?.fee_cents ?? 0;
+    if (!dz) return fail(500, 'zone_misconfigured', 'Delivery for your area is being set up — choose pickup for now.');
+    feeCents = dz.fee_cents ?? 0;
   }
 
   try {
-    // One Stripe customer per D1 customer — reuse if we already have it.
+    // One Stripe customer per D1 customer. Idempotency key prevents a double-click from making two.
     let stripeCustomerId = customer.stripe_customer_id;
+    let preexisting = !!stripeCustomerId;
     if (!stripeCustomerId) {
       const sc = await stripe(env, 'POST', 'customers', {
         email: customer.email,
         name: [customer.first_name, customer.last_name].filter(Boolean).join(' ') || undefined,
         metadata: { d1_customer_id: customer.id },
-      });
+      }, `gt_cust_${customer.id}`);
       stripeCustomerId = sc.id;
       await run(env.DB, `UPDATE customers SET stripe_customer_id = ?, updated_at = ? WHERE id = ?`,
         stripeCustomerId, nowIso(), customer.id);
     }
 
-    // Persist the delivery choice on the customer (D1 = source of truth).
-    await run(env.DB,
-      `UPDATE customers SET delivery_method = ?, delivery_zone = ?, zip = COALESCE(NULLIF(?,''), zip),
-         address = COALESCE(NULLIF(?,''), address), city = COALESCE(NULLIF(?,''), city), updated_at = ? WHERE id = ?`,
-      deliveryMethod, zone, zip, address, city, nowIso(), customer.id);
+    // ── Double-billing guard ── refuse if they already have a live subscription.
+    // Stripe is authoritative (D1 lags the async webhook, which may not even be registered yet).
+    if (preexisting) {
+      const subs = await stripe(env, 'GET', 'subscriptions', { customer: stripeCustomerId, status: 'all', limit: 20 });
+      const live = (subs.data || []).find((s) => LIVE_STATUSES.has(s.status));
+      if (live) {
+        return fail(409, 'already_subscribed', "You already have an active plan — manage it from your account.");
+      }
+    }
 
     const lineItems = [{ price: await ensureStripePrice(env, tier), quantity: meals }];
     if (deliveryMethod === 'delivery' && feeCents > 0) {
@@ -81,8 +93,15 @@ export async function onRequestPost(context) {
       metadata: { d1_customer_id: customer.id, meals: String(meals), tier: tier.key, delivery_method: deliveryMethod },
       allow_promotion_codes: true,
       success_url: `${base}/app/?checkout=success`,
-      cancel_url: `${base}/subscribe/?checkout=cancel`,
-    });
+      cancel_url: `${base}/start/?checkout=cancel`,
+    }, `gt_checkout_${customer.id}_${meals}_${deliveryMethod}_${zone}`);
+
+    // Persist the delivery choice only AFTER the session is created (not on a validation failure).
+    await run(env.DB,
+      `UPDATE customers SET delivery_method = ?, delivery_zone = ?, zip = COALESCE(NULLIF(?,''), zip),
+         address = COALESCE(NULLIF(?,''), address), city = COALESCE(NULLIF(?,''), city), updated_at = ? WHERE id = ?`,
+      deliveryMethod, zone, zip, address, city, nowIso(), customer.id);
+
     return ok({ url: session.url, tier: tier.key, meals, delivery_method: deliveryMethod, delivery_fee_cents: feeCents });
   } catch (e) {
     return fail(502, 'checkout_failed', String(e?.message || e).slice(0, 200));

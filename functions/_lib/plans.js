@@ -24,20 +24,26 @@ export function publicPlans() {
   return TIERS.map((t) => ({ key: t.key, name: t.name, min: t.min, max: t.max, per_meal_cents: t.perMealCents }));
 }
 
-// Find-or-create a named Stripe Product (idempotent by name).
+// Find-or-create a named Stripe Product (idempotent: name lookup + idempotency key on create).
 async function ensureProduct(env, name) {
   const list = await stripe(env, 'GET', 'products', { active: true, limit: 100 });
   const found = (list.data || []).find((p) => p.name === name);
   if (found) return found.id;
-  const created = await stripe(env, 'POST', 'products', { name });
+  const created = await stripe(env, 'POST', 'products', { name }, `gt_prod_${name.replace(/\s+/g, '_')}`);
   return created.id;
 }
 
-// Find-or-create a recurring WEEKLY Stripe Price (idempotent via lookup_key).
-// FUTURE: when the weekly-vs-monthly pricing lands, add an `interval` arg + per-interval lookup keys.
-async function ensurePrice(env, { productName, lookupKey, unitAmount, nickname }) {
+// Find-or-create a recurring WEEKLY Stripe Price. The lookup_key ENCODES the amount
+// (`${keyBase}_${unitAmount}`) so a price found by key always has the right amount — a rate change
+// produces a NEW key/price and can never silently serve a stale price. We also assert the amount
+// as a belt-and-suspenders, and pass an idempotency key so a find-or-create race can't duplicate.
+// FUTURE (weekly-vs-monthly): add an `interval` arg and fold it into keyBase.
+async function ensurePrice(env, { productName, keyBase, unitAmount, nickname }) {
+  const lookupKey = `${keyBase}_${unitAmount}`;
   const existing = await stripe(env, 'GET', 'prices', { lookup_keys: [lookupKey], active: true, limit: 1 });
-  if (existing.data && existing.data.length) return existing.data[0].id;
+  if (existing.data && existing.data.length && existing.data[0].unit_amount === unitAmount) {
+    return existing.data[0].id;
+  }
   const productId = await ensureProduct(env, productName);
   const price = await stripe(env, 'POST', 'prices', {
     product: productId,
@@ -45,15 +51,16 @@ async function ensurePrice(env, { productName, lookupKey, unitAmount, nickname }
     unit_amount: unitAmount,
     recurring: { interval: 'week' },
     lookup_key: lookupKey,
+    transfer_lookup_key: true, // move the key onto the new price if an old one held it
     nickname,
-  });
+  }, `gt_price_${lookupKey}`);
   return price.id;
 }
 
 export async function ensureStripePrice(env, tier) {
   return ensurePrice(env, {
     productName: 'Gainz Train Meals',
-    lookupKey: tier.lookupKey,
+    keyBase: 'gt_meal',
     unitAmount: tier.perMealCents,
     nickname: `${tier.name} — $${(tier.perMealCents / 100).toFixed(2)}/meal`,
   });
@@ -63,7 +70,7 @@ export async function ensureStripePrice(env, tier) {
 export async function ensureDeliveryPrice(env, zone, feeCents) {
   return ensurePrice(env, {
     productName: 'Gainz Train Delivery',
-    lookupKey: `gt_delivery_zone_${zone}`,
+    keyBase: `gt_delivery_zone_${zone}`,
     unitAmount: feeCents,
     nickname: `Delivery — Zone ${zone}`,
   });

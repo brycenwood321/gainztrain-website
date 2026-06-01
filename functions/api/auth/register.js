@@ -39,15 +39,18 @@ export async function onRequestPost(context) {
     return fail(409, 'email_exists', 'An account with that email already exists — try logging in.');
   }
 
-  if (password) {
-    const { hash, salt, iterations } = await hashPassword(password);
-    await run(
-      env.DB,
-      `INSERT INTO auth_passwords (customer_id, password_hash, salt, iterations, updated_at) VALUES (?, ?, ?, ?, ?)`,
-      id, hash, salt, iterations, now,
-    );
+  try {
+    if (password) {
+      const { hash, salt, iterations } = await hashPassword(password);
+      await run(
+        env.DB,
+        `INSERT INTO auth_passwords (customer_id, password_hash, salt, iterations, updated_at) VALUES (?, ?, ?, ?, ?)`,
+        id, hash, salt, iterations, now,
+      );
+    }
+    const { cookie } = await createSession(env, id, request);
+    return ok({ customer: { id, email, first_name: firstName } }, { 'Set-Cookie': cookie });
+  } catch (e) {
+    return fail(500, 'register_failed', String(e?.message || e).slice(0, 300));
   }
-
-  const { cookie } = await createSession(env, id, request);
-  return ok({ customer: { id, email, first_name: firstName } }, { 'Set-Cookie': cookie });
 }

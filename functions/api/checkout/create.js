@@ -1,0 +1,90 @@
+// POST /api/checkout/create — start a subscription via Stripe hosted Checkout.
+// Session-gated: the customer must already have an account (pick plan → create account → pay).
+// Body: { meals: 6..16, delivery_method: 'pickup'|'delivery', address?, city?, zip? }
+// Returns { url } to redirect the browser to Stripe.
+//
+// Stamps meals_per_week into the subscription (line quantity AND metadata) so the webhook
+// records the meal tier correctly with zero GHL dependency. Delivery is a second line item
+// priced by the customer's zip → zone fee (from the delivery_zones table = our source of truth).
+import { ok, fail, readJson } from '../../_lib/respond.js';
+import { one, run, nowIso } from '../../_lib/db.js';
+import { getSessionCustomer } from '../../_lib/auth.js';
+import { stripe } from '../../_lib/stripe.js';
+import { str } from '../../_lib/validate.js';
+import { tierForMeals, ensureStripePrice, ensureDeliveryPrice, MIN_MEALS, MAX_MEALS } from '../../_lib/plans.js';
+
+export async function onRequestPost(context) {
+  const { request, env } = context;
+  const auth = await getSessionCustomer(context);
+  if (!auth) return fail(401, 'not_authenticated', 'Create an account first, then choose your plan.');
+  const { customer } = auth;
+
+  const body = await readJson(request);
+  const meals = Number(body.meals);
+  const tier = tierForMeals(meals);
+  if (!tier) return fail(400, 'invalid_meals', `Choose between ${MIN_MEALS} and ${MAX_MEALS} meals per week.`);
+
+  const deliveryMethod = str(body.delivery_method) === 'delivery' ? 'delivery' : 'pickup';
+
+  // Resolve delivery zone + fee from the zip (our tables are the source of truth).
+  let zone = 0, feeCents = 0, zip = '', address = '', city = '';
+  if (deliveryMethod === 'delivery') {
+    zip = str(body.zip).replace(/[^0-9]/g, '').slice(0, 5);
+    address = str(body.address).trim();
+    city = str(body.city).trim();
+    if (!zip || zip.length !== 5 || !address) {
+      return fail(400, 'address_required', 'Enter your delivery address and a valid zip code.');
+    }
+    const z = await one(env.DB, `SELECT zone FROM zip_zone_map WHERE zip = ?`, zip);
+    if (!z) return fail(400, 'zip_not_served', "We don't deliver to that zip yet — choose pickup, or contact us.");
+    zone = z.zone;
+    const dz = await one(env.DB, `SELECT fee_cents FROM delivery_zones WHERE zone = ?`, zone);
+    feeCents = dz?.fee_cents ?? 0;
+  }
+
+  try {
+    // One Stripe customer per D1 customer — reuse if we already have it.
+    let stripeCustomerId = customer.stripe_customer_id;
+    if (!stripeCustomerId) {
+      const sc = await stripe(env, 'POST', 'customers', {
+        email: customer.email,
+        name: [customer.first_name, customer.last_name].filter(Boolean).join(' ') || undefined,
+        metadata: { d1_customer_id: customer.id },
+      });
+      stripeCustomerId = sc.id;
+      await run(env.DB, `UPDATE customers SET stripe_customer_id = ?, updated_at = ? WHERE id = ?`,
+        stripeCustomerId, nowIso(), customer.id);
+    }
+
+    // Persist the delivery choice on the customer (D1 = source of truth).
+    await run(env.DB,
+      `UPDATE customers SET delivery_method = ?, delivery_zone = ?, zip = COALESCE(NULLIF(?,''), zip),
+         address = COALESCE(NULLIF(?,''), address), city = COALESCE(NULLIF(?,''), city), updated_at = ? WHERE id = ?`,
+      deliveryMethod, zone, zip, address, city, nowIso(), customer.id);
+
+    const lineItems = [{ price: await ensureStripePrice(env, tier), quantity: meals }];
+    if (deliveryMethod === 'delivery' && feeCents > 0) {
+      lineItems.push({ price: await ensureDeliveryPrice(env, zone, feeCents), quantity: 1 });
+    }
+
+    const base = env.APP_BASE_URL || '';
+    const session = await stripe(env, 'POST', 'checkout/sessions', {
+      mode: 'subscription',
+      customer: stripeCustomerId,
+      line_items: lineItems,
+      subscription_data: {
+        metadata: {
+          meals_per_week: String(meals), tier: tier.key, d1_customer_id: customer.id,
+          delivery_method: deliveryMethod, delivery_zone: String(zone),
+        },
+      },
+      metadata: { d1_customer_id: customer.id, meals: String(meals), tier: tier.key, delivery_method: deliveryMethod },
+      allow_promotion_codes: true,
+      success_url: `${base}/app/?checkout=success`,
+      cancel_url: `${base}/subscribe/?checkout=cancel`,
+    });
+    return ok({ url: session.url, tier: tier.key, meals, delivery_method: deliveryMethod, delivery_fee_cents: feeCents });
+  } catch (e) {
+    return fail(502, 'checkout_failed', String(e?.message || e).slice(0, 200));
+  }
+}

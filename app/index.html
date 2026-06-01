@@ -262,9 +262,10 @@
         const week = d.this_week[0].week_of;
         $('thisWeek').innerHTML =
           `<div class="stat-sub" style="margin-bottom:0.5rem;">Week of ${fmtDate(week)}</div>` +
-          d.this_week.map(m => `<span class="meal-pill"><span class="q">${m.qty}</span>${m.meal_name}</span>`).join('');
+          d.this_week.map(m => `<span class="meal-pill"><span class="q">${m.qty}</span>${m.meal_name}</span>`).join('') +
+          `<div style="margin-top:0.75rem;"><a href="/app/menu/" style="font-weight:600;">Edit this week's meals →</a></div>`;
       } else {
-        $('thisWeek').innerHTML = `<div class="empty">No meals selected for this week yet. <a href="/menu-selection/">Pick your meals →</a></div>`;
+        $('thisWeek').innerHTML = `<div class="empty">No meals picked for this week yet. <a href="/app/menu/">Pick your meals →</a></div>`;
       }
 
       // orders

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pick Your Meals | Gainz Train</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root{--black:#1a1614;--surface:#fff;--mid:#f5f2ee;--bg:#fafaf8;--gray:#4a4440;--muted:#7a7270;
+      --line:#ede9e3;--orange:#ff6b35;--orange-dark:#cc5520;--green:#16a34a;--red:#dc2626;
+      --head:'Barlow Condensed',sans-serif;--body:'Inter',sans-serif;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--body);background:var(--bg);color:var(--black);line-height:1.5;-webkit-font-smoothing:antialiased;}
+    h1,h2,h3{font-family:var(--head);font-weight:700;line-height:1.05;}
+    .topbar{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid var(--line);background:var(--surface);}
+    .brand{font-family:var(--head);font-weight:700;font-size:1.3rem;}.brand .t{color:var(--orange);}
+    .topbar a{color:var(--gray);text-decoration:none;font-size:.9rem;font-weight:600;}
+    .wrap{max-width:640px;margin:0 auto;padding:1.25rem 1.25rem 7rem;}
+    .head h1{font-size:2rem;}
+    .head .wk{color:var(--muted);margin-bottom:1rem;}
+    .meal{display:flex;gap:1rem;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1rem;margin-bottom:.85rem;box-shadow:0 4px 18px rgba(0,0,0,.03);}
+    .meal .emoji{font-size:2rem;line-height:1;flex-shrink:0;width:2.5rem;text-align:center;}
+    .meal .info{flex:1;min-width:0;}
+    .meal h3{font-size:1.15rem;}
+    .meal .desc{color:var(--muted);font-size:.85rem;margin:.2rem 0 .5rem;}
+    .macros{display:flex;gap:.6rem;flex-wrap:wrap;font-size:.78rem;color:var(--gray);}
+    .macros b{color:var(--black);}
+    .up{display:inline-block;margin-top:.4rem;font-size:.72rem;font-weight:700;color:var(--orange-dark);background:#fff3ec;border:1px solid #ffd9c4;border-radius:999px;padding:.1rem .5rem;}
+    .qty{display:flex;align-items:center;gap:.6rem;flex-shrink:0;align-self:center;}
+    .qbtn{width:38px;height:38px;border-radius:50%;border:2px solid var(--line);background:#fff;font-size:1.3rem;font-weight:700;color:var(--orange);cursor:pointer;line-height:1;}
+    .qbtn:hover:not(:disabled){border-color:var(--orange);background:var(--mid);}
+    .qbtn:disabled{opacity:.3;cursor:not-allowed;}
+    .qn{font-family:var(--head);font-weight:700;font-size:1.5rem;min-width:1.5rem;text-align:center;}
+    .bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:.9rem 1.25rem;box-shadow:0 -4px 16px rgba(0,0,0,.05);}
+    .bar-inner{max-width:640px;margin:0 auto;display:flex;align-items:center;gap:1rem;}
+    .count{flex:1;font-size:.9rem;color:var(--muted);}
+    .count b{font-family:var(--head);font-size:1.4rem;color:var(--black);}
+    .count.ok b{color:var(--green);}
+    .btn{font-family:var(--body);font-weight:600;font-size:1rem;border:none;border-radius:10px;padding:.9rem 1.6rem;background:var(--orange);color:#fff;cursor:pointer;}
+    .btn:hover:not(:disabled){background:var(--orange-dark);}
+    .btn:disabled{opacity:.45;cursor:not-allowed;}
+    .msg{max-width:640px;margin:0 auto 1rem;padding:.8rem 1rem;border-radius:10px;font-size:.92rem;display:none;}
+    .msg.show{display:block;}.msg.err{background:#fef2f2;color:var(--red);border:1px solid #fecaca;}
+    .msg.ok{background:#f0fdf4;color:var(--green);border:1px solid #bbf7d0;}
+    .msg.info{background:var(--mid);color:var(--gray);border:1px solid var(--line);}
+    .banner{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:.7rem 1rem;font-size:.9rem;margin-bottom:1rem;}
+    .empty{text-align:center;padding:3rem 1rem;color:var(--muted);}
+    .empty a{color:var(--orange-dark);font-weight:600;}
+    .loading{text-align:center;padding:4rem;color:var(--muted);}
+    .hidden{display:none!important;}
+  </style>
+</head>
+<body>
+  <div class="topbar"><div class="brand">GAINZ<span class="t">TRAIN</span></div><a href="/app/">← My account</a></div>
+  <div class="wrap">
+    <div id="loading" class="loading">Loading this week's menu…</div>
+    <div id="msg" class="msg"></div>
+    <div id="empty" class="empty hidden"></div>
+    <div id="app" class="hidden">
+      <div class="head">
+        <h1>Pick your meals</h1>
+        <div class="wk" id="weekLine"></div>
+      </div>
+      <div id="lockBanner" class="banner hidden"></div>
+      <div id="meals"></div>
+    </div>
+  </div>
+  <div id="bar" class="bar hidden">
+    <div class="bar-inner">
+      <div class="count" id="count"><b><span id="sel">0</span>/<span id="need">0</span></b> selected</div>
+      <button class="btn" id="saveBtn" disabled>Save my meals</button>
+    </div>
+  </div>
+
+  <script>
+    const $=id=>document.getElementById(id);
+    const api=(p,o={})=>fetch(p,{credentials:'same-origin',headers:{'Content-Type':'application/json'},...o}).then(async r=>({status:r.status,body:await r.json().catch(()=>({}))}));
+    let MENU=null,need=0,locked=false,qty={};
+    function msg(t,k){const m=$('msg');m.textContent=t;m.className='msg show '+k;}
+
+    function total(){return Object.values(qty).reduce((a,b)=>a+b,0);}
+    function refresh(){
+      const t=total();
+      $('sel').textContent=t;$('need').textContent=need;
+      $('count').className='count'+(t===need?' ok':'');
+      $('saveBtn').disabled=(t!==need)||locked;
+      MENU.forEach(m=>{$('qn_'+m.position).textContent=qty[m.position]||0;
+        const plus=$('plus_'+m.position);if(plus)plus.disabled=locked||t>=need;
+        const minus=$('minus_'+m.position);if(minus)minus.disabled=locked||(qty[m.position]||0)<=0;});
+    }
+    function renderMeals(){
+      $('meals').innerHTML=MENU.map(m=>`
+        <div class="meal">
+          <div class="emoji">${m.emoji||'🍽️'}</div>
+          <div class="info">
+            <h3>${m.name}</h3>
+            <div class="desc">${m.description||''}</div>
+            <div class="macros"><span><b>${m.calories||'—'}</b> cal</span><span><b>${m.protein||0}g</b> protein</span><span><b>${m.carbs||0}g</b> carbs</span><span><b>${m.fat||0}g</b> fat</span></div>
+            ${m.upcharge_per_meal>0?`<span class="up">+$${m.upcharge_per_meal.toFixed(2)}/meal specialty</span>`:''}
+          </div>
+          <div class="qty">
+            <button class="qbtn" id="minus_${m.position}" aria-label="fewer">–</button>
+            <span class="qn" id="qn_${m.position}">0</span>
+            <button class="qbtn" id="plus_${m.position}" aria-label="more">+</button>
+          </div>
+        </div>`).join('');
+      MENU.forEach(m=>{
+        $('plus_'+m.position).onclick=()=>{if(total()<need&&!locked){qty[m.position]=(qty[m.position]||0)+1;refresh();}};
+        $('minus_'+m.position).onclick=()=>{if((qty[m.position]||0)>0){qty[m.position]--;refresh();}};
+      });
+    }
+    $('saveBtn').onclick=async()=>{
+      $('saveBtn').disabled=true;
+      const selections=MENU.map(m=>({position:m.position,qty:qty[m.position]||0})).filter(s=>s.qty>0);
+      const r=await api('/api/meals/select',{method:'POST',body:JSON.stringify({week_of:MENU_WEEK,selections})});
+      if(r.status===200&&r.body.ok){msg(`Locked in — ${r.body.total_meals} meals for the week. You can change them until Friday.`,'ok');refresh();window.scrollTo(0,0);}
+      else{msg(r.body.detail||'Could not save. Try again.','err');$('saveBtn').disabled=false;}
+    };
+
+    let MENU_WEEK='';
+    (async()=>{
+      const me=await api('/api/me');
+      if(me.status!==200||!me.body.ok){location.href='/app/';return;}
+      const {status,body}=await api('/api/menu/current');
+      $('loading').classList.add('hidden');
+      if(status!==200){msg('Could not load the menu. Refresh to try again.','err');return;}
+      if(!body.has_active_sub){
+        $('empty').classList.remove('hidden');
+        $('empty').innerHTML='You don\'t have an active plan yet. <a href="/start/">Start one →</a>';
+        return;
+      }
+      MENU=body.meals;MENU_WEEK=body.week_of;need=body.meals_per_week;locked=body.locked;
+      (body.selections||[]).forEach(s=>{qty[s.meal_position]=s.qty;});
+      const d=new Date(body.week_of+'T00:00:00Z');
+      $('weekLine').textContent=`Week of ${d.toLocaleDateString('en-US',{month:'long',day:'numeric',timeZone:'UTC'})} · choose ${need} meals`;
+      if(locked){$('lockBanner').classList.remove('hidden');$('lockBanner').textContent='Ordering for this week has closed (Friday cutoff). These are your locked-in meals.';}
+      $('app').classList.remove('hidden');$('bar').classList.remove('hidden');
+      renderMeals();refresh();
+    })();
+  </script>
+</body>
+</html>

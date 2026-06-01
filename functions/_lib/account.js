@@ -11,3 +11,9 @@ export async function currentSub(env, customerId, statuses) {
      ORDER BY created_at DESC LIMIT 1`,
     customerId, ...list);
 }
+
+// Find a Stripe subscription line item whose price's lookup_key starts with a prefix
+// (e.g. 'gt_meal' for the meal line, 'gt_delivery_zone' for the delivery line).
+export function findItem(stripeSub, keyPrefix) {
+  return (stripeSub?.items?.data || []).find((it) => (it.price?.lookup_key || '').startsWith(keyPrefix)) || null;
+}

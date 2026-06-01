@@ -56,8 +56,12 @@ export async function onRequestGet(context) {
       last_name: customer.last_name,
       role: customer.role,
       goal: customer.goal,
+      sex: customer.sex,
       delivery_method: customer.delivery_method,
       delivery_zone: customer.delivery_zone,
+      address: customer.address,
+      city: customer.city,
+      zip: customer.zip,
     },
     subscription: sub
       ? {

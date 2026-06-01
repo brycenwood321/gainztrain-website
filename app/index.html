@@ -247,9 +247,10 @@
         $('subStatus').innerHTML =
           `<div style="margin-bottom:0.6rem;"><span class="badge ${s.status}">${s.status.replace('_',' ')}</span></div>` +
           `<div class="stat" style="font-size:1.5rem;">${tier}</div><div class="stat-sub">${price.replace(' · ','')}</div>` +
-          renews + coupon;
+          renews + coupon +
+          `<div style="margin-top:0.75rem;"><a href="/app/manage/" style="font-weight:600;">Manage plan →</a></div>`;
       } else {
-        $('subStatus').innerHTML = `<div class="empty">No active subscription. <a href="/subscribe/">Start one →</a></div>`;
+        $('subStatus').innerHTML = `<div class="empty">No active subscription. <a href="/start/">Start one →</a></div>`;
       }
 
       // total spent + delivery

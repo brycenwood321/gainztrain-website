@@ -1,0 +1,8 @@
+# Standalone scheduled Worker for the Gainz Train weekly cycle (separate from the Pages project).
+name = "gainztrain-cron"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+[triggers]
+# Wednesday 17:00 UTC — reminders.  Saturday 06:30 UTC — cutoff lock + auto-fill.
+crons = ["0 17 * * 3", "30 6 * * 6"]

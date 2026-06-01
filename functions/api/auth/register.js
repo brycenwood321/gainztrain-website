@@ -50,7 +50,9 @@ export async function onRequestPost(context) {
     }
     const { cookie } = await createSession(env, id, request);
     return ok({ customer: { id, email, first_name: firstName } }, { 'Set-Cookie': cookie });
-  } catch (e) {
-    return fail(500, 'register_failed', String(e?.message || e).slice(0, 300));
+  } catch {
+    // Defensive: never let a hashing/session error become a raw 1101. The customer row exists;
+    // they can set a password via magic-link if this ever fires.
+    return fail(500, 'register_failed', 'Could not finish creating your account. Try again.');
   }
 }

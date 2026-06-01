@@ -39,12 +39,15 @@ export async function onRequestPost(context) {
     const stripeSub = await stripe(env, 'GET', `subscriptions/${sub.stripe_subscription_id}`);
     const deliveryItem = findItem(stripeSub, 'gt_delivery_zone');
 
+    const idemCycle = stripeSub.current_period_start || '';
     if (method === 'delivery' && feeCents > 0) {
       const priceId = await ensureDeliveryPrice(env, zone, feeCents);
       if (deliveryItem) {
-        await stripe(env, 'POST', `subscription_items/${deliveryItem.id}`, { price: priceId, quantity: 1, proration_behavior: 'none' });
+        await stripe(env, 'POST', `subscription_items/${deliveryItem.id}`, { price: priceId, quantity: 1, proration_behavior: 'none' },
+          `gt_addr_${deliveryItem.id}_${zone}_${idemCycle}`);
       } else {
-        await stripe(env, 'POST', 'subscription_items', { subscription: sub.stripe_subscription_id, price: priceId, quantity: 1, proration_behavior: 'none' });
+        await stripe(env, 'POST', 'subscription_items', { subscription: sub.stripe_subscription_id, price: priceId, quantity: 1, proration_behavior: 'none' },
+          `gt_addr_${sub.stripe_subscription_id}_${zone}_${idemCycle}`);
       }
     } else if (deliveryItem) {
       // Switching to pickup (or a free zone): drop the delivery line.

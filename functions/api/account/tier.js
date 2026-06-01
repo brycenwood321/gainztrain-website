@@ -29,7 +29,7 @@ export async function onRequestPost(context) {
     const priceId = await ensureStripePrice(env, tier);
     await stripe(env, 'POST', `subscription_items/${mealItem.id}`, {
       price: priceId, quantity: meals, proration_behavior: 'none',
-    });
+    }, `gt_tier_${mealItem.id}_${meals}_${stripeSub.current_period_start || ''}`);
   } catch (e) {
     return fail(502, 'stripe_failed', String(e?.message || e).slice(0, 160));
   }

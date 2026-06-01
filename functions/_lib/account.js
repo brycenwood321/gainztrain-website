@@ -6,9 +6,10 @@ import { one } from './db.js';
 // (incl. stripe_subscription_id + status) or null.
 export async function currentSub(env, customerId, statuses) {
   const list = statuses && statuses.length ? statuses : ['active', 'trialing', 'past_due', 'paused', 'incomplete'];
+  // Deterministic tiebreak (id DESC) so selection is stable when created_at collides.
   return one(env.DB,
     `SELECT * FROM subscriptions WHERE customer_id = ? AND status IN (${list.map(() => '?').join(',')})
-     ORDER BY created_at DESC LIMIT 1`,
+     ORDER BY created_at DESC, id DESC LIMIT 1`,
     customerId, ...list);
 }
 

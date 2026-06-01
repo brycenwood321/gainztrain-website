@@ -12,7 +12,7 @@ export async function onRequestGet(context) {
 
   const sub = await one(
     env.DB,
-    `SELECT * FROM subscriptions WHERE customer_id = ? ORDER BY created_at DESC LIMIT 1`,
+    `SELECT * FROM subscriptions WHERE customer_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`,
     customer.id,
   );
 

@@ -113,11 +113,16 @@
       $('loading').classList.add('hidden');
       if(r.status!==200||!r.body.ok){location.href='/app/';return;}
       ME=r.body;sub=ME.subscription;
-      if(!sub){$('empty').classList.remove('hidden');$('empty').innerHTML='No active plan. <a href="/start/">Start one →</a>';return;}
+      const dead=['canceled','incomplete_expired','incomplete'];
+      if(!sub||dead.includes(sub.status)){
+        $('empty').classList.remove('hidden');
+        $('empty').innerHTML=(sub?`Your plan is ${(sub.status||'').replace('_',' ')}.`:'You don\'t have an active plan.')+' <a href="/start/">Start a plan →</a>';
+        return;
+      }
       $('app').classList.remove('hidden');
       const st=sub.status||'';
       $('planSub').innerHTML=`<span class="badge ${st}">${st.replace('_',' ')}</span> · ${sub.meals_per_week} meals/week`+(sub.cancel_at_period_end?' · <b>cancels at period end</b>':'');
-      tier=sub.meals_per_week||9;$('tMeals').textContent=tier;
+      tier=Math.min(16,Math.max(6,sub.meals_per_week||9));$('tMeals').textContent=tier;
       $('pauseBtn').classList.toggle('hidden',st==='paused');
       $('resumeBtn').classList.toggle('hidden',st!=='paused');
       $('cancelBtn').textContent=sub.cancel_at_period_end?'Undo cancellation':'Cancel plan';
@@ -139,7 +144,7 @@
     $('cancelBtn').onclick=()=>act('cancelBtn',()=>post('/api/account/cancel',{undo:!!(sub&&sub.cancel_at_period_end)}));
     $('goalSave').onclick=()=>act('goalSave',()=>post('/api/account/goal',{goal:$('goal').value,sex:$('sex').value}));
     $('addrSave').onclick=()=>act('addrSave',()=>post('/api/account/address',{delivery_method:method,address:$('address').value,city:$('city').value,zip:$('zip').value}));
-    $('cardBtn').onclick=async()=>{const r=await post('/api/account/portal');if(r.body.url)location.href=r.body.url;else msg(r.body.detail||'Could not open billing.','err');};
+    $('cardBtn').onclick=async()=>{const b=$('cardBtn');b.disabled=true;b.textContent='…';const r=await post('/api/account/portal');if(r.body.url){location.href=r.body.url;return;}b.disabled=false;b.textContent='Update card';msg(r.body.detail||'Could not open billing.','err');};
 
     load();
   </script>

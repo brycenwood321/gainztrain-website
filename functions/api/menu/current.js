@@ -37,6 +37,7 @@ export async function onRequestGet(context) {
     meals,
     meals_per_week: sub?.meals_per_week ?? null,
     has_active_sub: !!sub,
+    paused: !!(sub && sub.status === 'paused'),
     selections,                                  // [{meal_position, qty}]
     cutoff: cutoffForWeek(week).toISOString(),
     locked: isLocked(week),

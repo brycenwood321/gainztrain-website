@@ -23,10 +23,12 @@ export async function onRequestPost(context) {
   if (isLocked(weekOf)) return fail(409, 'ordering_locked', "Ordering for this week has closed (Friday cutoff).");
 
   const sub = await one(env.DB,
-    `SELECT id, meals_per_week FROM subscriptions
-     WHERE customer_id = ? AND status IN ('active','trialing','past_due','paused') ORDER BY created_at DESC LIMIT 1`,
+    `SELECT id, meals_per_week, status FROM subscriptions
+     WHERE customer_id = ? AND status IN ('active','trialing','past_due','paused') ORDER BY created_at DESC, id DESC LIMIT 1`,
     customer.id);
   if (!sub) return fail(400, 'no_subscription', 'You need an active plan to order meals.');
+  if (sub.status === 'paused') return fail(409, 'plan_paused', 'Your plan is paused — resume it to order meals.');
+  if (!(sub.meals_per_week > 0)) return fail(409, 'tier_unset', "Your plan's meal count isn't set yet — contact us.");
 
   const menuRow = await one(env.DB, `SELECT meals_json FROM weekly_menus WHERE week_of = ?`, weekOf);
   if (!menuRow) return fail(404, 'no_menu', 'No menu is published for this week yet.');

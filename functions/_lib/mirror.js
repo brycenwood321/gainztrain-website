@@ -122,6 +122,10 @@ export async function mirrorSubscription(env, subInput) {
   const mealsPerWeek = meals ?? existing?.meals_per_week ?? 0;
   const tierPrice = unit ?? existing?.tier_price_cents ?? null;
   const finalCoupon = couponCode ?? existing?.coupon_code ?? null;
+  // Stripe keeps a paused sub's status as 'active' with pause_collection set — derive 'paused' from
+  // that, so a webhook re-fetch can't silently un-pause the customer in D1.
+  const isPaused = !!(sub.pause_collection && sub.pause_collection.behavior);
+  const status = isPaused ? 'paused' : (sub.status || existing?.status || 'incomplete');
 
   const id = existing?.id || randomToken(16);
   await run(
@@ -140,11 +144,11 @@ export async function mirrorSubscription(env, subInput) {
        coupon_code = excluded.coupon_code,
        discount_active = excluded.discount_active,
        updated_at = excluded.updated_at`,
-    id, customer.id, stripeSubId, sub.status || existing?.status || 'incomplete', mealsPerWeek, tierPrice,
+    id, customer.id, stripeSubId, status, mealsPerWeek, tierPrice,
     periodStart, periodEnd, sub.cancel_at_period_end ? 1 : 0, finalCoupon, hasDiscount ? 1 : 0, now, now,
   );
-  await audit(env, `subscription:${id}`, `stripe_${sub.status || 'unknown'}`,
-    { stripeSubId, status: sub.status, cancel_at_period_end: !!sub.cancel_at_period_end, couponCode: finalCoupon });
+  await audit(env, `subscription:${id}`, `stripe_${status}`,
+    { stripeSubId, status, paused: isPaused, cancel_at_period_end: !!sub.cancel_at_period_end, couponCode: finalCoupon });
 }
 
 export async function mirrorInvoice(env, inv) {

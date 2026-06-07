@@ -30,12 +30,14 @@ export async function onRequestPost(context) {
   const tier = tierForMeals(meals);
   if (!tier) return fail(400, 'invalid_meals', `Choose between ${MIN_MEALS} and ${MAX_MEALS} meals per week.`);
 
-  // Optional promo code: validate against our coupons table (it mirrors Stripe; the code IS the
-  // Stripe coupon id). We apply it directly to the Checkout Session — no Stripe promotion-code object.
+  // Optional promo code: must be a PUBLIC (customer-facing) coupon in our table, not expired.
+  // Internal comps like OWNERS100 (is_public=0) are blocked here — a customer can't grant themselves
+  // a free-forever sub. The code IS the Stripe coupon id; we apply it directly to the Checkout Session.
   const code = str(body.code).trim().toUpperCase();
   if (code) {
-    const c = await one(env.DB, `SELECT code FROM coupons WHERE code = ?`, code);
-    if (!c) return fail(400, 'invalid_code', "That promo code isn't valid.");
+    const c = await one(env.DB, `SELECT code, is_public, expires_at FROM coupons WHERE code = ?`, code);
+    if (!c || !c.is_public) return fail(400, 'invalid_code', "That promo code isn't valid.");
+    if (c.expires_at && new Date(c.expires_at) < new Date()) return fail(400, 'code_expired', 'That promo code has expired.');
   }
 
   const deliveryMethod = str(body.delivery_method) === 'delivery' ? 'delivery' : 'pickup';

@@ -9,8 +9,11 @@ import { ok, fail } from '../../_lib/respond.js';
 import { one, all, run, nowIso } from '../../_lib/db.js';
 import { upcomingSunday } from '../../_lib/menu.js';
 import { repeatLastWeek, evenSpread } from '../../_lib/substitute.js';
+import { MIN_MEALS } from '../../_lib/plans.js';
 
-const ACTIVE = ['active', 'trialing', 'past_due', 'paused'];
+// Only these get meals cooked. 'paused' is deliberately EXCLUDED — a paused customer isn't billed
+// and gets no meals. Legacy subs with meals_per_week < MIN_MEALS are skipped + surfaced, not locked.
+const COOKABLE = ['active', 'trialing', 'past_due'];
 
 async function writeSelectionsAndOrder(env, sub, weekOf, menu, qtyByPos, now) {
   let total = 0, upchargeTotal = 0;
@@ -48,14 +51,21 @@ export async function onRequestPost(context) {
   if (!Array.isArray(menu) || menu.length === 0) return fail(422, 'empty_menu', `Menu for ${weekOf} has no meals — fix the menu before locking.`);
 
   const subs = await all(env.DB,
-    `SELECT id, customer_id, meals_per_week FROM subscriptions WHERE status IN (${ACTIVE.map(() => '?').join(',')})`,
-    ...ACTIVE);
+    `SELECT id, customer_id, meals_per_week FROM subscriptions WHERE status IN (${COOKABLE.map(() => '?').join(',')})`,
+    ...COOKABLE);
 
   const now = nowIso();
-  const summary = { week_of: weekOf, total_subs: subs.length, locked_as_picked: 0, autofilled: 0, errors: [] };
+  const summary = { week_of: weekOf, total_subs: subs.length, locked_as_picked: 0, autofilled: 0, skipped: 0, errors: [] };
 
   for (const sub of subs) {
     try {
+      // Skip legacy / misconfigured subs (no real tier yet) — surface them instead of locking an
+      // empty order. These need enrich-ghl to set meals_per_week first.
+      if (!(sub.meals_per_week >= MIN_MEALS)) {
+        summary.skipped++;
+        summary.errors.push(`sub ${sub.id}: meals_per_week=${sub.meals_per_week} (< ${MIN_MEALS}) — needs enrichment, not locked`);
+        continue;
+      }
       const picked = await all(env.DB,
         `SELECT meal_position, qty FROM meal_selections WHERE subscription_id = ? AND week_of = ? AND qty > 0`,
         sub.id, weekOf);

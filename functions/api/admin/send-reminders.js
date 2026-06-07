@@ -7,7 +7,7 @@ import { one, all } from '../../_lib/db.js';
 import { orderableWeek, isLocked, cutoffForWeek } from '../../_lib/menu.js';
 import { ghlSend } from '../../_lib/ghl.js';
 
-const ACTIVE = ['active', 'trialing', 'past_due', 'paused'];
+const ACTIVE = ['active', 'trialing', 'past_due']; // paused customers don't order, don't nag them
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -26,6 +26,7 @@ export async function onRequestPost(context) {
 
   const summary = { week_of: week, candidates: 0, reminded: 0, already_picked: 0, no_contact: 0, dry };
   for (const sub of subs) {
+    if (!(sub.meals_per_week > 0)) continue; // legacy 0-meal subs: not orderable yet, skip
     const picked = await one(env.DB,
       `SELECT COALESCE(SUM(qty),0) AS n FROM meal_selections WHERE subscription_id = ? AND week_of = ?`, sub.id, week);
     if ((picked?.n || 0) === sub.meals_per_week) { summary.already_picked++; continue; }

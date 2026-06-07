@@ -30,6 +30,14 @@ export async function onRequestPost(context) {
   const tier = tierForMeals(meals);
   if (!tier) return fail(400, 'invalid_meals', `Choose between ${MIN_MEALS} and ${MAX_MEALS} meals per week.`);
 
+  // Optional promo code: validate against our coupons table (it mirrors Stripe; the code IS the
+  // Stripe coupon id). We apply it directly to the Checkout Session — no Stripe promotion-code object.
+  const code = str(body.code).trim().toUpperCase();
+  if (code) {
+    const c = await one(env.DB, `SELECT code FROM coupons WHERE code = ?`, code);
+    if (!c) return fail(400, 'invalid_code', "That promo code isn't valid.");
+  }
+
   const deliveryMethod = str(body.delivery_method) === 'delivery' ? 'delivery' : 'pickup';
 
   // Resolve delivery zone + fee from the zip (our tables are the source of truth).
@@ -80,7 +88,7 @@ export async function onRequestPost(context) {
     }
 
     const base = env.APP_BASE_URL || '';
-    const session = await stripe(env, 'POST', 'checkout/sessions', {
+    const sessionParams = {
       mode: 'subscription',
       customer: stripeCustomerId,
       line_items: lineItems,
@@ -90,11 +98,18 @@ export async function onRequestPost(context) {
           delivery_method: deliveryMethod, delivery_zone: String(zone),
         },
       },
-      metadata: { d1_customer_id: customer.id, meals: String(meals), tier: tier.key, delivery_method: deliveryMethod },
-      allow_promotion_codes: true,
+      metadata: { d1_customer_id: customer.id, meals: String(meals), tier: tier.key, delivery_method: deliveryMethod, code: code || '' },
+      // Don't force a card when nothing is due now (e.g. a 100%-off plan checks out at $0).
+      payment_method_collection: 'if_required',
       success_url: `${base}/app/?checkout=success`,
       cancel_url: `${base}/start/?checkout=cancel`,
-    }, `gt_checkout_${customer.id}_${meals}_${deliveryMethod}_${zone}`);
+    };
+    // A validated code applies its coupon directly; otherwise let Stripe accept promotion codes.
+    if (code) sessionParams.discounts = [{ coupon: code }];
+    else sessionParams.allow_promotion_codes = true;
+
+    const session = await stripe(env, 'POST', 'checkout/sessions', sessionParams,
+      `gt_checkout_${customer.id}_${meals}_${deliveryMethod}_${zone}_${code}`);
 
     // Persist the delivery choice only AFTER the session is created (not on a validation failure).
     await run(env.DB,

@@ -120,6 +120,8 @@
           <input id="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
         </div>
         <div id="loggedInBox" class="loggedin hidden"></div>
+        <label for="code" style="margin-top:1rem;">Promo code (optional)</label>
+        <input id="code" type="text" autocapitalize="characters" placeholder="e.g. FOUNDER25" />
         <div id="msg" class="msg"></div>
       </div>
     </div>
@@ -185,7 +187,8 @@
           loggedIn=true;
         }
         // checkout
-        const co=await api('/api/checkout/create',{method:'POST',body:JSON.stringify({meals,delivery_method:method,address,city,zip})});
+        const code=($('code').value||'').trim().toUpperCase();
+        const co=await api('/api/checkout/create',{method:'POST',body:JSON.stringify({meals,delivery_method:method,address,city,zip,code})});
         if(co.status===200&&co.body.url){window.location.href=co.body.url;return;}
         showMsg(co.body.detail||'Could not start checkout. Try again.');btn.disabled=false;
       }catch(e){showMsg('Something went wrong. Try again.');btn.disabled=false;}

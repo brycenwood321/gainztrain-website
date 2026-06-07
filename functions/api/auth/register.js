@@ -3,6 +3,7 @@ import { ok, fail, readJson } from '../../_lib/respond.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 import { randomToken, hashPassword } from '../../_lib/crypto.js';
 import { createSession } from '../../_lib/auth.js';
+import { ghlSendToCustomer } from '../../_lib/ghl.js';
 import { str, normEmail, toE164 } from '../../_lib/validate.js';
 
 export async function onRequestPost(context) {
@@ -49,6 +50,18 @@ export async function onRequestPost(context) {
       );
     }
     const { cookie } = await createSession(env, id, request);
+    // Welcome email + link a GHL contact (so future magic links can reach them). Non-blocking —
+    // a comms hiccup must never fail the signup.
+    const base = env.APP_BASE_URL || '';
+    try {
+      await ghlSendToCustomer(env, { id, email, first_name: firstName, last_name: lastName, phone, ghl_contact_id: null }, {
+        channel: 'email', template: 'welcome', subject: 'Welcome to Gainz Train',
+        body: `<p>Hey${firstName ? ' ' + firstName : ''}, welcome to Gainz Train!</p>`
+          + `<p>Your account is ready. Log in anytime at <a href="${base}/app/">${base.replace('https://', '')}/app</a> with this email`
+          + `${password ? ' and your password' : ' — use "Email me a link" to get in'}.</p>`
+          + `<p>If you ever forget your password, choose "Email me a link" on the login page.</p>`,
+      });
+    } catch { /* non-fatal */ }
     return ok({ customer: { id, email, first_name: firstName } }, { 'Set-Cookie': cookie });
   } catch {
     // Defensive: never let a hashing/session error become a raw 1101. The customer row exists;

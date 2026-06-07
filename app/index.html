@@ -109,6 +109,7 @@
         <div class="form-actions">
           <button type="submit" class="btn btn-primary" id="pwSubmit">Log in</button>
         </div>
+        <div class="switch-link"><a id="forgotPw">Forgot your password?</a></div>
         <div class="switch-link" id="switchMode">
           New here? <a id="toRegister">Create an account</a>
         </div>
@@ -173,13 +174,18 @@
     function clearMsg(){ $('loginMsg').className='msg'; }
 
     // ── Tab + mode switching ──
-    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-      t.classList.add('active');
-      const pane = t.dataset.tab;
+    function selectTab(pane){
+      document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.tab===pane));
       document.querySelectorAll('.tabpane').forEach(p => p.classList.toggle('hidden', p.dataset.pane !== pane));
       clearMsg();
-    }));
+    }
+    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => selectTab(t.dataset.tab)));
+    // "Forgot your password?" → the magic-link tab (the recovery path) + prefill the email if typed.
+    $('forgotPw').addEventListener('click', () => {
+      const e = $('email').value.trim(); if (e) $('linkEmail').value = e;
+      selectTab('link');
+      showMsg('Enter your email and we\'ll send you a link to log in.', 'info');
+    });
 
     function toggleMode(){
       mode = mode === 'login' ? 'register' : 'login';

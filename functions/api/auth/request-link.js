@@ -3,7 +3,7 @@
 import { ok, fail, readJson } from '../../_lib/respond.js';
 import { one, all, run, nowIso, addMinutesIso } from '../../_lib/db.js';
 import { randomToken, sha256hex } from '../../_lib/crypto.js';
-import { ghlSend } from '../../_lib/ghl.js';
+import { ghlSendToCustomer } from '../../_lib/ghl.js';
 import { normEmail } from '../../_lib/validate.js';
 
 export async function onRequestPost(context) {
@@ -15,7 +15,7 @@ export async function onRequestPost(context) {
   const devExpose = (env.APP_BASE_URL || '').includes('localhost');
   const generic = (extra = {}) => ok({ message: 'If that email is on file, a login link is on its way.', ...extra });
 
-  const customer = await one(env.DB, `SELECT id, ghl_contact_id, first_name FROM customers WHERE email = ?`, email);
+  const customer = await one(env.DB, `SELECT id, ghl_contact_id, first_name, last_name, phone, email FROM customers WHERE email = ?`, email);
   if (!customer) return generic();
 
   // Rate limit: no more than 5 unconsumed, unexpired magic links per customer at a time.
@@ -43,9 +43,7 @@ export async function onRequestPost(context) {
     `<p><a href="${link}">Log in to Gainz Train</a></p>` +
     `<p>This link expires in 15 minutes. If you didn't request it, you can ignore this email.</p>`;
 
-  await ghlSend(env, {
-    customerId: customer.id,
-    contactId: customer.ghl_contact_id,
+  await ghlSendToCustomer(env, customer, {
     channel: 'email',
     template: 'magic_link',
     subject: 'Your Gainz Train login link',

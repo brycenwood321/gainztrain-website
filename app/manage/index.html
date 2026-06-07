@@ -98,6 +98,14 @@
         </div>
         <div class="acts"><button class="btn" id="addrSave">Save delivery</button></div>
       </div>
+
+      <div class="card">
+        <h2>Password</h2>
+        <div class="sub">Set or change your password so you can log in with email + password.</div>
+        <label>New password</label>
+        <input id="newpw" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
+        <div class="acts"><button class="btn" id="pwSave">Save password</button></div>
+      </div>
     </div>
   </div>
 
@@ -144,6 +152,7 @@
     $('cancelBtn').onclick=()=>act('cancelBtn',()=>post('/api/account/cancel',{undo:!!(sub&&sub.cancel_at_period_end)}));
     $('goalSave').onclick=()=>act('goalSave',()=>post('/api/account/goal',{goal:$('goal').value,sex:$('sex').value}));
     $('addrSave').onclick=()=>act('addrSave',()=>post('/api/account/address',{delivery_method:method,address:$('address').value,city:$('city').value,zip:$('zip').value}));
+    $('pwSave').onclick=async()=>{const pw=$('newpw').value;if(pw.length<8){msg('Password must be at least 8 characters.','err');return;}await act('pwSave',()=>post('/api/auth/set-password',{password:pw}));$('newpw').value='';};
     $('cardBtn').onclick=async()=>{const b=$('cardBtn');b.disabled=true;b.textContent='…';const r=await post('/api/account/portal');if(r.body.url){location.href=r.body.url;return;}b.disabled=false;b.textContent='Update card';msg(r.body.detail||'Could not open billing.','err');};
 
     load();

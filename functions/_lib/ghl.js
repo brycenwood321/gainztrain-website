@@ -49,6 +49,35 @@ export async function ghlSend(env, { customerId = null, contactId, channel, temp
   return ghlStatus;
 }
 
+// Create-or-find a GHL contact by email (idempotent upsert). Returns the contact id, or null.
+// App-created customers aren't GHL contacts, so transactional email (magic link, welcome) needs this.
+export async function ghlEnsureContact(env, { email, firstName, lastName, phone }) {
+  if (!env.GAINZ_GHL_TOKEN || env.GAINZ_GHL_TOKEN === 'PLACEHOLDER_SET_LATER' || !env.GAINZ_GHL_LOCATION || !email) return null;
+  try {
+    const r = await fetch(`${GHL_BASE}/contacts/upsert`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.GAINZ_GHL_TOKEN}`, Version: '2021-07-28', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locationId: env.GAINZ_GHL_LOCATION, email, firstName: firstName || undefined, lastName: lastName || undefined, phone: phone || undefined }),
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d?.contact?.id || d?.id || null;
+  } catch { return null; }
+}
+
+// Send to a customer, lazily creating + persisting their GHL contact id if it's missing. This is the
+// path that makes magic-link + welcome emails actually reach an app-created customer.
+export async function ghlSendToCustomer(env, customer, msg) {
+  let contactId = customer.ghl_contact_id;
+  if (!contactId) {
+    contactId = await ghlEnsureContact(env, { email: customer.email, firstName: customer.first_name, lastName: customer.last_name, phone: customer.phone });
+    if (contactId) {
+      try { await run(env.DB, `UPDATE customers SET ghl_contact_id = ?, updated_at = ? WHERE id = ?`, contactId, nowIso(), customer.id); } catch { /* non-fatal */ }
+    }
+  }
+  return ghlSend(env, { customerId: customer.id, contactId, ...msg });
+}
+
 // Add a tag to a GHL contact (the allowed one-step "tag → static template" trigger pattern).
 export async function ghlAddTag(env, contactId, tag) {
   if (!env.GAINZ_GHL_TOKEN || env.GAINZ_GHL_TOKEN === 'PLACEHOLDER_SET_LATER' || !contactId) return false;

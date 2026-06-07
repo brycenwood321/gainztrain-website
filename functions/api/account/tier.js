@@ -27,9 +27,14 @@ export async function onRequestPost(context) {
     const mealItem = findItem(stripeSub, 'gt_meal');
     if (!mealItem) return fail(409, 'meal_item_missing', 'Could not find your meal plan on file — contact us.');
     const priceId = await ensureStripePrice(env, tier);
+    // create_prorations → charge the difference now on upgrade, credit on downgrade (Brycen's rule:
+    // plan changes take effect THIS week, prorated).
     await stripe(env, 'POST', `subscription_items/${mealItem.id}`, {
-      price: priceId, quantity: meals, proration_behavior: 'none',
+      price: priceId, quantity: meals, proration_behavior: 'create_prorations',
     }, `gt_tier_${mealItem.id}_${meals}_${stripeSub.current_period_start || ''}`);
+    // CRITICAL: also update the subscription metadata.meals_per_week — the webhook re-derives the
+    // tier from this tag, so if we don't update it, the next webhook reverts D1 to the old count.
+    await stripe(env, 'POST', `subscriptions/${sub.stripe_subscription_id}`, { metadata: { meals_per_week: String(meals), tier: tier.key } });
   } catch (e) {
     return fail(502, 'stripe_failed', String(e?.message || e).slice(0, 160));
   }

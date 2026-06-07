@@ -40,19 +40,22 @@ export async function onRequestPost(context) {
     const deliveryItem = findItem(stripeSub, 'gt_delivery_zone');
 
     const idemCycle = stripeSub.current_period_start || '';
+    // create_prorations → delivery fee change takes effect this week, prorated (Brycen's rule).
     if (method === 'delivery' && feeCents > 0) {
       const priceId = await ensureDeliveryPrice(env, zone, feeCents);
       if (deliveryItem) {
-        await stripe(env, 'POST', `subscription_items/${deliveryItem.id}`, { price: priceId, quantity: 1, proration_behavior: 'none' },
+        await stripe(env, 'POST', `subscription_items/${deliveryItem.id}`, { price: priceId, quantity: 1, proration_behavior: 'create_prorations' },
           `gt_addr_${deliveryItem.id}_${zone}_${idemCycle}`);
       } else {
-        await stripe(env, 'POST', 'subscription_items', { subscription: sub.stripe_subscription_id, price: priceId, quantity: 1, proration_behavior: 'none' },
+        await stripe(env, 'POST', 'subscription_items', { subscription: sub.stripe_subscription_id, price: priceId, quantity: 1, proration_behavior: 'create_prorations' },
           `gt_addr_${sub.stripe_subscription_id}_${zone}_${idemCycle}`);
       }
     } else if (deliveryItem) {
-      // Switching to pickup (or a free zone): drop the delivery line.
-      await stripe(env, 'DELETE', `subscription_items/${deliveryItem.id}`, { proration_behavior: 'none' });
+      // Switching to pickup (or a free zone): drop the delivery line (credit the unused portion).
+      await stripe(env, 'DELETE', `subscription_items/${deliveryItem.id}`, { proration_behavior: 'create_prorations' });
     }
+    // Keep the subscription metadata in step (consistency across Stripe + D1).
+    await stripe(env, 'POST', `subscriptions/${sub.stripe_subscription_id}`, { metadata: { delivery_method: method, delivery_zone: String(zone) } });
   } catch (e) {
     return fail(502, 'stripe_failed', String(e?.message || e).slice(0, 160));
   }

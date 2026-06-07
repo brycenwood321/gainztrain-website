@@ -31,5 +31,7 @@ export async function onRequestGet(context) {
     return pageError('This login link was already used. Please request a new one.');
   }
   const { cookie } = await createSession(env, row.customer_id, request);
-  return new Response(null, { status: 302, headers: { Location: '/app/', 'Set-Cookie': cookie } });
+  // Land on the set-password page (they likely came from "forgot password") so they can set a real
+  // password instead of being dropped on the dashboard and forgetting again. They can skip to /app.
+  return new Response(null, { status: 302, headers: { Location: '/app/reset/', 'Set-Cookie': cookie } });
 }

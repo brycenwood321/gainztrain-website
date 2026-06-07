@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Set Your Password | Gainz Train</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root{--black:#1a1614;--surface:#fff;--mid:#f5f2ee;--bg:#fafaf8;--gray:#4a4440;--muted:#7a7270;
+      --line:#ede9e3;--orange:#ff6b35;--orange-dark:#cc5520;--green:#16a34a;--red:#dc2626;
+      --head:'Barlow Condensed',sans-serif;--body:'Inter',sans-serif;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--body);background:var(--bg);color:var(--black);line-height:1.5;-webkit-font-smoothing:antialiased;}
+    h1{font-family:var(--head);font-weight:700;line-height:1.05;font-size:2rem;margin-bottom:.25rem;}
+    .topbar{display:flex;align-items:center;padding:1rem 1.25rem;border-bottom:1px solid var(--line);background:var(--surface);}
+    .brand{font-family:var(--head);font-weight:700;font-size:1.3rem;}.brand .t{color:var(--orange);}
+    .wrap{max-width:420px;margin:3rem auto 0;padding:0 1.25rem;}
+    .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1.75rem;box-shadow:0 6px 24px rgba(0,0,0,.04);}
+    .sub{color:var(--muted);margin-bottom:1.25rem;font-size:.95rem;}
+    label{display:block;font-size:.85rem;font-weight:600;color:var(--gray);margin:.9rem 0 .35rem;}
+    input{width:100%;font-size:1rem;padding:.8rem .9rem;border:1px solid var(--line);border-radius:10px;background:var(--bg);}
+    input:focus{outline:none;border-color:var(--orange);background:#fff;}
+    .btn{width:100%;font-family:var(--body);font-weight:600;font-size:1rem;border:none;border-radius:10px;padding:.95rem 1.5rem;background:var(--orange);color:#fff;cursor:pointer;margin-top:1.25rem;}
+    .btn:hover:not(:disabled){background:var(--orange-dark);}.btn:disabled{opacity:.55;cursor:wait;}
+    .skip{display:block;text-align:center;margin-top:1rem;color:var(--muted);font-size:.9rem;}
+    .skip a{color:var(--orange-dark);font-weight:600;}
+    .msg{margin-top:1rem;padding:.75rem .9rem;border-radius:10px;font-size:.9rem;display:none;}
+    .msg.show{display:block;}.msg.err{background:#fef2f2;color:var(--red);border:1px solid #fecaca;}
+    .loading{text-align:center;padding:4rem;color:var(--muted);}
+    .hidden{display:none!important;}
+  </style>
+</head>
+<body>
+  <div class="topbar"><div class="brand">GAINZ<span class="t">TRAIN</span></div></div>
+  <div class="wrap">
+    <div id="loading" class="loading">Loading…</div>
+    <div id="card" class="card hidden">
+      <h1>Set your password</h1>
+      <p class="sub">You're logged in. Pick a password so next time you can sign in fast with your email — no waiting for a link.</p>
+      <label for="pw">New password</label>
+      <input id="pw" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
+      <button class="btn" id="save">Save password</button>
+      <div id="msg" class="msg"></div>
+      <span class="skip"><a href="/app/">Skip for now →</a></span>
+    </div>
+  </div>
+  <script>
+    const $=id=>document.getElementById(id);
+    const api=(p,o={})=>fetch(p,{credentials:'same-origin',headers:{'Content-Type':'application/json'},...o}).then(async r=>({status:r.status,body:await r.json().catch(()=>({}))}));
+    function msg(t){const m=$('msg');m.textContent=t;m.className='msg show err';}
+    (async()=>{
+      const me=await api('/api/me');
+      $('loading').classList.add('hidden');
+      if(me.status!==200||!me.body.ok){location.href='/app/';return;}
+      $('card').classList.remove('hidden');
+    })();
+    $('save').onclick=async()=>{
+      const pw=$('pw').value;
+      if(pw.length<8){msg('Password must be at least 8 characters.');return;}
+      $('save').disabled=true;
+      const r=await api('/api/auth/set-password',{method:'POST',body:JSON.stringify({password:pw})});
+      if(r.status===200&&r.body.ok!==false){location.href='/app/';return;}
+      $('save').disabled=false;msg(r.body.detail||'Could not save. Try again.');
+    };
+  </script>
+</body>
+</html>

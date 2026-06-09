@@ -55,25 +55,16 @@ async function mainLogic(event) {
 
     const n = parseInt(subscriptionMeals, 10);
 
-    // Debug payload — only included when ?debug=1
-    var debug = undefined;
-    if (params.debug === '1') {
-      debug = {
-        cf_shape: Array.isArray(c.customFields) ? 'array' : typeof c.customFields,
-        cf_sample: Array.isArray(c.customFields) ? c.customFields.slice(0, 25) : c.customFields,
-        contact_keys: Object.keys(c),
-      };
-    }
-
+    // NOTE: ?debug=1 raw-GHL-customField dump REMOVED (it leaked PII on this unauthenticated endpoint).
     return json(200, {
       ok: true,
       contactId: match.id,
       first_name: c.firstName || c.firstNameLowerCase || null,
       subscription_meals: Number.isFinite(n) ? n : null,
-      debug,
     });
   } catch (e) {
-    return json(500, { ok: false, error: 'unexpected', detail: String(e).slice(0, 200) });
+    // Don't leak raw exception strings on a public endpoint.
+    return json(500, { ok: false, error: 'unexpected' });
   }
 };
 

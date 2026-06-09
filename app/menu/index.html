@@ -91,13 +91,14 @@
         const plus=$('plus_'+m.position);if(plus)plus.disabled=locked||t>=need;
         const minus=$('minus_'+m.position);if(minus)minus.disabled=locked||(qty[m.position]||0)<=0;});
     }
+    function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
     function renderMeals(){
       $('meals').innerHTML=MENU.map(m=>`
         <div class="meal">
-          <div class="emoji">${m.emoji||'🍽️'}</div>
+          <div class="emoji">${esc(m.emoji||'🍽️')}</div>
           <div class="info">
-            <h3>${m.name}</h3>
-            <div class="desc">${m.description||''}</div>
+            <h3>${esc(m.name)}</h3>
+            <div class="desc">${esc(m.description||'')}</div>
             <div class="macros"><span><b>${m.calories||'—'}</b> cal</span><span><b>${m.protein||0}g</b> protein</span><span><b>${m.carbs||0}g</b> carbs</span><span><b>${m.fat||0}g</b> fat</span></div>
             ${m.upcharge_per_meal>0?`<span class="up">+$${m.upcharge_per_meal.toFixed(2)}/meal specialty</span>`:''}
           </div>

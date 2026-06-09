@@ -5,6 +5,7 @@ import { one, all, run, nowIso, addMinutesIso } from '../../_lib/db.js';
 import { randomToken, sha256hex } from '../../_lib/crypto.js';
 import { ghlSendToCustomer } from '../../_lib/ghl.js';
 import { normEmail } from '../../_lib/validate.js';
+import { rateLimit, clientIp } from '../../_lib/ratelimit.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -14,6 +15,10 @@ export async function onRequestPost(context) {
 
   const devExpose = (env.APP_BASE_URL || '').includes('localhost');
   const generic = (extra = {}) => ok({ message: 'If that email is on file, a login link is on its way.', ...extra });
+
+  // Per-IP throttle so an attacker can't email-bomb arbitrary addresses via the magic-link sender.
+  // Stay non-enumerable: a limited request returns the SAME generic response.
+  if (!(await rateLimit(env, `link:ip:${clientIp(request)}`, 8, 900))) return generic();
 
   const customer = await one(env.DB, `SELECT id, ghl_contact_id, first_name, last_name, phone, email FROM customers WHERE email = ?`, email);
   if (!customer) return generic();

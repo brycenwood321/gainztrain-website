@@ -11,5 +11,8 @@ export async function onRequestPost(context) {
   const denied = await requireAdmin(context);
   if (denied) return denied;
   const r = await run(env.DB, `DELETE FROM notifications WHERE created_at < ?`, addDaysIso(-120));
-  return ok({ deleted: r?.meta?.changes || 0 });
+  // Also prune stale rate-limit counters (windows are minutes; anything a day old is dead).
+  let rl = { meta: { changes: 0 } };
+  try { rl = await run(env.DB, `DELETE FROM rate_limits WHERE window_start < ?`, addDaysIso(-1)); } catch { /* table may not exist yet */ }
+  return ok({ deleted: r?.meta?.changes || 0, rate_limits_pruned: rl?.meta?.changes || 0 });
 }

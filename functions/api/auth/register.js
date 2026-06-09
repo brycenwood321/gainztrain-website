@@ -5,6 +5,7 @@ import { randomToken, hashPassword } from '../../_lib/crypto.js';
 import { createSession } from '../../_lib/auth.js';
 import { notify } from '../../_lib/notify.js';
 import { str, normEmail, toE164 } from '../../_lib/validate.js';
+import { rateLimit, clientIp } from '../../_lib/ratelimit.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -18,6 +19,7 @@ export async function onRequestPost(context) {
   const phoneRaw = str(body.phone).trim();
 
   if (!email || !email.includes('@')) return fail(400, 'invalid_email', 'Enter a valid email address.');
+  if (!(await rateLimit(env, `register:ip:${clientIp(request)}`, 6, 3600))) return fail(429, 'rate_limited', 'Too many signups from your network. Please try again later.');
   if (password && password.length < 8) return fail(400, 'weak_password', 'Password must be at least 8 characters.');
   // Normalize phone to E.164 so it matches the OTP-login lookup; reject garbage rather than store it.
   const phone = phoneRaw ? toE164(phoneRaw) : '';

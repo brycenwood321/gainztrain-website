@@ -4,6 +4,7 @@ import { one } from '../../_lib/db.js';
 import { verifyPassword } from '../../_lib/crypto.js';
 import { createSession } from '../../_lib/auth.js';
 import { str, normEmail } from '../../_lib/validate.js';
+import { rateLimit, clientIp } from '../../_lib/ratelimit.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -11,6 +12,12 @@ export async function onRequestPost(context) {
   const email = normEmail(body.email);
   const password = str(body.password);
   if (!email || !password) return fail(400, 'missing_credentials', 'Enter your email and password.');
+
+  // Brute-force throttle (per IP + per account) BEFORE the expensive PBKDF2 verify.
+  const ip = clientIp(request);
+  if (!(await rateLimit(env, `login:ip:${ip}`, 20, 900)) || !(await rateLimit(env, `login:email:${email}`, 8, 900))) {
+    return fail(429, 'rate_limited', 'Too many attempts. Please wait a few minutes and try again.');
+  }
 
   const generic = () => fail(401, 'invalid_login', 'Email or password is incorrect.');
   const customer = await one(env.DB, `SELECT id, email FROM customers WHERE email = ?`, email);

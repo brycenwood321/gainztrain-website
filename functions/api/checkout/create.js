@@ -64,12 +64,21 @@ export async function onRequestPost(context) {
     let stripeCustomerId = customer.stripe_customer_id;
     let preexisting = !!stripeCustomerId;
     if (!stripeCustomerId) {
-      const sc = await stripe(env, 'POST', 'customers', {
-        email: customer.email,
-        name: [customer.first_name, customer.last_name].filter(Boolean).join(' ') || undefined,
-        metadata: { d1_customer_id: customer.id },
-      }, `gt_cust_${customer.id}`);
-      stripeCustomerId = sc.id;
+      // Reuse an existing Stripe customer with this email (e.g. a legacy GHL-funnel customer who signs
+      // up at /start) instead of spinning up a parallel customer — otherwise the double-billing guard
+      // below can't see their existing sub and they get charged twice.
+      try {
+        const found = await stripe(env, 'GET', 'customers', { email: customer.email, limit: 1 });
+        if (found.data && found.data.length) { stripeCustomerId = found.data[0].id; preexisting = true; }
+      } catch { /* search failed — fall through to create a fresh customer */ }
+      if (!stripeCustomerId) {
+        const sc = await stripe(env, 'POST', 'customers', {
+          email: customer.email,
+          name: [customer.first_name, customer.last_name].filter(Boolean).join(' ') || undefined,
+          metadata: { d1_customer_id: customer.id },
+        }, `gt_cust_${customer.id}`);
+        stripeCustomerId = sc.id;
+      }
       await run(env.DB, `UPDATE customers SET stripe_customer_id = ?, updated_at = ? WHERE id = ?`,
         stripeCustomerId, nowIso(), customer.id);
     }

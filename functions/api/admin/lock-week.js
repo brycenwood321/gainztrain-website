@@ -12,11 +12,28 @@ import { upcomingSunday } from '../../_lib/menu.js';
 import { repeatLastWeek, evenSpread } from '../../_lib/substitute.js';
 import { MIN_MEALS } from '../../_lib/plans.js';
 import { notify } from '../../_lib/notify.js';
+import { stripe } from '../../_lib/stripe.js';
 
 // Build a [{name, qty}] list (qty>0) from a menu + a Map/array of position→qty, for the email body.
 function pickList(menu, qtyByPos) {
   const get = qtyByPos instanceof Map ? (p) => qtyByPos.get(p) || 0 : (p) => qtyByPos[p] || 0;
   return menu.map((m) => ({ name: m.name, qty: get(m.position) })).filter((m) => m.qty > 0);
+}
+
+// Bill the week's specialty upcharge as a one-off Stripe invoiceitem on the customer's NEXT invoice.
+// Idempotency key = sub+week so a cron retry / manual re-run never double-bills. Non-fatal on error.
+async function billUpcharge(env, sub, weekOf, cents) {
+  if (!(cents > 0) || !sub.stripe_customer_id) return;
+  try {
+    await stripe(env, 'POST', 'invoiceitems', {
+      customer: sub.stripe_customer_id,
+      amount: cents,
+      currency: 'usd',
+      description: `Specialty meal upcharge — week of ${weekOf}`,
+    }, `gt_upcharge_${sub.id}_${weekOf}`);
+  } catch (e) {
+    try { await run(env.DB, `INSERT INTO audit_log (at, actor, entity, action, detail_json) VALUES (?, 'cron:lock-week', ?, 'upcharge_bill_failed', ?)`, nowIso(), `subscription:${sub.id}`, JSON.stringify({ weekOf, cents, error: String(e).slice(0, 160) })); } catch { /* ignore */ }
+  }
 }
 
 // Only these get meals cooked. 'paused' is deliberately EXCLUDED — a paused customer isn't billed
@@ -44,7 +61,7 @@ async function writeSelectionsAndOrder(env, sub, weekOf, menu, qtyByPos, now) {
        status='locked', total_meals=excluded.total_meals, upcharge_total_cents=excluded.upcharge_total_cents,
        delivery_method=excluded.delivery_method, locked_at=excluded.locked_at, updated_at=excluded.updated_at`,
     `${sub.id}:${weekOf}`, sub.id, sub.customer_id, weekOf, total, upchargeTotal, sub.delivery_method || 'pickup', now, now, now);
-  return total;
+  return upchargeTotal;
 }
 
 export async function onRequestPost(context) {
@@ -60,7 +77,7 @@ export async function onRequestPost(context) {
 
   // JOIN customers so we can email each one their locked / auto-filled order + freeze their method.
   const subs = await all(env.DB,
-    `SELECT s.id, s.customer_id, s.meals_per_week, c.email, c.first_name, c.ghl_contact_id, c.delivery_method
+    `SELECT s.id, s.customer_id, s.meals_per_week, c.email, c.first_name, c.ghl_contact_id, c.delivery_method, c.stripe_customer_id
      FROM subscriptions s JOIN customers c ON c.id = s.customer_id
      WHERE s.status IN (${COOKABLE.map(() => '?').join(',')}) AND s.origin = 'app'`,
     ...COOKABLE);
@@ -95,6 +112,7 @@ export async function onRequestPost(context) {
            ON CONFLICT(subscription_id, week_of) DO UPDATE SET status='locked', total_meals=excluded.total_meals,
              upcharge_total_cents=excluded.upcharge_total_cents, delivery_method=excluded.delivery_method, locked_at=excluded.locked_at, updated_at=excluded.updated_at`,
           `${sub.id}:${weekOf}`, sub.id, sub.customer_id, weekOf, pickedTotal, upRow?.up || 0, sub.delivery_method || 'pickup', now, now, now);
+        await billUpcharge(env, sub, weekOf, upRow?.up || 0);
         const lockedMeals = picked.map((p) => ({ name: p.meal_name, qty: p.qty })).filter((m) => m.qty > 0);
         await notify(env, cust, 'order_locked', { meals: lockedMeals, total: pickedTotal, weekOf },
           { dedupKey: `order_locked:${sub.id}:${weekOf}` });
@@ -120,7 +138,8 @@ export async function onRequestPost(context) {
       } else {
         qtyByPos = evenSpread(menu, sub.meals_per_week);
       }
-      await writeSelectionsAndOrder(env, sub, weekOf, menu, qtyByPos, now);
+      const filledUpcharge = await writeSelectionsAndOrder(env, sub, weekOf, menu, qtyByPos, now);
+      await billUpcharge(env, sub, weekOf, filledUpcharge);
       const source = prevWeekRow ? 'repeat_last_week' : 'even_spread';
       await run(env.DB,
         `INSERT INTO audit_log (at, actor, entity, action, detail_json) VALUES (?, 'cron:lock-week', ?, 'autofilled', ?)`,

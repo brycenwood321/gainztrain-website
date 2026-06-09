@@ -30,7 +30,7 @@ export async function audit(env, entity, action, detail) {
 export async function ensureCustomer(env, stripeCustomerId) {
   if (!stripeCustomerId) return null;
 
-  let email = null, first = null, last = null, phone = null, fetched = false;
+  let email = null, first = null, last = null, phone = null, fetched = false, d1id = null;
   try {
     const c = await stripe(env, 'GET', `customers/${stripeCustomerId}`);
     email = (c.email || '').toLowerCase() || null;
@@ -38,13 +38,13 @@ export async function ensureCustomer(env, stripeCustomerId) {
     const nm = (c.name || '').trim().split(/\s+/).filter(Boolean);
     first = nm[0] || null;
     last = nm.length > 1 ? nm.slice(1).join(' ') : null;
+    d1id = (c.metadata && c.metadata.d1_customer_id) || null; // authoritative link set by our checkout
     fetched = true;
   } catch { /* offline/test — fall back to a stub keyed on the stripe id */ }
 
+  // 1. Already linked by Stripe customer id → return (with the @stripe.local stub → real email upgrade).
   const existing = await one(env.DB, `SELECT * FROM customers WHERE stripe_customer_id = ?`, stripeCustomerId);
   if (existing) {
-    // Upgrade a stub (@stripe.local) to the real email now that Stripe is reachable — only if
-    // no other customer already owns that email (avoid a UNIQUE collision / accidental merge).
     if (fetched && email && existing.email.endsWith('@stripe.local') && existing.email !== email) {
       const clash = await one(env.DB, `SELECT id FROM customers WHERE email = ? AND id <> ?`, email, existing.id);
       if (!clash) {
@@ -56,26 +56,40 @@ export async function ensureCustomer(env, stripeCustomerId) {
     return existing;
   }
 
-  // Email is UNIQUE + NOT NULL; synthesize a placeholder if Stripe gave us none.
-  const safeEmail = email || `${stripeCustomerId}@stripe.local`;
-  const id = randomToken(16);
+  // 2. AUTHORITATIVE link: this Stripe customer was created by OUR checkout for a known D1 account
+  //    (metadata.d1_customer_id). Bind the stripe id onto THAT specific account — never an email match.
+  if (d1id) {
+    const byId = await one(env.DB, `SELECT * FROM customers WHERE id = ?`, d1id);
+    if (byId) {
+      if (!byId.stripe_customer_id) {
+        await run(env.DB, `UPDATE customers SET stripe_customer_id = ?, first_name = COALESCE(first_name, ?), last_name = COALESCE(last_name, ?), phone = COALESCE(phone, ?), updated_at = ? WHERE id = ? AND stripe_customer_id IS NULL`,
+          stripeCustomerId, first, last, phone, nowIso(), d1id);
+      }
+      return await one(env.DB, `SELECT * FROM customers WHERE id = ?`, d1id);
+    }
+  }
+
+  // 3. Unknown Stripe customer (born OUTSIDE the app — old GHL funnel / manual / backfill). Give it its
+  //    OWN row. SECURITY: never absorb the stripe id onto an existing email row (that was the account-
+  //    takeover + cross-customer-merge vector) — if the email is already taken, use a placeholder so
+  //    two identities can never be merged. A later @stripe.local→real upgrade happens via branch 1.
   const now = nowIso();
-  // Upsert by email: links the stripe id onto an account that registered by email first,
-  // and converges if two events insert the same stub concurrently.
+  let insertEmail = email || `${stripeCustomerId}@stripe.local`;
+  if (email) {
+    const clash = await one(env.DB, `SELECT id FROM customers WHERE email = ?`, email);
+    if (clash) insertEmail = `${stripeCustomerId}@stripe.local`;
+  }
+  const id = randomToken(16);
   await run(
     env.DB,
     `INSERT INTO customers (id, email, first_name, last_name, phone, role, stripe_customer_id, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, 'customer', ?, ?, ?)
-     ON CONFLICT(email) DO UPDATE SET
-       stripe_customer_id = COALESCE(customers.stripe_customer_id, excluded.stripe_customer_id),
-       first_name = COALESCE(customers.first_name, excluded.first_name),
-       last_name  = COALESCE(customers.last_name, excluded.last_name),
-       phone      = COALESCE(customers.phone, excluded.phone),
-       updated_at = excluded.updated_at`,
-    id, safeEmail, first, last, phone, stripeCustomerId, now, now,
+     ON CONFLICT(email) DO NOTHING`,
+    id, insertEmail, first, last, phone, stripeCustomerId, now, now,
   );
-  const row = await one(env.DB, `SELECT * FROM customers WHERE email = ?`, safeEmail);
-  if (row && row.id === id) await audit(env, `customer:${id}`, 'created_from_stripe', { stripeCustomerId, email: safeEmail });
+  let row = await one(env.DB, `SELECT * FROM customers WHERE stripe_customer_id = ?`, stripeCustomerId);
+  if (!row) row = await one(env.DB, `SELECT * FROM customers WHERE email = ?`, insertEmail);
+  if (row && row.id === id) await audit(env, `customer:${id}`, 'created_from_stripe', { stripeCustomerId, email: insertEmail });
   return row;
 }
 
@@ -156,6 +170,11 @@ export async function mirrorSubscription(env, subInput) {
 }
 
 export async function mirrorInvoice(env, inv) {
+  // Re-fetch the LIVE invoice so an out-of-order retry (e.g. a delayed invoice.created/finalized
+  // landing AFTER invoice.paid) can't revert a paid invoice back to 'open' / amount_paid to 0.
+  if (inv && inv.id) {
+    try { inv = await stripe(env, 'GET', `invoices/${inv.id}`); } catch { /* unreachable — use the delivered payload */ }
+  }
   const customer = await ensureCustomer(env, inv.customer);
   const sub = inv.subscription
     ? await one(env.DB, `SELECT id FROM subscriptions WHERE stripe_subscription_id = ?`, inv.subscription)

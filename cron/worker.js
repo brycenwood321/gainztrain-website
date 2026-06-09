@@ -22,8 +22,8 @@ export default {
       // Saturday 06:30 UTC — after the Friday 11pm Mountain cutoff (Sat 05:00Z MDT / 06:00Z MST) —
       // lock complete orders + auto-fill anyone who didn't pick.
       ctx.waitUntil(hit(env, '/api/admin/lock-week'));
-    } else if (event.cron === '0 8 * * 0') {
-      // Sunday 08:00 UTC — prune in-app feed rows older than 120 days (storage hygiene).
+    } else if (event.cron === '0 8 * * 1') {
+      // Monday 08:00 UTC — prune in-app feed rows older than 120 days (storage hygiene).
       ctx.waitUntil(hit(env, '/api/admin/prune-notifications'));
     }
   },

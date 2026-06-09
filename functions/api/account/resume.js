@@ -4,6 +4,7 @@ import { run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
 import { currentSub } from '../../_lib/account.js';
+import { notify } from '../../_lib/notify.js';
 
 export async function onRequestPost(context) {
   const auth = await getSessionCustomer(context);
@@ -24,5 +25,6 @@ export async function onRequestPost(context) {
   const now = nowIso();
   const status = live?.status === 'active' ? 'active' : (live?.status || 'active');
   await run(env.DB, `UPDATE subscriptions SET status=?, paused_at=NULL, updated_at=? WHERE id=?`, status, now, sub.id);
+  try { await notify(env, auth.customer, 'resumed'); } catch { /* non-fatal */ }
   return ok({ status });
 }

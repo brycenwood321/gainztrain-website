@@ -7,6 +7,7 @@ import { ok, fail, readJson } from '../../_lib/respond.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
 import { orderableWeek, isLocked } from '../../_lib/menu.js';
+import { notify } from '../../_lib/notify.js';
 
 export async function onRequestPost(context) {
   const auth = await getSessionCustomer(context);
@@ -76,6 +77,24 @@ export async function onRequestPost(context) {
      ON CONFLICT(subscription_id, week_of) DO UPDATE SET
        total_meals=excluded.total_meals, upcharge_total_cents=excluded.upcharge_total_cents, updated_at=excluded.updated_at`,
     `${sub.id}:${weekOf}`, sub.id, customer.id, weekOf, total, upchargeTotal, now, now);
+
+  // Order email. FIRST complete order this week → "you're all set" (once). A later CHANGE before the
+  // cutoff → "order updated", but only when the picks actually differ (the dedup key carries a hash of
+  // the picks, so re-saving the same set while toggling checkboxes stays silent).
+  try {
+    const picks = menu.map((m) => ({ name: m.name, qty: qtyByPos.get(m.position) || 0 })).filter((m) => m.qty > 0);
+    // Confirmed-vs-updated is decided by ORDER STATE (existingOrder, read above before the upsert), not
+    // by a comms row — a delivery hiccup must not corrupt the order flow. No prior order = first pick.
+    if (!existingOrder) {
+      await notify(env, customer, 'order_confirmed',
+        { meals: picks, total, weekOf, upchargeCents: upchargeTotal }, { dedupKey: `order_confirm:${sub.id}:${weekOf}` });
+    } else {
+      const stateStr = [...qtyByPos.entries()].filter(([, q]) => q > 0).sort((a, b) => a[0] - b[0]).map(([p, q]) => `${p}:${q}`).join(',');
+      await notify(env, customer, 'order_updated',
+        { meals: picks, total, weekOf, upchargeCents: upchargeTotal },
+        { dedupKey: `order_update:${sub.id}:${weekOf}:${stateStr}` });
+    }
+  } catch { /* non-fatal */ }
 
   return ok({ week_of: weekOf, total_meals: total, upcharge_total_cents: upchargeTotal });
 }

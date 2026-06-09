@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ops | Gainz Train</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root{--black:#1a1614;--surface:#fff;--mid:#f5f2ee;--bg:#fafaf8;--gray:#4a4440;--muted:#7a7270;--line:#ede9e3;
+      --orange:#ff6b35;--orange-dark:#cc5520;--green:#16a34a;--red:#dc2626;--amber:#b45309;
+      --head:'Barlow Condensed',sans-serif;--body:'Inter',sans-serif;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--body);background:var(--bg);color:var(--black);line-height:1.5;-webkit-font-smoothing:antialiased;}
+    h1,h2,h3{font-family:var(--head);font-weight:700;line-height:1.05;}
+    .topbar{display:flex;align-items:center;justify-content:space-between;padding:.9rem 1.25rem;border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0;z-index:5;flex-wrap:wrap;gap:.5rem;}
+    .brand{font-family:var(--head);font-weight:700;font-size:1.3rem;}.brand .t{color:var(--orange);} .brand .o{font-size:.8rem;color:var(--muted);margin-left:.4rem;font-family:var(--body);font-weight:600;text-transform:uppercase;letter-spacing:.1em;}
+    .wrap{max-width:920px;margin:0 auto;padding:1.25rem 1.25rem 5rem;}
+    .tabs{display:flex;gap:.4rem;flex-wrap:wrap;}
+    .tab{padding:.5rem .9rem;border-radius:9px;font-weight:600;font-size:.9rem;cursor:pointer;background:var(--mid);color:var(--gray);border:1px solid transparent;}
+    .tab.active{background:#fff;color:var(--black);border-color:var(--orange);}
+    .ctl{display:flex;gap:.5rem;align-items:center;margin:1rem 0;flex-wrap:wrap;}
+    input,select{font-family:var(--body);font-size:.95rem;padding:.5rem .7rem;border:1px solid var(--line);border-radius:8px;background:#fff;}
+    .btn{font-family:var(--body);font-weight:600;font-size:.88rem;border:none;border-radius:8px;padding:.55rem 1rem;cursor:pointer;background:var(--orange);color:#fff;}
+    .btn:hover:not(:disabled){background:var(--orange-dark);}.btn:disabled{opacity:.5;}
+    .btn.ghost{background:transparent;color:var(--gray);border:1px solid var(--line);}.btn.ghost:hover{background:var(--mid);}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.8rem;margin-bottom:1rem;}
+    .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1.1rem;}
+    .card h2{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;}
+    .stat{font-size:1.9rem;font-family:var(--head);font-weight:700;}
+    .stat.sm{font-size:1.3rem;}
+    .stat-sub{color:var(--muted);font-size:.82rem;}
+    .ok{color:var(--green);}.warn{color:var(--amber);}.bad{color:var(--red);}
+    table{width:100%;border-collapse:collapse;font-size:.9rem;}
+    th{text-align:left;color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;padding:.5rem .4rem;border-bottom:1px solid var(--line);}
+    td{padding:.55rem .4rem;border-bottom:1px solid var(--line);}
+    tr:last-child td{border-bottom:none;}
+    .badge{display:inline-block;padding:.15rem .5rem;border-radius:999px;font-size:.72rem;font-weight:600;text-transform:capitalize;}
+    .badge.active,.badge.trialing,.badge.delivered,.badge.paid{background:#f0fdf4;color:var(--green);}
+    .badge.paused,.badge.out_for_delivery,.badge.prepping,.badge.pickup_ready{background:#fffbeb;color:var(--amber);}
+    .badge.canceled,.badge.past_due,.badge.failed{background:#fef2f2;color:var(--red);}
+    .badge.scheduled,.badge.locked,.badge.incomplete{background:var(--mid);color:var(--gray);}
+    .mealrow{display:flex;align-items:center;justify-content:space-between;padding:.7rem .2rem;border-bottom:1px solid var(--line);}
+    .mealrow .q{font-family:var(--head);font-weight:700;font-size:1.6rem;color:var(--orange);min-width:3rem;text-align:right;}
+    .zone{margin-bottom:1rem;}
+    .zone h3{font-size:1rem;margin-bottom:.3rem;display:flex;justify-content:space-between;}
+    .stop{padding:.5rem .2rem;border-bottom:1px solid var(--line);font-size:.9rem;}
+    .stop .nm{font-weight:600;}.stop .ad{color:var(--muted);font-size:.84rem;}
+    .loading{text-align:center;padding:3rem;color:var(--muted);}
+    .hidden{display:none!important;}
+    .gate{max-width:380px;margin:4rem auto;}
+    .msg{padding:.6rem .8rem;border-radius:8px;font-size:.85rem;margin:.5rem 0;display:none;}
+    .msg.show{display:block;}.msg.ok{background:#f0fdf4;color:var(--green);}.msg.err{background:#fef2f2;color:var(--red);}
+    .link{color:var(--orange-dark);font-weight:600;cursor:pointer;}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">GAINZ<span class="t">TRAIN</span><span class="o">Ops</span></div>
+    <div class="tabs" id="tabs">
+      <div class="tab active" data-tab="overview">Overview</div>
+      <div class="tab" data-tab="kitchen">Kitchen prep</div>
+      <div class="tab" data-tab="route">Route</div>
+      <div class="tab" data-tab="customers">Customers</div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <!-- token gate -->
+    <div id="gate" class="card gate hidden">
+      <h2 style="font-size:1.2rem;margin-bottom:.5rem;">Ops access</h2>
+      <p class="stat-sub" style="margin-bottom:.8rem;">Enter the admin token to view operations.</p>
+      <input id="tok" type="password" placeholder="Admin token" style="width:100%;margin-bottom:.6rem;" />
+      <button class="btn" id="tokGo" style="width:100%;">Enter</button>
+      <div id="gateMsg" class="msg err"></div>
+    </div>
+
+    <div id="main" class="hidden">
+      <div class="ctl">
+        <label class="stat-sub">Week of</label>
+        <input id="week" type="date" />
+        <button class="btn ghost" id="reload">Refresh</button>
+        <span class="stat-sub" id="weekLabel"></span>
+      </div>
+      <div id="msg" class="msg"></div>
+      <div id="view"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const money = (c) => '$' + ((c||0)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const esc = (s) => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+    let TOKEN = localStorage.getItem('gt_admin_token') || '';
+    let TAB = 'overview';
+
+    function weekParam(){ const w = $('week').value; return w ? ('?week_of=' + w) : ''; }
+    async function adminGet(path){
+      const r = await fetch(path, { headers: { 'X-Admin-Token': TOKEN } });
+      if (r.status === 401){ gate('Token rejected. Try again.'); throw new Error('unauthorized'); }
+      return r.json().catch(()=>({}));
+    }
+    async function adminPost(path){
+      const r = await fetch(path, { method:'POST', headers: { 'X-Admin-Token': TOKEN } });
+      if (r.status === 401){ gate('Token rejected.'); throw new Error('unauthorized'); }
+      return r.json().catch(()=>({}));
+    }
+    function msg(t,k){ const m=$('msg'); m.textContent=t; m.className='msg show '+(k||'ok'); setTimeout(()=>m.className='msg',3500); }
+
+    function gate(err){
+      $('main').classList.add('hidden'); $('gate').classList.remove('hidden');
+      if (err){ localStorage.removeItem('gt_admin_token'); TOKEN=''; $('tok').value=''; $('gateMsg').textContent=err; $('gateMsg').classList.add('show'); }
+    }
+    $('tokGo').onclick = () => { TOKEN = $('tok').value.trim(); localStorage.setItem('gt_admin_token', TOKEN); $('gate').classList.add('hidden'); $('main').classList.remove('hidden'); boot(); };
+
+    // ── Tabs ──
+    document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+      document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x===t));
+      TAB = t.dataset.tab; render();
+    });
+    $('reload').onclick = render;
+    $('week').onchange = render;
+
+    // ── Views ──
+    async function render(){
+      $('view').innerHTML = '<div class="loading">Loading…</div>';
+      try {
+        if (TAB==='overview') return renderOverview();
+        if (TAB==='kitchen') return renderKitchen();
+        if (TAB==='route') return renderRoute();
+        if (TAB==='customers') return renderCustomers();
+      } catch(e){ if(String(e.message)!=='unauthorized') $('view').innerHTML = '<div class="loading">Something went wrong loading this view.</div>'; }
+    }
+
+    async function renderOverview(){
+      const d = await adminGet('/api/admin/overview' + weekParam());
+      $('weekLabel').textContent = 'Production week of ' + fmtDate(d.week_of);
+      const split = {}; (d.delivery_split||[]).forEach(s=>split[s.method||'pickup']=s.n);
+      const h = d.health||{};
+      $('view').innerHTML =
+        `<div class="grid">
+          <div class="card"><h2>Active subscriptions</h2><div class="stat">${d.subscriptions.active}</div></div>
+          <div class="card"><h2>Weekly list price</h2><div class="stat">${money(d.weekly_list_price_cents)}</div><div class="stat-sub">pre-discount/wk</div></div>
+          <div class="card"><h2>Net revenue (30d)</h2><div class="stat">${money(d.revenue_30d_cents)}</div><div class="stat-sub">${d.refunds_30d_cents?('incl. '+money(d.refunds_30d_cents)+' refunds'):'after refunds'}</div></div>
+          <div class="card"><h2>This week locked</h2><div class="stat">${d.production.orders}</div><div class="stat-sub">${d.production.meals} meals</div></div>
+          <div class="card"><h2>Delivery / Pickup</h2><div class="stat sm">${split.delivery||0} / ${split.pickup||0}</div></div>
+          <div class="card"><h2>Specialty upcharge</h2><div class="stat sm">${money(d.production.upcharge_cents)}</div><div class="stat-sub">this week</div></div>
+        </div>
+        <div class="grid">
+          <div class="card"><h2>Failed comms (24h)</h2><div class="stat sm ${h.failed_comms_24h?'bad':'ok'}">${h.failed_comms_24h||0}</div></div>
+          <div class="card"><h2>Stuck webhooks</h2><div class="stat sm ${h.stuck_webhooks?'bad':'ok'}">${h.stuck_webhooks||0}</div><div class="stat-sub">unprocessed Stripe events</div></div>
+          <div class="card"><h2>Subscriptions by status</h2>${(d.subscriptions.by_status||[]).map(s=>`<div style="display:flex;justify-content:space-between;font-size:.88rem;padding:.15rem 0;"><span class="badge ${esc(s.status)}">${esc(s.status)}</span><b>${s.n}</b></div>`).join('')||'<span class="stat-sub">none</span>'}</div>
+        </div>`;
+    }
+
+    async function renderKitchen(){
+      const d = await adminGet('/api/admin/kitchen-prep' + weekParam());
+      $('weekLabel').textContent = 'Cook list for week of ' + fmtDate(d.week_of);
+      const rows = (d.meals||[]).map(m=>`<div class="mealrow"><span>${esc(m.name)}</span><span class="q">${m.total_qty}</span></div>`).join('');
+      $('view').innerHTML =
+        `<div class="grid">
+          <div class="card"><h2>Orders</h2><div class="stat">${d.totals.orders}</div></div>
+          <div class="card"><h2>Total meals</h2><div class="stat">${d.totals.meals}</div></div>
+        </div>
+        <div class="card"><h2>Make this many of each</h2>${rows||'<div class="stat-sub" style="padding:1rem 0;">No locked orders yet for this week.</div>'}</div>
+        <div class="ctl"><button class="btn ghost" id="markPrep">Mark all "prepping"</button></div>`;
+      const mp = $('markPrep'); if (mp) mp.onclick = async () => { mp.disabled=true; const r=await adminPost('/api/admin/delivery-status?status=prepping'+(($('week').value)?('&week_of='+$('week').value):'')); mp.disabled=false; msg(`Marked ${r.summary?.updated||0} orders prepping, notified ${r.summary?.notified||0}.`); };
+    }
+
+    async function renderRoute(){
+      const d = await adminGet('/api/admin/route' + weekParam());
+      $('weekLabel').textContent = 'Delivery run for week of ' + fmtDate(d.week_of);
+      const wp = ($('week').value)?('&week_of='+$('week').value):'';
+      const zones = (d.zones||[]).map(z =>
+        `<div class="zone"><h3><span>Zone ${z.zone}</span><span class="stat-sub">${z.stop_count} stops · ${z.meals} meals</span></h3>`
+        + z.stops.map(s=>`<div class="stop"><div class="nm">${esc((s.first_name||'')+' '+(s.last_name||''))} <span class="badge ${esc(s.delivery_status||'scheduled')}">${esc(s.delivery_status||'scheduled')}</span></div><div class="ad">${esc(s.address||'')}, ${esc(s.city||'')} ${esc(s.zip||'')} · ${s.total_meals} meals${s.phone?(' · '+esc(s.phone)):''}</div></div>`).join('')
+        + '</div>').join('');
+      $('view').innerHTML =
+        `<div class="grid">
+          <div class="card"><h2>Delivery stops</h2><div class="stat">${d.total_stops}</div></div>
+          <div class="card"><h2>Meals out</h2><div class="stat">${d.total_meals}</div></div>
+        </div>
+        ${zones || '<div class="card"><div class="stat-sub" style="padding:1rem 0;">No delivery orders locked for this week.</div></div>'}
+        <div class="ctl">
+          <button class="btn" id="mOut">Mark all out for delivery</button>
+          <button class="btn ghost" id="mDone">Mark all delivered</button>
+          <button class="btn ghost" id="mReady">Mark pickups ready</button>
+        </div>`;
+      const go = (status, label) => async (ev) => { ev.target.disabled=true; const r=await adminPost('/api/admin/delivery-status?status='+status+wp); ev.target.disabled=false; msg(`${label}: updated ${r.summary?.updated||0}, notified ${r.summary?.notified||0}.`); render(); };
+      if ($('mOut')) $('mOut').onclick = go('out_for_delivery','Out for delivery');
+      if ($('mDone')) $('mDone').onclick = go('delivered','Delivered');
+      if ($('mReady')) $('mReady').onclick = go('pickup_ready','Pickup ready');
+    }
+
+    let CUSTS = [];
+    async function renderCustomers(){
+      const d = await adminGet('/api/admin/customers');
+      $('weekLabel').textContent = d.count + ' customers';
+      CUSTS = d.customers||[];
+      drawCustList(CUSTS);
+    }
+    function drawCustList(list){
+      $('view').innerHTML =
+        `<div class="ctl"><input id="csearch" placeholder="Search name or email" style="flex:1;" /></div>
+         <div class="card"><table><thead><tr><th>Name</th><th>Status</th><th>Meals</th><th>Spent</th></tr></thead><tbody>`
+        + list.map(c=>`<tr><td><span class="link" data-id="${c.id}">${esc((c.first_name||'')+' '+(c.last_name||''))||esc(c.email)}</span><div class="stat-sub">${esc(c.email)}</div></td><td>${c.sub_status?`<span class="badge ${esc(c.sub_status)}">${esc(c.sub_status)}</span>`:'—'}</td><td>${c.meals_per_week||'—'}</td><td>${money(c.spent_cents)}</td></tr>`).join('')
+        + `</tbody></table></div>`;
+      $('csearch').oninput = (e)=>{ const q=e.target.value.toLowerCase(); drawCustList(CUSTS.filter(c=>((c.first_name||'')+' '+(c.last_name||'')+' '+c.email).toLowerCase().includes(q))); $('csearch').focus(); };
+      document.querySelectorAll('.link[data-id]').forEach(el=>el.onclick=()=>showCustomer(el.dataset.id));
+    }
+    async function showCustomer(id){
+      $('view').innerHTML = '<div class="loading">Loading…</div>';
+      const d = await adminGet('/api/admin/customers?id='+encodeURIComponent(id));
+      const c = d.customer;
+      $('view').innerHTML =
+        `<div class="ctl"><span class="link" id="backCust">← All customers</span></div>
+         <div class="card"><h2 style="font-size:1.1rem;color:var(--black);">${esc((c.first_name||'')+' '+(c.last_name||''))}</h2>
+           <div class="stat-sub">${esc(c.email)}${c.phone?(' · '+esc(c.phone)):''}</div>
+           <div class="stat-sub">${c.delivery_method==='delivery'?('Delivery zone '+(c.delivery_zone??'—')+' · '+esc(c.address||'')+', '+esc(c.city||'')+' '+esc(c.zip||'')):'Pickup'}</div>
+           <div class="stat-sub">Goal: ${esc(c.goal||'—')} · ${esc(c.sex||'—')} · joined ${fmtDate(c.created_at)}</div>
+           <div class="stat" style="margin-top:.5rem;">${money(d.total_spent_cents)} <span class="stat-sub">lifetime</span></div>
+         </div>
+         <div class="card"><h2>Subscriptions</h2><table><tbody>${(d.subscriptions||[]).map(s=>`<tr><td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td><td>${s.meals_per_week} meals</td><td>${s.coupon_code?esc(s.coupon_code):''}</td><td>${s.cancel_at_period_end?'cancels '+fmtDate(s.current_period_end):(s.current_period_end?'renews '+fmtDate(s.current_period_end):'')}</td></tr>`).join('')||'<tr><td class="stat-sub">none</td></tr>'}</tbody></table></div>
+         <div class="card"><h2>Invoices</h2><table><thead><tr><th>Date</th><th>Status</th><th>Paid</th><th></th></tr></thead><tbody>${(d.invoices||[]).map(i=>`<tr><td>${fmtDate(i.created_at)}</td><td><span class="badge ${esc(i.status||'incomplete')}">${esc(i.status||'—')}</span></td><td>${money(i.status==='paid'?i.amount_paid_cents:i.amount_due_cents)}</td><td>${i.hosted_invoice_url?`<a href="${esc(i.hosted_invoice_url)}" target="_blank" rel="noopener" class="link">view</a>`:''}</td></tr>`).join('')||'<tr><td class="stat-sub">no invoices</td></tr>'}</tbody></table></div>`;
+      $('backCust').onclick = renderCustomers;
+    }
+
+    function boot(){
+      // default the week picker to the next Sunday (the delivery day) for display; endpoints default too.
+      const t=new Date(); const add=(7 - t.getUTCDay())%7; const s=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth(),t.getUTCDate()+add));
+      $('week').value = s.toISOString().slice(0,10);
+      render();
+    }
+
+    // start
+    if (!TOKEN) gate(); else { $('main').classList.remove('hidden'); boot(); }
+  </script>
+</body>
+</html>

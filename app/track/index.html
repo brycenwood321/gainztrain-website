@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Track Your Order | Gainz Train</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root{--black:#1a1614;--surface:#fff;--bg:#fafaf8;--gray:#4a4440;--muted:#7a7270;--line:#ede9e3;
+      --orange:#ff6b35;--orange-dark:#cc5520;--green:#16a34a;--head:'Barlow Condensed',sans-serif;--body:'Inter',sans-serif;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--body);background:var(--bg);color:var(--black);line-height:1.5;-webkit-font-smoothing:antialiased;}
+    .topbar{display:flex;align-items:center;padding:1rem 1.25rem;border-bottom:1px solid var(--line);background:var(--surface);}
+    .brand{font-family:var(--head);font-weight:700;font-size:1.3rem;}.brand .t{color:var(--orange);}
+    .wrap{max-width:480px;margin:2rem auto 0;padding:0 1.25rem 4rem;}
+    h1{font-family:var(--head);font-weight:700;font-size:1.9rem;margin-bottom:.2rem;}
+    .sub{color:var(--muted);margin-bottom:1.5rem;}
+    .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1.6rem;box-shadow:0 6px 24px rgba(0,0,0,.04);}
+    .loading{text-align:center;padding:4rem;color:var(--muted);}
+    .err{text-align:center;padding:3rem 1rem;color:var(--muted);}
+    /* stepper */
+    .step{display:flex;gap:1rem;position:relative;padding-bottom:1.6rem;}
+    .step:last-child{padding-bottom:0;}
+    .step .dot{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);background:#fff;flex:none;display:flex;align-items:center;justify-content:center;font-size:.95rem;z-index:1;}
+    .step:not(:last-child)::before{content:'';position:absolute;left:14px;top:30px;bottom:0;width:2px;background:var(--line);}
+    .step.done .dot{background:var(--green);border-color:var(--green);color:#fff;}
+    .step.done:not(:last-child)::before{background:var(--green);}
+    .step.current .dot{background:var(--orange);border-color:var(--orange);color:#fff;animation:pulse 1.6s infinite;}
+    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,107,53,.4);}70%{box-shadow:0 0 0 10px rgba(255,107,53,0);}100%{box-shadow:0 0 0 0 rgba(255,107,53,0);}}
+    .step .lbl{font-weight:600;font-size:1rem;}
+    .step.pending .lbl{color:var(--muted);}
+    .step .meta{color:var(--muted);font-size:.85rem;margin-top:.1rem;}
+    .summary{margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid var(--line);color:var(--gray);font-size:.92rem;}
+  </style>
+</head>
+<body>
+  <div class="topbar"><div class="brand">GAINZ<span class="t">TRAIN</span></div></div>
+  <div class="wrap">
+    <div id="loading" class="loading">Loading your order…</div>
+    <div id="content" style="display:none;">
+      <h1 id="title">Tracking your order</h1>
+      <p class="sub" id="sub"></p>
+      <div class="card"><div id="steps"></div><div class="summary" id="summary"></div></div>
+    </div>
+    <div id="error" class="card err" style="display:none;"></div>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}) : '';
+    const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '';
+
+    // Lifecycle per method. The API status maps onto these ordered stages.
+    const FLOWS = {
+      delivery: [
+        { key:'scheduled', lbl:'Order confirmed', icon:'✓' },
+        { key:'prepping', lbl:'Being prepped', icon:'👨‍🍳' },
+        { key:'out_for_delivery', lbl:'Out for delivery', icon:'🚗' },
+        { key:'delivered', lbl:'Delivered', icon:'📦' },
+      ],
+      pickup: [
+        { key:'scheduled', lbl:'Order confirmed', icon:'✓' },
+        { key:'prepping', lbl:'Being prepped', icon:'👨‍🍳' },
+        { key:'pickup_ready', lbl:'Ready for pickup', icon:'🥡' },
+        { key:'picked_up', lbl:'Picked up', icon:'✓' },
+      ],
+    };
+
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+    function render(o){
+      const flow = FLOWS[o.method] || FLOWS.delivery;
+      const found = flow.findIndex(s => s.key === o.status);
+      const unknown = found < 0 && o.status !== 'scheduled'; // status not in this method's flow
+      const idx = found < 0 ? 0 : found;
+      $('title').textContent = 'Your order';            // no PII on a login-less surface
+      $('sub').textContent = `${o.total_meals} meals · week of ${fmtDate(o.week_of)} · ${o.method === 'delivery' ? 'Delivery' : 'Pickup'}`;
+      $('steps').innerHTML = flow.map((s, i) => {
+        const cls = unknown ? 'pending' : (i < idx ? 'done' : (i === idx ? 'current' : 'pending'));
+        const meta = (!unknown && i === idx && o.status === 'delivered' && o.delivered_at) ? `Delivered ${fmtTime(o.delivered_at)}`
+          : (!unknown && i === idx && o.eta) ? `Estimated ${esc(o.eta)}` : '';
+        return `<div class="step ${cls}"><div class="dot">${(!unknown && i<idx)?'✓':s.icon}</div>`
+          + `<div><div class="lbl">${s.lbl}</div>${meta?`<div class="meta">${meta}</div>`:''}</div></div>`;
+      }).join('');
+      const done = o.status === 'delivered' || o.status === 'picked_up';
+      $('summary').textContent = unknown ? "Your order is being handled — we'll email you with updates."
+        : done ? 'All done — enjoy your meals! 💪'
+        : (o.method === 'delivery' ? "We'll text + email you when your meals are on the way." : "We'll let you know the moment they're ready.");
+      $('loading').style.display = 'none';
+      $('content').style.display = 'block';
+    }
+    function showErr(msg){ $('loading').style.display='none'; const e=$('error'); e.style.display='block'; e.textContent=msg; }
+
+    (async () => {
+      const t = new URLSearchParams(location.search).get('t');
+      if (!t) { showErr('This tracking link is missing its code. Check the link in your email.'); return; }
+      try {
+        const r = await fetch('/api/track?t=' + encodeURIComponent(t));
+        const b = await r.json().catch(() => ({}));
+        if (r.status === 200 && b.ok) render(b.order);
+        else showErr(b.detail || "We couldn't find that order. The link may have expired.");
+      } catch { showErr('Something went wrong loading your order. Try again in a moment.'); }
+    })();
+  </script>
+</body>
+</html>

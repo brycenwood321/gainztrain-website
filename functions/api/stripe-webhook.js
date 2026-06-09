@@ -15,6 +15,7 @@
 import { one, run, nowIso } from '../_lib/db.js';
 import { hmacSign, constantTimeEqual } from '../_lib/crypto.js';
 import { ensureCustomer, mirrorSubscription, mirrorInvoice, mirrorPayment, audit } from '../_lib/mirror.js';
+import { notify } from '../_lib/notify.js';
 
 const SIG_TOLERANCE_SECONDS = 300; // reject events whose timestamp is >5 min skewed
 
@@ -71,6 +72,105 @@ async function dispatch(env, event) {
     default:
       break; // unhandled type — recorded in stripe_events, no mirror action
   }
+  // Customer-facing billing notifications fire AFTER the mirror, off the webhook (the reliable,
+  // idempotent truth). Fully self-contained + try/caught: a comms failure must NEVER fail the
+  // webhook, or Stripe would retry and re-mirror. Dedup keys are natural Stripe ids so the
+  // invoice.paid / invoice.payment_succeeded twin events + retries all collapse to one send.
+  await safeNotifyBilling(env, event);
+}
+
+async function safeNotifyBilling(env, event) {
+  try {
+    const obj = event.data?.object || {};
+    switch (event.type) {
+      case 'invoice.paid': {
+        const amount = obj.amount_paid ?? 0;
+        if (amount <= 0) return; // comp / $0 (OWNERS100) — suppress the confusing "charged $0" receipt
+        const reason = obj.billing_reason;
+        if (reason !== 'subscription_create' && reason !== 'subscription_cycle') return;
+        const cust = await ensureCustomer(env, obj.customer);
+        if (!cust) return;
+        const discount = (obj.total_discount_amounts || []).reduce((s, d) => s + (d.amount || 0), 0);
+        const data = { amount, discount, invoiceUrl: obj.hosted_invoice_url || null };
+        // Fire only on invoice.paid (NOT the payment_succeeded twin) and key on the invoice id.
+        if (reason === 'subscription_create') {
+          await notify(env, cust, 'order_receipt_first', data, { dedupKey: `receipt_first:${obj.id}` });
+        } else if ((obj.attempt_count || 0) > 1) {
+          // A renewal that succeeded after one or more failed attempts → recovery, not a plain receipt.
+          await notify(env, cust, 'payment_recovered', data, { dedupKey: `recovered:${obj.id}` });
+        } else {
+          await notify(env, cust, 'renewal_receipt', data, { dedupKey: `receipt_cycle:${obj.id}` });
+        }
+        break;
+      }
+      case 'invoice.payment_failed': {
+        // EVERY decline is the soft "update your card" nudge (keyed per attempt so each retry notifies
+        // once). We do NOT infer "dunning exhausted" from a missing next_payment_attempt — under Stripe
+        // Smart Retries (the default) that field isn't on this event, which would fire the "paused"
+        // email on the very first decline. The FINAL/"paused" email is driven off the subscription
+        // actually going unpaid (customer.subscription.updated below).
+        const cust = await ensureCustomer(env, obj.customer);
+        if (!cust) return;
+        const data = { amount: obj.amount_due ?? obj.amount_remaining ?? 0, invoiceUrl: obj.hosted_invoice_url || null };
+        await notify(env, cust, 'payment_failed', data, { dedupKey: `pf:${obj.id}:${obj.attempt_count || 0}` });
+        break;
+      }
+      case 'customer.subscription.updated': {
+        // Dunning truly exhausted → Stripe flips the subscription to 'unpaid'. THIS is the deterministic
+        // signal for the "your plan is paused" email (keyed per billing period so a later cycle can re-fire).
+        if (obj.status !== 'unpaid') return;
+        const cust = await ensureCustomer(env, obj.customer);
+        if (!cust) return;
+        await notify(env, cust, 'payment_failed_final', { invoiceUrl: null },
+          { dedupKey: `unpaid:${obj.id}:${obj.current_period_end || ''}` });
+        break;
+      }
+      case 'charge.refunded': {
+        // obj.amount_refunded is CUMULATIVE across all refunds on the charge — never show it as "your
+        // refund". Use the triggering refund object (most recent first) for the amount + its id as the
+        // natural idempotency key, so a 2nd partial refund emails the right amount and notifies once.
+        const latest = obj.refunds && obj.refunds.data && obj.refunds.data[0];
+        const amount = latest ? latest.amount : (obj.amount_refunded || 0);
+        if (amount <= 0) return;
+        const cust = await ensureCustomer(env, obj.customer);
+        if (!cust) return;
+        await notify(env, cust, 'refund_issued',
+          { amount, partial: (obj.amount_refunded || 0) < (obj.amount || amount) },
+          { dedupKey: `refund:${latest ? latest.id : obj.id}` });
+        break;
+      }
+      case 'customer.subscription.deleted': {
+        const cust = await ensureCustomer(env, obj.customer);
+        if (!cust) return;
+        await notify(env, cust, 'subscription_ended', {}, { dedupKey: `subend:${obj.id}` });
+        break;
+      }
+      // ── Step 3 events: must ALSO be subscribed in the Stripe dashboard webhook config to ever fire.
+      // Neither is in the mirror switch above (no D1 object to mirror), so they reach here cleanly.
+      case 'invoice.upcoming': {
+        // Pre-renewal heads-up. invoice.upcoming has NO invoice id, so dedup on subscription + period.
+        const amount = obj.amount_due ?? obj.total ?? 0;
+        if (amount <= 0) return; // comp plan — no charge coming, no heads-up
+        const cust = await ensureCustomer(env, obj.customer);
+        if (!cust) return;
+        const when = obj.next_payment_attempt
+          ? new Date(obj.next_payment_attempt * 1000).toISOString()
+          : (obj.period_end ? new Date(obj.period_end * 1000).toISOString() : null);
+        await notify(env, cust, 'renewal_upcoming', { amount, when }, { dedupKey: `upcoming:${obj.subscription}:${obj.period_end || ''}` });
+        break;
+      }
+      case 'customer.source.expiring': {
+        const cust = await ensureCustomer(env, obj.customer);
+        if (!cust) return;
+        await notify(env, cust, 'card_expiring',
+          { last4: obj.last4, month: obj.exp_month, year: obj.exp_year },
+          { dedupKey: `cardexp:${obj.id}:${obj.exp_month}-${obj.exp_year}` });
+        break;
+      }
+      default:
+        break;
+    }
+  } catch { /* notifications must never fail the webhook */ }
 }
 
 export async function onRequestPost(context) {

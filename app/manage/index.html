@@ -52,6 +52,8 @@
     .loading{text-align:center;padding:4rem;color:var(--muted);}
     .hidden{display:none!important;}
     .acts{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem;}
+    .ck{display:flex;align-items:flex-start;gap:.55rem;margin:.6rem 0;font-weight:500;color:var(--gray);font-size:.92rem;cursor:pointer;}
+    .ck input{width:auto;margin-top:.15rem;accent-color:var(--orange);}
   </style>
 </head>
 <body>
@@ -106,6 +108,15 @@
         <input id="newpw" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
         <div class="acts"><button class="btn" id="pwSave">Save password</button></div>
       </div>
+
+      <div class="card">
+        <h2>Notifications</h2>
+        <div class="sub">Receipts, payment alerts, and order confirmations always send. You can opt out of the rest.</div>
+        <label class="ck"><input type="checkbox" id="np_email_account"> <span>Account change confirmations <span style="color:var(--muted)">(pause, plan, delivery, goal)</span></span></label>
+        <label class="ck"><input type="checkbox" id="np_email_marketing"> <span>Weekly menu drops &amp; meal reminders</span></label>
+        <label class="ck"><input type="checkbox" id="np_sms_marketing"> <span>Text notifications <span style="color:var(--muted)">(reminders + updates, when texting is available)</span></span></label>
+        <div class="acts"><button class="btn" id="npSave">Save preferences</button></div>
+      </div>
     </div>
   </div>
 
@@ -137,6 +148,14 @@
       $('goal').value=ME.customer.goal||'';$('sex').value=ME.customer.sex||'';
       method=ME.customer.delivery_method||'pickup';setMethod(method);
       $('address').value=ME.customer.address||'';$('city').value=ME.customer.city||'';$('zip').value=ME.customer.zip||'';
+      loadPrefs();
+    }
+    async function loadPrefs(){
+      const r=await api('/api/account/notification-prefs');
+      const p=(r.body&&r.body.prefs)||{email_account:1,email_marketing:1,sms_marketing:0};
+      $('np_email_account').checked=p.email_account!==0;
+      $('np_email_marketing').checked=p.email_marketing!==0;
+      $('np_sms_marketing').checked=p.sms_marketing!==0;
     }
     function setMethod(m){method=m;$('optPickup').classList.toggle('sel',m==='pickup');$('optDelivery').classList.toggle('sel',m==='delivery');$('addrFields').classList.toggle('hidden',m!=='delivery');}
     $('optPickup').onclick=()=>setMethod('pickup');$('optDelivery').onclick=()=>setMethod('delivery');
@@ -153,6 +172,7 @@
     $('goalSave').onclick=()=>act('goalSave',()=>post('/api/account/goal',{goal:$('goal').value,sex:$('sex').value}));
     $('addrSave').onclick=()=>act('addrSave',()=>post('/api/account/address',{delivery_method:method,address:$('address').value,city:$('city').value,zip:$('zip').value}));
     $('pwSave').onclick=async()=>{const pw=$('newpw').value;if(pw.length<8){msg('Password must be at least 8 characters.','err');return;}await act('pwSave',()=>post('/api/auth/set-password',{password:pw}));$('newpw').value='';};
+    $('npSave').onclick=()=>act('npSave',()=>post('/api/account/notification-prefs',{email_account:$('np_email_account').checked,email_marketing:$('np_email_marketing').checked,sms_account:$('np_sms_marketing').checked,sms_marketing:$('np_sms_marketing').checked}));
     $('cardBtn').onclick=async()=>{const b=$('cardBtn');b.disabled=true;b.textContent='…';const r=await post('/api/account/portal');if(r.body.url){location.href=r.body.url;return;}b.disabled=false;b.textContent='Update card';msg(r.body.detail||'Could not open billing.','err');};
 
     load();

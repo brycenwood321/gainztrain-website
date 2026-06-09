@@ -8,13 +8,14 @@
 //   curl -X POST https://<host>/api/admin/backfill -H "X-Admin-Token: $ADMIN_TOKEN"
 //   (add ?dry=1 to count what WOULD import without writing)
 import { ok, fail } from '../../_lib/respond.js';
+import { requireAdmin } from '../../_lib/admin.js';
 import { stripe } from '../../_lib/stripe.js';
 import { mirrorSubscription, mirrorInvoice } from '../../_lib/mirror.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const token = request.headers.get('x-admin-token') || '';
-  if (!env.ADMIN_TOKEN || token !== env.ADMIN_TOKEN) return fail(401, 'unauthorized', 'Bad admin token.');
+  const denied = await requireAdmin(context);
+  if (denied) return denied;
 
   const dry = new URL(request.url).searchParams.get('dry') === '1';
   const summary = { subscriptions: 0, invoices: 0, errors: [] };

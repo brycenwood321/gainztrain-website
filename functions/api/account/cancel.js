@@ -5,6 +5,7 @@ import { run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
 import { currentSub } from '../../_lib/account.js';
+import { notify } from '../../_lib/notify.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -26,5 +27,6 @@ export async function onRequestPost(context) {
   const end = live?.current_period_end ? new Date(live.current_period_end * 1000).toISOString() : sub.current_period_end;
   await run(env.DB, `UPDATE subscriptions SET cancel_at_period_end=?, current_period_end=?, updated_at=? WHERE id=?`,
     undo ? 0 : 1, end, now, sub.id);
+  try { await notify(env, auth.customer, undo ? 'reactivated' : 'canceled', { ends: end }); } catch { /* non-fatal */ }
   return ok({ cancel_at_period_end: !undo, ends: end });
 }

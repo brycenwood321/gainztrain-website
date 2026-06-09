@@ -70,6 +70,34 @@ Re-runnable (every op is an upsert). After this, D1 holds the 5 live subs + thei
 - Log in (magic link works once `GAINZ_GHL_TOKEN` is set so the email sends).
 - `/api/me` returns the account with the backfilled subscription/invoice data.
 
+## Notification system + ops back end deploy (2026-06-07) — built + tested, NOT yet live
+
+Notification Steps 0-7 (confirmations, billing off the webhook, weekly cycle, in-app feed, preferences,
+delivery tracker) + Phase 4 ops back end (overview/kitchen/route/customers dashboard) are built and
+locally tested (29 templates + idempotency/prefs/regression suites + all SQL validated vs real SQLite).
+To make it live:
+
+1. **Apply migrations 0007-0011** (idempotency guard, in-app feed table, prefs table, delivery tracker
+   columns, frozen order delivery_method): `npm run db:migrate:remote`
+2. **Confirm prod secrets** (step 4): `GAINZ_GHL_TOKEN` (emails send), `APP_BASE_URL=https://gainztrainprep.com`,
+   `SESSION_HMAC_SECRET` (REQUIRED — marketing email now fail-closes without it), `ADMIN_TOKEN`
+   (gates the ops dashboard + cron), `SMS_AUTH_ENABLED=false` (keep false until A2P clears).
+3. **Deploy the Pages project** (`git push` or `wrangler pages deploy .`).
+4. **Re-deploy the cron Worker** (`cd cron && wrangler deploy`) — now Wed reminders, Fri last-call,
+   Sat lock, Sun feed-prune.
+5. **[Brycen] Add two Stripe webhook events** (Step 3 emails can't fire until subscribed):
+   `invoice.upcoming` + `customer.source.expiring`. Also confirm the Smart Retries setting (drives the
+   "your plan is paused" final email off subscription.status=unpaid).
+6. **Smoke test:** change something in `/app` (e.g. pause) → email arrives + `comms_log` row `ghl_status='sent'`
+   + an in-app feed row appears in the bell. Fire a webhook test event → exactly ONE receipt row.
+
+**Surfaces:** customer app `/app/` (now has the notification bell) · `/app/manage/` (notification
+prefs card) · `/app/track/?t=<token>` (public delivery tracker) · `/app/ops/` (token-gated ops dashboard
+— enter the ADMIN_TOKEN). Announce a new menu with `POST /api/admin/publish-menu?notify=1` (plain call
+stays a silent sync). Advance deliveries from the Ops → Route tab or
+`POST /api/admin/delivery-status?status=out_for_delivery`. SMS is written everywhere but gated on
+`SMS_AUTH_ENABLED` — flip to `true` only after A2P, money/surprise events first.
+
 ## Still on the roadmap (after go-live)
 - Migrate the existing `/api/*` functions (assign-delivery-zone, submit-meals, calculate-specialty-upcharge,
   switch-to-pickup) to read/write D1 as the source of truth instead of scanning Stripe/GHL at runtime.

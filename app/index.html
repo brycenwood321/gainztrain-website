@@ -35,6 +35,27 @@
     .btn-ghost { background:transparent; color:var(--gray); border:1px solid var(--line); padding:0.5rem 0.9rem; }
     .btn-ghost:hover { background:var(--surface-mid); }
 
+    /* ── Notification bell + feed ── */
+    .topbar-right { display:flex; align-items:center; gap:0.5rem; }
+    .bell-wrap { position:relative; }
+    .bell { background:transparent; border:1px solid var(--line); border-radius:var(--radius); padding:0.5rem 0.7rem; cursor:pointer; font-size:1.1rem; line-height:1; position:relative; }
+    .bell:hover { background:var(--surface-mid); }
+    .bell-badge { position:absolute; top:-6px; right:-6px; background:var(--orange); color:#fff; border-radius:999px; font-size:0.7rem; font-weight:700; min-width:18px; height:18px; padding:0 4px; display:flex; align-items:center; justify-content:center; }
+    .feed { position:absolute; right:0; top:calc(100% + 8px); width:340px; max-width:92vw; max-height:440px; overflow-y:auto; background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.12); z-index:50; }
+    .feed-head { display:flex; justify-content:space-between; align-items:center; padding:0.8rem 1rem; border-bottom:1px solid var(--line); position:sticky; top:0; background:#fff; }
+    .feed-head h3 { font-size:1rem; }
+    .feed-head a { font-size:0.8rem; cursor:pointer; font-weight:600; }
+    .feed-item { display:block; padding:0.75rem 1rem; border-bottom:1px solid var(--line); text-decoration:none; color:var(--black); }
+    .feed-item:last-child { border-bottom:none; }
+    .feed-item:hover { background:var(--surface-light); }
+    .feed-item.unread { background:#fff8f5; }
+    .feed-item .ft { font-weight:600; font-size:0.9rem; display:flex; gap:0.45rem; align-items:flex-start; }
+    .feed-item .fdot { width:7px; height:7px; border-radius:999px; background:var(--orange); margin-top:0.4rem; flex:none; }
+    .feed-item.read .fdot { background:transparent; }
+    .feed-item .fb { color:var(--muted); font-size:0.85rem; margin-top:0.2rem; padding-left:1.05rem; }
+    .feed-item .fc { color:var(--muted); font-size:0.72rem; margin-top:0.35rem; padding-left:1.05rem; }
+    .feed-empty { padding:2.5rem 1rem; text-align:center; color:var(--muted); font-size:0.9rem; }
+
     /* ── Login card ── */
     .card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:1.75rem; box-shadow:0 6px 24px rgba(0,0,0,0.04); }
     .login-card { max-width:420px; margin:3rem auto 0; }
@@ -80,7 +101,16 @@
 <body>
   <div class="topbar">
     <div class="brand">GAINZ<span class="t">TRAIN</span></div>
-    <button id="logoutBtn" class="btn btn-ghost hidden">Log out</button>
+    <div class="topbar-right">
+      <div class="bell-wrap hidden" id="bellWrap">
+        <button class="bell" id="bellBtn" aria-label="Notifications">🔔<span class="bell-badge hidden" id="bellBadge">0</span></button>
+        <div class="feed hidden" id="feedPanel">
+          <div class="feed-head"><h3>Notifications</h3><a id="markAllRead">Mark all read</a></div>
+          <div id="feedList"></div>
+        </div>
+      </div>
+      <button id="logoutBtn" class="btn btn-ghost hidden">Log out</button>
+    </div>
   </div>
 
   <div class="wrap">
@@ -290,6 +320,58 @@
         : `<div class="empty">No invoices yet.</div>`;
     }
 
+    // ── Notification feed ──
+    function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+    function relTime(iso){
+      if(!iso) return '';
+      const s = Math.floor((Date.now() - new Date(iso).getTime())/1000);
+      if (s < 60) return 'just now';
+      const m = Math.floor(s/60); if (m < 60) return m+'m ago';
+      const h = Math.floor(m/60); if (h < 24) return h+'h ago';
+      const dd = Math.floor(h/24); if (dd < 7) return dd+'d ago';
+      return fmtDate(iso);
+    }
+    let feedOpen = false;
+    async function loadFeed(){
+      const { status, body } = await api('/api/notifications');
+      if (status !== 200 || !body.ok) return;
+      const n = body.unread || 0;
+      const badge = $('bellBadge');
+      badge.textContent = n > 9 ? '9+' : String(n);
+      badge.classList.toggle('hidden', n === 0);
+      const list = $('feedList');
+      if (!body.notifications || !body.notifications.length){
+        list.innerHTML = `<div class="feed-empty">No notifications yet.<br>We'll let you know when anything changes.</div>`;
+        return;
+      }
+      list.innerHTML = body.notifications.map(it => {
+        const unread = !it.read_at;
+        return `<a class="feed-item ${unread?'unread':'read'}" href="${it.href || '/app/'}">`
+          + `<div class="ft"><span class="fdot"></span><span>${escapeHtml(it.title||'')}</span></div>`
+          + (it.body ? `<div class="fb">${escapeHtml(it.body)}</div>` : '')
+          + `<div class="fc">${escapeHtml(it.category||'')} · ${relTime(it.created_at)}</div></a>`;
+      }).join('');
+    }
+    async function markRead(strip){
+      await api('/api/notifications/read', { method:'POST', body: JSON.stringify({ all:true }) });
+      $('bellBadge').classList.add('hidden');
+      if (strip) document.querySelectorAll('.feed-item.unread').forEach(el => { el.classList.remove('unread'); el.classList.add('read'); });
+    }
+    $('bellBtn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      feedOpen = !feedOpen;
+      $('feedPanel').classList.toggle('hidden', !feedOpen);
+      // Opening refreshes the feed (so it isn't stale within a session), then clears the badge + marks
+      // read server-side, but keeps the highlight so you can still see what's new.
+      if (feedOpen) { await loadFeed(); if (!$('bellBadge').classList.contains('hidden')) markRead(false); }
+    });
+    $('markAllRead').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); markRead(true); });
+    document.addEventListener('click', (e) => {
+      if (feedOpen && !$('feedPanel').contains(e.target) && !$('bellBtn').contains(e.target)) {
+        feedOpen = false; $('feedPanel').classList.add('hidden');
+      }
+    });
+
     // ── Boot: are we logged in? ──
     async function loadAccount(){
       const { status, body } = await api('/api/me');
@@ -298,10 +380,13 @@
         $('loginView').classList.add('hidden');
         $('dashView').classList.remove('hidden');
         $('logoutBtn').classList.remove('hidden');
+        $('bellWrap').classList.remove('hidden');
         render(body);
+        loadFeed();
       } else {
         $('dashView').classList.add('hidden');
         $('logoutBtn').classList.add('hidden');
+        $('bellWrap').classList.add('hidden');
         $('loginView').classList.remove('hidden');
       }
     }

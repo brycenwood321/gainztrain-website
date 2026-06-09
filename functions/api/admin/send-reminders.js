@@ -3,18 +3,21 @@
 // shows "no meals picked"); this is the email nudge. SMS reminder is added once A2P clears.
 // Admin-gated. ?dry=1 to preview who would be reminded without sending.
 import { ok, fail } from '../../_lib/respond.js';
+import { requireAdmin } from '../../_lib/admin.js';
 import { one, all } from '../../_lib/db.js';
 import { orderableWeek, isLocked, cutoffForWeek } from '../../_lib/menu.js';
-import { ghlSend } from '../../_lib/ghl.js';
+import { notify } from '../../_lib/notify.js';
 
 const ACTIVE = ['active', 'trialing', 'past_due']; // paused customers don't order, don't nag them
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const token = request.headers.get('x-admin-token') || '';
-  if (!env.ADMIN_TOKEN || token !== env.ADMIN_TOKEN) return fail(401, 'unauthorized', 'Bad admin token.');
+  const denied = await requireAdmin(context);
+  if (denied) return denied;
 
-  const dry = new URL(request.url).searchParams.get('dry') === '1';
+  const params = new URL(request.url).searchParams;
+  const dry = params.get('dry') === '1';
+  const final = params.get('final') === '1'; // Friday last-call tone vs the Wednesday nudge
   const week = orderableWeek();
   if (isLocked(week)) return ok({ skipped: 'week_already_locked', week_of: week });
 
@@ -24,7 +27,8 @@ export async function onRequestPost(context) {
      FROM subscriptions s JOIN customers c ON c.id = s.customer_id
      WHERE s.status IN (${ACTIVE.map(() => '?').join(',')})`, ...ACTIVE);
 
-  const summary = { week_of: week, candidates: 0, reminded: 0, already_picked: 0, no_contact: 0, dry };
+  const tpl = final ? 'meal_reminder_final' : 'meal_reminder';
+  const summary = { week_of: week, candidates: 0, reminded: 0, already_picked: 0, no_contact: 0, deduped: 0, dry, final };
   for (const sub of subs) {
     if (!(sub.meals_per_week > 0)) continue; // legacy 0-meal subs: not orderable yet, skip
     const picked = await one(env.DB,
@@ -32,16 +36,15 @@ export async function onRequestPost(context) {
     if ((picked?.n || 0) === sub.meals_per_week) { summary.already_picked++; continue; }
     summary.candidates++;
     if (dry) continue;
-    const hi = sub.first_name ? ` ${sub.first_name}` : '';
-    const html =
-      `<p>Hey${hi},</p>` +
-      `<p>Your Gainz Train meals for the week of ${week} aren't picked yet. Choose your ${sub.meals_per_week} meals before Friday (${cutoff}) or we'll repeat last week for you.</p>` +
-      `<p><a href="${(env.APP_BASE_URL || '')}/app/menu/">Pick my meals</a></p>`;
-    const status = await ghlSend(env, {
-      customerId: sub.customer_id, contactId: sub.ghl_contact_id,
-      channel: 'email', template: 'meal_reminder', subject: 'Pick your Gainz Train meals', body: html,
-    });
-    if (status === 'sent') summary.reminded++; else summary.no_contact++;
+    // Through notify() so it's deduped (a re-delivered cron / manual re-run can't re-blast everyone) and
+    // gets the SMS leg + comms_log logging for free. One nudge + one final per sub per week.
+    const cust = { id: sub.customer_id, email: sub.email, first_name: sub.first_name, ghl_contact_id: sub.ghl_contact_id };
+    const r = await notify(env, cust, tpl,
+      { weekOf: week, mealsPerWeek: sub.meals_per_week, cutoff },
+      { dedupKey: `reminder:${final ? 'final' : 'nudge'}:${sub.id}:${week}` });
+    if (r.deduped) summary.deduped++;
+    else if (r.ok) summary.reminded++;
+    else summary.no_contact++;
   }
   return ok({ summary });
 }

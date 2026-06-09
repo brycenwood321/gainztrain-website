@@ -6,6 +6,7 @@ import { run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
 import { hashPassword } from '../../_lib/crypto.js';
 import { str } from '../../_lib/validate.js';
+import { notify } from '../../_lib/notify.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -21,5 +22,8 @@ export async function onRequestPost(context) {
      ON CONFLICT(customer_id) DO UPDATE SET password_hash=excluded.password_hash, salt=excluded.salt,
        iterations=excluded.iterations, updated_at=excluded.updated_at`,
     auth.customer.id, hash, salt, iterations, nowIso());
+  // Security alarm: the reset path is a magic link, so this email is the customer's only signal if a
+  // link was ever hijacked. Non-blocking — a comms hiccup must not fail the password change.
+  try { await notify(env, auth.customer, 'password_changed'); } catch { /* non-fatal */ }
   return ok({});
 }

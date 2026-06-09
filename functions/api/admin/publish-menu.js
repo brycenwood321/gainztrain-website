@@ -2,12 +2,18 @@
 // (D1 = source of truth for the app + ops scheduler). Idempotent upsert by week_of.
 // Auth: X-Admin-Token = env.ADMIN_TOKEN. Run after editing menus.json each week.
 import { ok, fail } from '../../_lib/respond.js';
-import { run, nowIso } from '../../_lib/db.js';
+import { requireAdmin } from '../../_lib/admin.js';
+import { all, run, nowIso } from '../../_lib/db.js';
+import { orderableWeek } from '../../_lib/menu.js';
+import { notify } from '../../_lib/notify.js';
+
+// Who gets the "new menu is live" blast: cooking-eligible subs with a real tier (paused excluded).
+const ANNOUNCE_STATUSES = ['active', 'trialing', 'past_due'];
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const token = request.headers.get('x-admin-token') || '';
-  if (!env.ADMIN_TOKEN || token !== env.ADMIN_TOKEN) return fail(401, 'unauthorized', 'Bad admin token.');
+  const denied = await requireAdmin(context);
+  if (denied) return denied;
 
   let menus;
   try {
@@ -18,9 +24,14 @@ export async function onRequestPost(context) {
     return fail(502, 'menus_fetch_failed', String(e).slice(0, 150));
   }
 
+  // ?notify=1 → also email cooking-eligible subscribers "this week's menu is live" (for the orderable
+  // week only, so publishing future weeks early doesn't blast anyone). Default is a silent data sync.
+  const doNotify = new URL(request.url).searchParams.get('notify') === '1';
+
   const now = nowIso();
   let published = 0;
   const skipped = [];
+  const publishedWeeks = [];
   for (const m of menus) {
     // Validate: week_of must be a YYYY-MM-DD that is a Sunday; meals must be a non-empty array.
     const okDate = typeof m.week_of === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(m.week_of)
@@ -34,6 +45,23 @@ export async function onRequestPost(context) {
          published_at=excluded.published_at, updated_at=excluded.updated_at`,
       m.week_of, m.label || null, JSON.stringify(m.meals), now, now, now);
     published++;
+    publishedWeeks.push(m.week_of);
   }
-  return ok({ published, skipped });
+
+  // Announce the orderable week's menu (deduped per customer+week, so re-running is safe).
+  const announceWeek = orderableWeek();
+  let announced = 0;
+  if (doNotify && publishedWeeks.includes(announceWeek)) {
+    const subs = await all(env.DB,
+      `SELECT c.id AS customer_id, c.email, c.first_name, c.ghl_contact_id
+       FROM subscriptions s JOIN customers c ON c.id = s.customer_id
+       WHERE s.status IN (${ANNOUNCE_STATUSES.map(() => '?').join(',')}) AND s.meals_per_week > 0`,
+      ...ANNOUNCE_STATUSES);
+    for (const sub of subs) {
+      const cust = { id: sub.customer_id, email: sub.email, first_name: sub.first_name, ghl_contact_id: sub.ghl_contact_id };
+      const r = await notify(env, cust, 'menu_posted', { weekOf: announceWeek }, { dedupKey: `menu_posted:${announceWeek}:${cust.id}` });
+      if (r.ok && !r.deduped) announced++;
+    }
+  }
+  return ok({ published, skipped, announced, announce_week: doNotify ? announceWeek : null });
 }

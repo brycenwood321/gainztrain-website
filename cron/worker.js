@@ -15,10 +15,16 @@ export default {
     if (event.cron === '0 17 * * 3') {
       // Wednesday 17:00 UTC (~10–11am Mountain) — remind subscribers who haven't picked.
       ctx.waitUntil(hit(env, '/api/admin/send-reminders'));
+    } else if (event.cron === '0 22 * * 5') {
+      // Friday 22:00 UTC (~3–4pm Mountain) — LAST CALL before the 11pm Mountain cutoff.
+      ctx.waitUntil(hit(env, '/api/admin/send-reminders?final=1'));
     } else if (event.cron === '30 6 * * 6') {
       // Saturday 06:30 UTC — after the Friday 11pm Mountain cutoff (Sat 05:00Z MDT / 06:00Z MST) —
       // lock complete orders + auto-fill anyone who didn't pick.
       ctx.waitUntil(hit(env, '/api/admin/lock-week'));
+    } else if (event.cron === '0 8 * * 0') {
+      // Sunday 08:00 UTC — prune in-app feed rows older than 120 days (storage hygiene).
+      ctx.waitUntil(hit(env, '/api/admin/prune-notifications'));
     }
   },
 };

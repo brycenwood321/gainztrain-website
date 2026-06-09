@@ -1,13 +1,18 @@
 // POST /api/account/tier — change how many meals/week the customer gets.
 // Body { meals: 6..16 }. Updates the meal line item's price (per-meal rate may change band) +
-// quantity on Stripe, and meals_per_week in D1. proration_behavior=none → new amount starts next
-// cycle; the current already-placed order for this week is unaffected.
+// quantity on Stripe, and meals_per_week in D1.
+// LOCK AWARENESS: if this week's order is already LOCKED (or the Friday cutoff has passed), the change
+// uses proration_behavior=none so it starts NEXT cycle — keeping the bill in step with the meals the
+// kitchen is already prepping. If the week is still open, proration_behavior=create_prorations (takes
+// effect this week, prorated) and any stale picks at the old count are cleared for a fresh re-pick.
 import { ok, fail, readJson } from '../../_lib/respond.js';
-import { run, nowIso } from '../../_lib/db.js';
+import { one, run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
 import { currentSub, findItem } from '../../_lib/account.js';
 import { tierForMeals, ensureStripePrice, MIN_MEALS, MAX_MEALS } from '../../_lib/plans.js';
+import { orderableWeek, isLocked } from '../../_lib/menu.js';
+import { notify } from '../../_lib/notify.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -22,16 +27,22 @@ export async function onRequestPost(context) {
   if (!sub || !sub.stripe_subscription_id) return fail(400, 'no_active_sub', 'You have no active plan to change.');
   if (sub.meals_per_week === meals) return ok({ meals, tier: tier.key });
 
+  // Is this week already committed (locked order, or past the Friday cutoff)? Drives proration + copy.
+  const weekOf = orderableWeek();
+  const order = await one(env.DB, `SELECT status, total_meals FROM orders WHERE subscription_id = ? AND week_of = ?`, sub.id, weekOf);
+  const weekLocked = isLocked(weekOf) || (order && order.status === 'locked');
+  const proration = weekLocked ? 'none' : 'create_prorations';
+
   try {
     const stripeSub = await stripe(env, 'GET', `subscriptions/${sub.stripe_subscription_id}`);
     const mealItem = findItem(stripeSub, 'gt_meal');
     if (!mealItem) return fail(409, 'meal_item_missing', 'Could not find your meal plan on file — contact us.');
     const priceId = await ensureStripePrice(env, tier);
-    // create_prorations → charge the difference now on upgrade, credit on downgrade (Brycen's rule:
-    // plan changes take effect THIS week, prorated).
+    // Open week → create_prorations (charge/credit the difference this week). Locked week → none (new
+    // amount starts next cycle, matching the meals the kitchen is already prepping — no 3-way mismatch).
     await stripe(env, 'POST', `subscription_items/${mealItem.id}`, {
-      price: priceId, quantity: meals, proration_behavior: 'create_prorations',
-    }, `gt_tier_${mealItem.id}_${meals}_${stripeSub.current_period_start || ''}`);
+      price: priceId, quantity: meals, proration_behavior: proration,
+    }, `gt_tier_${mealItem.id}_${meals}_${proration}_${stripeSub.current_period_start || ''}`);
     // CRITICAL: also update the subscription metadata.meals_per_week — the webhook re-derives the
     // tier from this tag, so if we don't update it, the next webhook reverts D1 to the old count.
     await stripe(env, 'POST', `subscriptions/${sub.stripe_subscription_id}`, { metadata: { meals_per_week: String(meals), tier: tier.key } });
@@ -40,5 +51,15 @@ export async function onRequestPost(context) {
   }
   await run(env.DB, `UPDATE subscriptions SET meals_per_week=?, tier_price_cents=?, updated_at=? WHERE id=?`,
     meals, tier.perMealCents, nowIso(), sub.id);
-  return ok({ meals, tier: tier.key, per_meal_cents: tier.perMealCents });
+
+  // Open week with picks already saved at the OLD count → those picks no longer total the new count.
+  // Clear them so /app/menu prompts a fresh pick at the new tier (the email says "pick your meals").
+  if (!weekLocked && order) {
+    try {
+      await run(env.DB, `DELETE FROM meal_selections WHERE subscription_id = ? AND week_of = ?`, sub.id, weekOf);
+      await run(env.DB, `DELETE FROM orders WHERE subscription_id = ? AND week_of = ?`, sub.id, weekOf);
+    } catch { /* non-fatal */ }
+  }
+  try { await notify(env, auth.customer, 'tier_changed', { meals, perMealCents: tier.perMealCents, nextWeek: !!weekLocked }); } catch { /* non-fatal */ }
+  return ok({ meals, tier: tier.key, per_meal_cents: tier.perMealCents, effective: weekLocked ? 'next_week' : 'this_week' });
 }

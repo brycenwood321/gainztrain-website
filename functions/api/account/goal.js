@@ -4,6 +4,7 @@ import { ok, fail, readJson } from '../../_lib/respond.js';
 import { run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
 import { str } from '../../_lib/validate.js';
+import { notify } from '../../_lib/notify.js';
 
 const GOALS = new Set(['cut', 'maintain', 'build']);
 const SEXES = new Set(['male', 'female']);
@@ -23,5 +24,10 @@ export async function onRequestPost(context) {
   await run(env.DB,
     `UPDATE customers SET goal = COALESCE(NULLIF(?,''), goal), sex = COALESCE(NULLIF(?,''), sex), updated_at = ? WHERE id = ?`,
     goal, sex, nowIso(), auth.customer.id);
-  return ok({ goal: goal || auth.customer.goal, sex: sex || auth.customer.sex });
+  const finalGoal = goal || auth.customer.goal, finalSex = sex || auth.customer.sex;
+  // Only notify on a real change — re-submitting the same values is a no-op UPDATE, no email.
+  if (finalGoal !== auth.customer.goal || finalSex !== auth.customer.sex) {
+    try { await notify(env, auth.customer, 'goal_changed', { goal: finalGoal, sex: finalSex }); } catch { /* non-fatal */ }
+  }
+  return ok({ goal: finalGoal, sex: finalSex });
 }

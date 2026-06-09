@@ -6,8 +6,22 @@
 // Secret:  wrangler secret put ADMIN_TOKEN   (= the gainztrain-website ADMIN_TOKEN)
 const BASE = 'https://gainztrainprep.com';
 
+// Fire an admin endpoint AND check the result — a 401 (token drift) / 404 (no menu) / 500 must NOT pass
+// silently or a whole week's cook/reminders is skipped with no trace. Surfaces in `wrangler tail` + the
+// CF Workers logs. (A push alert / gt_health probe is the proper next step.)
 async function hit(env, path) {
-  return fetch(`${BASE}${path}`, { method: 'POST', headers: { 'X-Admin-Token': env.ADMIN_TOKEN } });
+  try {
+    const r = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'X-Admin-Token': env.ADMIN_TOKEN } });
+    if (!r.ok) {
+      const body = await r.text().catch(() => '');
+      console.error(`[gainztrain-cron] FAIL ${path} -> ${r.status} ${body.slice(0, 300)}`);
+    } else {
+      console.log(`[gainztrain-cron] OK ${path} -> ${r.status}`);
+    }
+    return r;
+  } catch (e) {
+    console.error(`[gainztrain-cron] THREW ${path}: ${String(e).slice(0, 200)}`);
+  }
 }
 
 export default {

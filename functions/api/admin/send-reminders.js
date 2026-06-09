@@ -25,7 +25,7 @@ export async function onRequestPost(context) {
   const subs = await all(env.DB,
     `SELECT s.id, s.meals_per_week, c.id AS customer_id, c.email, c.first_name, c.ghl_contact_id
      FROM subscriptions s JOIN customers c ON c.id = s.customer_id
-     WHERE s.status IN (${ACTIVE.map(() => '?').join(',')})`, ...ACTIVE);
+     WHERE s.status IN (${ACTIVE.map(() => '?').join(',')}) AND s.origin = 'app'`, ...ACTIVE);
 
   const tpl = final ? 'meal_reminder_final' : 'meal_reminder';
   const summary = { week_of: week, candidates: 0, reminded: 0, already_picked: 0, no_contact: 0, deduped: 0, dry, final };

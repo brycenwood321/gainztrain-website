@@ -128,11 +128,14 @@ export async function mirrorSubscription(env, subInput) {
   const status = isPaused ? 'paused' : (sub.status || existing?.status || 'incomplete');
 
   const id = existing?.id || randomToken(16);
+  // origin: app-checkout subs carry our metadata.d1_customer_id; everything else stays 'legacy'. Never
+  // downgrade an already-'app' sub. This is what gates the cron/email machinery away from old customers.
+  const origin = sub.metadata?.d1_customer_id ? 'app' : (existing?.origin || 'legacy');
   await run(
     env.DB,
     `INSERT INTO subscriptions (id, customer_id, stripe_subscription_id, status, meals_per_week, tier_price_cents,
-       current_period_start, current_period_end, cancel_at_period_end, coupon_code, discount_active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       current_period_start, current_period_end, cancel_at_period_end, coupon_code, discount_active, origin, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(stripe_subscription_id) DO UPDATE SET
        customer_id = excluded.customer_id,
        status = excluded.status,
@@ -143,9 +146,10 @@ export async function mirrorSubscription(env, subInput) {
        cancel_at_period_end = excluded.cancel_at_period_end,
        coupon_code = excluded.coupon_code,
        discount_active = excluded.discount_active,
+       origin = excluded.origin,
        updated_at = excluded.updated_at`,
     id, customer.id, stripeSubId, status, mealsPerWeek, tierPrice,
-    periodStart, periodEnd, sub.cancel_at_period_end ? 1 : 0, finalCoupon, hasDiscount ? 1 : 0, now, now,
+    periodStart, periodEnd, sub.cancel_at_period_end ? 1 : 0, finalCoupon, hasDiscount ? 1 : 0, origin, now, now,
   );
   await audit(env, `subscription:${id}`, `stripe_${status}`,
     { stripeSubId, status, paused: isPaused, cancel_at_period_end: !!sub.cancel_at_period_end, couponCode: finalCoupon });

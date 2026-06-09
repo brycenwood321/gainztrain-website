@@ -55,7 +55,7 @@ export async function onRequestPost(context) {
     const subs = await all(env.DB,
       `SELECT c.id AS customer_id, c.email, c.first_name, c.ghl_contact_id
        FROM subscriptions s JOIN customers c ON c.id = s.customer_id
-       WHERE s.status IN (${ANNOUNCE_STATUSES.map(() => '?').join(',')}) AND s.meals_per_week > 0`,
+       WHERE s.status IN (${ANNOUNCE_STATUSES.map(() => '?').join(',')}) AND s.meals_per_week > 0 AND s.origin = 'app'`,
       ...ANNOUNCE_STATUSES);
     for (const sub of subs) {
       const cust = { id: sub.customer_id, email: sub.email, first_name: sub.first_name, ghl_contact_id: sub.ghl_contact_id };

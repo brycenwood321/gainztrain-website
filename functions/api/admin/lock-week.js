@@ -62,7 +62,7 @@ export async function onRequestPost(context) {
   const subs = await all(env.DB,
     `SELECT s.id, s.customer_id, s.meals_per_week, c.email, c.first_name, c.ghl_contact_id, c.delivery_method
      FROM subscriptions s JOIN customers c ON c.id = s.customer_id
-     WHERE s.status IN (${COOKABLE.map(() => '?').join(',')})`,
+     WHERE s.status IN (${COOKABLE.map(() => '?').join(',')}) AND s.origin = 'app'`,
     ...COOKABLE);
 
   const now = nowIso();

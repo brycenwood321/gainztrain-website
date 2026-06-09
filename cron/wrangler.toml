@@ -4,5 +4,5 @@ main = "worker.js"
 compatibility_date = "2024-09-23"
 
 [triggers]
-# Wed 17:00 — reminders. Fri 22:00 — last call. Sat 06:30 — cutoff lock + auto-fill. Mon 08:00 — prune feed.
-crons = ["0 17 * * 3", "0 22 * * 5", "30 6 * * 6", "0 8 * * 1"]
+# Wed 16:00 — publish menu. Wed 17:00 — reminders. Fri 22:00 — last call. Sat 06:30 — lock. Mon 08:00 — prune.
+crons = ["0 16 * * 3", "0 17 * * 3", "0 22 * * 5", "30 6 * * 6", "0 8 * * 1"]

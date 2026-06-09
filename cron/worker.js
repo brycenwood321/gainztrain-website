@@ -26,7 +26,11 @@ async function hit(env, path) {
 
 export default {
   async scheduled(event, env, ctx) {
-    if (event.cron === '0 17 * * 3') {
+    if (event.cron === '0 16 * * 3') {
+      // Wednesday 16:00 UTC — sync data/menus.json into D1 (silent) so a missed manual publish can't
+      // leave /app/menu empty or 404 the Saturday lock. Idempotent; no customer emails (no ?notify).
+      ctx.waitUntil(hit(env, '/api/admin/publish-menu'));
+    } else if (event.cron === '0 17 * * 3') {
       // Wednesday 17:00 UTC (~10–11am Mountain) — remind subscribers who haven't picked.
       ctx.waitUntil(hit(env, '/api/admin/send-reminders'));
     } else if (event.cron === '0 22 * * 5') {

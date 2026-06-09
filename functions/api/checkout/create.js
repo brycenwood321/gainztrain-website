@@ -112,7 +112,7 @@ export async function onRequestPost(context) {
       metadata: { d1_customer_id: customer.id, meals: String(meals), tier: tier.key, delivery_method: deliveryMethod, code: code || '' },
       // Don't force a card when nothing is due now (e.g. a 100%-off plan checks out at $0).
       payment_method_collection: 'if_required',
-      success_url: `${base}/app/?checkout=success`,
+      success_url: `${base}/app/menu/?checkout=success`,
       cancel_url: `${base}/start/?checkout=cancel`,
     };
     // A validated code applies its coupon directly; otherwise let Stripe accept promotion codes.

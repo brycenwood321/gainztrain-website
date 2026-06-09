@@ -81,6 +81,10 @@ async function dispatch(env, event) {
 
 async function safeNotifyBilling(env, event) {
   try {
+    // CUTOVER GATE: existing customers are still on the OLD GHL funnel. Until we deliberately cut over,
+    // do NOT auto-email them billing notifications from the webhook (would duplicate old GHL emails +
+    // link them to /app they've never used). Unset/false = off; flip BILLING_NOTIFY_ENABLED=true at cutover.
+    if (String(env.BILLING_NOTIFY_ENABLED) !== 'true') return;
     const obj = event.data?.object || {};
     switch (event.type) {
       case 'invoice.paid': {

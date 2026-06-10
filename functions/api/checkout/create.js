@@ -42,22 +42,23 @@ export async function onRequestPost(context) {
 
   const deliveryMethod = str(body.delivery_method) === 'delivery' ? 'delivery' : 'pickup';
 
-  // Resolve delivery zone + fee from the zip (our tables are the source of truth).
-  let zone = 0, feeCents = 0, zip = '', address = '', city = '';
+  // SERVICE-AREA GATE: Gainz Train only serves specific Utah zips (zip_zone_map). Require a SERVED zip
+  // for BOTH pickup and delivery — this is what stops out-of-area / out-of-state people from signing up.
+  let zone = 0, feeCents = 0, address = '', city = '';
+  const zip = str(body.zip).replace(/[^0-9]/g, '').slice(0, 5);
+  if (zip.length !== 5) return fail(400, 'zip_required', 'Enter your 5-digit zip code.');
+  const z = await one(env.DB, `SELECT zone FROM zip_zone_map WHERE zip = ?`, zip);
+  if (!z) return fail(400, 'out_of_area', "Sorry — we don't serve your area yet. Gainz Train is Utah-only for now.");
   if (deliveryMethod === 'delivery') {
-    zip = str(body.zip).replace(/[^0-9]/g, '').slice(0, 5);
     address = str(body.address).trim().slice(0, 200);
     city = str(body.city).trim().slice(0, 80);
-    if (!zip || zip.length !== 5 || !address) {
-      return fail(400, 'address_required', 'Enter your delivery address and a valid zip code.');
-    }
-    const z = await one(env.DB, `SELECT zone FROM zip_zone_map WHERE zip = ?`, zip);
-    if (!z) return fail(400, 'zip_not_served', "We don't deliver to that zip yet — choose pickup, or contact us.");
+    if (!address) return fail(400, 'address_required', 'Enter your delivery address.');
     zone = z.zone;
     const dz = await one(env.DB, `SELECT fee_cents FROM delivery_zones WHERE zone = ?`, zone);
     if (!dz) return fail(500, 'zone_misconfigured', 'Delivery for your area is being set up — choose pickup for now.');
     feeCents = dz.fee_cents ?? 0;
   }
+  // pickup: zone stays 0 + fee 0, but the served-zip check above gated them in.
 
   try {
     // One Stripe customer per D1 customer. Idempotency key prevents a double-click from making two.

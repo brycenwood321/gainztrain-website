@@ -90,19 +90,18 @@
       <div class="step">
         <div class="eyebrow">Step 2</div>
         <h2>Pickup or delivery?</h2>
-        <p class="lead">Pickup is free at our Orem kitchen. Delivery fee depends on your area.</p>
+        <p class="lead">Pickup is free at our Orem kitchen. Delivery fee depends on your area. We're Utah-only for now.</p>
         <div class="toggle">
           <div class="opt sel" id="optPickup" data-m="pickup">Pickup<small>Free · Orem</small></div>
           <div class="opt" id="optDelivery" data-m="delivery">Delivery<small>Fee by zone</small></div>
         </div>
+        <label for="zip">Your zip code</label>
+        <input id="zip" type="text" inputmode="numeric" maxlength="5" autocomplete="postal-code" placeholder="84601" />
+        <p class="note">We'll confirm we serve your area before checkout. Delivery fee (if any) is added based on your zip.</p>
         <div id="addrFields" class="hidden">
           <label for="address">Street address</label>
           <input id="address" type="text" autocomplete="street-address" placeholder="123 Center St" />
-          <div class="row2">
-            <div><label for="city">City</label><input id="city" type="text" autocomplete="address-level2" placeholder="Provo" /></div>
-            <div><label for="zip">Zip</label><input id="zip" type="text" inputmode="numeric" maxlength="5" autocomplete="postal-code" placeholder="84601" /></div>
-          </div>
-          <p class="note">Your exact delivery fee is added at checkout based on your zip.</p>
+          <label for="city">City</label><input id="city" type="text" autocomplete="address-level2" placeholder="Provo" />
         </div>
       </div>
 
@@ -168,11 +167,12 @@
       clearMsg();
       const btn=$('continueBtn');btn.disabled=true;
       try{
-        // delivery validation
-        let address='',city='',zip='';
+        // Service-area gate: every signup needs a served zip (pickup OR delivery).
+        let address='',city='',zip=$('zip').value.replace(/[^0-9]/g,'').slice(0,5);
+        if(zip.length!==5){showMsg('Enter your 5-digit zip so we can check we serve your area.');btn.disabled=false;return;}
         if(method==='delivery'){
-          address=$('address').value.trim();city=$('city').value.trim();zip=$('zip').value.replace(/[^0-9]/g,'').slice(0,5);
-          if(!address||zip.length!==5){showMsg('Enter your delivery address and a valid 5-digit zip.');btn.disabled=false;return;}
+          address=$('address').value.trim();city=$('city').value.trim();
+          if(!address){showMsg('Enter your delivery address.');btn.disabled=false;return;}
         }
         // account gate
         if(!loggedIn){

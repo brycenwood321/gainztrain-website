@@ -55,7 +55,7 @@ export async function onRequestPost(context) {
     // Forward-only: never regress, and don't re-apply the same state (idempotent re-runs are a no-op).
     if ((RANK[status] ?? 0) <= (RANK[r.delivery_status || 'scheduled'] ?? 0)) { summary.skipped++; continue; }
     summary.targeted++;
-    const trackingToken = r.tracking_token || randomToken(16);
+    const trackingToken = r.tracking_token || randomToken(32);
     const delivered = (status === 'delivered' || status === 'picked_up') ? now : null;
     await run(env.DB,
       `UPDATE orders SET delivery_status=?, tracking_token=COALESCE(tracking_token,?),

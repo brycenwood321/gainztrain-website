@@ -1,7 +1,7 @@
 // POST /api/auth/verify-sms-otp — check a 6-digit code, lock out after 5 wrong tries.
 import { ok, fail, readJson } from '../../_lib/respond.js';
 import { one, run, nowIso } from '../../_lib/db.js';
-import { sha256hex } from '../../_lib/crypto.js';
+import { sha256hex, constantTimeEqual } from '../../_lib/crypto.js';
 import { createSession } from '../../_lib/auth.js';
 import { str, toE164 } from '../../_lib/validate.js';
 
@@ -30,7 +30,9 @@ export async function onRequestPost(context) {
     return fail(401, 'invalid_code', 'That code is incorrect or expired.');
   }
 
-  if (row.token_hash !== tokenHash) {
+  // Constant-time compare: a plain !== leaks how many leading hash bytes matched via timing, which
+  // (combined with the 6-digit code space) could narrow a brute force. Same guarantee as login.
+  if (!constantTimeEqual(row.token_hash, tokenHash)) {
     await run(env.DB, `UPDATE auth_tokens SET attempts = attempts + 1 WHERE id = ?`, row.id);
     return fail(401, 'invalid_code', 'That code is incorrect or expired.');
   }

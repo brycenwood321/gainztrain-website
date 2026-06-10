@@ -175,7 +175,7 @@
           "protein": 45,
           "carbs": 62,
           "fat": 12,
-          "image": "/assets/images/meals/meal-rice-bowl.png",
+          "image": "/assets/images/meals/meal-rice-bowl.jpg",
           "emoji": "🌮",
           "upcharge_per_meal": 0
         },
@@ -187,7 +187,7 @@
           "protein": 42,
           "carbs": 48,
           "fat": 16,
-          "image": "/assets/images/meals/meal-rice-bowl.png",
+          "image": "/assets/images/meals/meal-rice-bowl.jpg",
           "emoji": "🍝",
           "upcharge_per_meal": 1.00
         },

@@ -10,7 +10,17 @@ function buildCookie(name, value, maxAgeSeconds) {
   return `${name}=${value}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAgeSeconds}`;
 }
 
+// Fail closed if the cookie-signing secret is missing/weak. Without this guard a misconfigured deploy
+// would sign cookies with an empty key (publicly forgeable) instead of refusing to issue sessions.
+function requireHmacSecret(env) {
+  const s = env.SESSION_HMAC_SECRET;
+  if (!s || typeof s !== 'string' || s.length < 16) {
+    throw new Error('SESSION_HMAC_SECRET is missing or too short — refusing to sign sessions.');
+  }
+}
+
 export async function createSession(env, customerId, request) {
+  requireHmacSecret(env);
   const id = randomToken(32);
   const now = nowIso();
   await run(
@@ -55,6 +65,8 @@ export async function getSessionCustomer(context) {
   const id = value.slice(0, dot);
   const sig = value.slice(dot + 1);
   if (!id || !sig) return null;
+  // Missing/weak secret → no session is valid (rather than verifying against a forgeable empty key).
+  if (!env.SESSION_HMAC_SECRET || env.SESSION_HMAC_SECRET.length < 16) return null;
   if (!(await hmacVerify(env.SESSION_HMAC_SECRET, id, sig))) return null;
 
   const session = await one(env.DB, `SELECT * FROM sessions WHERE id = ?`, id);

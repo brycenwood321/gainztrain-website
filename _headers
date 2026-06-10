@@ -15,6 +15,9 @@
 /assets/js/*
   Cache-Control: public, max-age=2592000
 
+/data/*
+  Cache-Control: public, max-age=300
+
 /*.html
   Cache-Control: public, max-age=3600
 

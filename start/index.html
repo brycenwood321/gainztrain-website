@@ -202,7 +202,9 @@
         loggedIn=true;
         $('acctFields').classList.add('hidden');
         $('loggedInBox').classList.remove('hidden');
-        $('loggedInBox').textContent=`Logged in as ${me.body.customer.email} — you're all set, just continue.`;
+        const em=String(me.body.customer.email||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+        $('loggedInBox').innerHTML=`Logged in as <b>${em}</b> — you're all set, just continue.<br><a id="switchAcct" style="cursor:pointer;text-decoration:underline;font-size:.9rem;">Not you? Log out &amp; use a different email</a>`;
+        $('switchAcct').onclick=async(e)=>{e.preventDefault();await api('/api/auth/logout',{method:'POST'});location.reload();};
       }
       $('loading').classList.add('hidden');$('app').classList.remove('hidden');$('cta').classList.remove('hidden');
       render();

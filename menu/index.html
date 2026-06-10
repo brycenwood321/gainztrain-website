@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>This Week's Menu | High-Protein Meal Prep | Gainz Train Utah</title>
+  <meta name="description" content="See this week's Gainz Train menu — high-protein meals with exact macros, fresh every week in Utah County. Pick your plan and fuel up." />
+  <meta name="keywords" content="this week's menu, high protein meal prep Utah, macro friendly meals, gym meal prep Provo Orem" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://gainztrainprep.com/menu/" />
+  <link rel="stylesheet" href="../assets/css/global-light.css" />
+  <link rel="stylesheet" href="../assets/css/editorial.css" />
+  <style>
+    .menu-week-pill {
+      display: inline-flex; align-items: center; gap: .5rem;
+      background: var(--orange); color: #fff; font-weight: 800;
+      padding: .5rem 1.1rem; border-radius: 999px; font-size: .95rem;
+      letter-spacing: .02em; margin-top: 1rem;
+    }
+    .menu-meal-desc {
+      color: var(--ink-soft, #555); font-size: .92rem; line-height: 1.5;
+      margin: .35rem 0 .75rem;
+    }
+    .menu-upcharge {
+      display: inline-block; background: #fff4e8; color: var(--orange);
+      border: 1px solid var(--orange); border-radius: 999px;
+      font-size: .72rem; font-weight: 800; padding: .1rem .5rem;
+      vertical-align: middle; margin-left: .35rem;
+    }
+    .meal-emoji-fallback {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 4rem; background: #f4f4f4; aspect-ratio: 4 / 3; width: 100%;
+    }
+    #menuLoading, #menuEmpty { text-align: center; color: #888; padding: 2rem 0; }
+    #menuEmpty { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav" role="navigation">
+    <a href="/" class="nav-logo">
+      <span class="nav-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></span>
+      <span class="nav-logo-tagline">Fuel Your Engine</span>
+    </a>
+    <div class="nav-links">
+      <a href="/menu/" style="color: var(--orange);">This Week's Menu</a>
+      <a href="/meals/">Meals</a>
+      <a href="/how-it-works/">How It Works</a>
+      <a href="/subscribe/">Pricing</a>
+      <a href="/about/">About</a>
+      <a href="/faqs/">FAQs</a>
+      <a href="/contact">Contact</a>
+      <a href="/subscribe/" class="btn btn-primary nav-cta">Start Today</a>
+    </div>
+    <button class="nav-toggle" aria-label="Open menu"><span></span><span></span><span></span></button>
+  </nav>
+
+  <div class="nav-mobile">
+    <button class="nav-mobile-close">&times;</button>
+    <a href="/menu/">This Week's Menu</a>
+    <a href="/meals/">Meals</a>
+    <a href="/how-it-works/">How It Works</a>
+    <a href="/subscribe/">Pricing</a>
+    <a href="/about/">About</a>
+    <a href="/faqs/">FAQs</a>
+    <a href="/contact">Contact</a>
+  </div>
+
+  <!-- PAGE HERO -->
+  <div class="page-hero">
+    <div class="container">
+      <div class="section-label">On The Menu</div>
+      <h1>This Week's <span class="highlight">Menu.</span></h1>
+      <p>Fresh, high-protein meals with exact macros — rotating every week. Here's what's cooking right now.</p>
+      <div class="menu-week-pill" id="weekPill">Loading…</div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <section>
+    <div class="container">
+      <p id="menuLoading">Loading this week's menu…</p>
+      <p id="menuEmpty">Our menu is being updated for the week — check back soon, or browse the <a href="/meals/" style="color:var(--orange);font-weight:700;">full catalog &rarr;</a></p>
+      <div class="meals-catalog-grid" id="menuGrid"></div>
+
+      <!-- specialty note -->
+      <div class="menu-rotation-box fade-up" style="margin-top:2.5rem;">
+        <div class="section-label" style="justify-content: center;">How It Works</div>
+        <h3>Pick Your Plan, Then Your Meals.</h3>
+        <p>Choose a weekly plan, and each week you'll pick your meals from the rotating menu before the Friday cutoff. Some specialty proteins carry a small upcharge, shown right on the meal.</p>
+        <a href="/subscribe/" class="btn btn-primary">Start Your Plan &rarr;</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div class="cta-orange">
+    <div class="container">
+      <div class="section-label">Ready?</div>
+      <h2>Ready to <span style="color: rgba(255,255,255,0.85);">Fuel Up?</span></h2>
+      <p>Pick your plan and start eating meals that actually move the needle.</p>
+      <div class="cta-actions">
+        <a href="/subscribe/" class="btn btn-primary btn-pulse">Choose Your Plan &rarr;</a>
+        <a href="/how-it-works/" class="btn btn-outline">How It Works</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></div>
+          <span class="footer-logo-tagline">Fuel Your Engine</span>
+          <p>High-protein weekly meal prep for people serious about their goals. Utah County, UT.</p>
+        </div>
+        <div class="footer-col">
+          <h5>Pages</h5>
+          <ul>
+            <li><a href="/menu/">This Week's Menu</a></li>
+            <li><a href="/meals/">Meal Catalog</a></li>
+            <li><a href="/how-it-works/">How It Works</a></li>
+            <li><a href="/subscribe/">Pricing</a></li>
+            <li><a href="/delivery/">Delivery Zones</a></li>
+            <li><a href="/about/">About</a></li>
+            <li><a href="/faqs/">FAQs</a></li>
+            <li><a href="/contact">Contact</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Contact</h5>
+          <ul>
+            <li><a href="tel:+13853278045">(385) 327-8045</a></li>
+            <li><a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener">@gainztrainprep</a></li>
+            <li><a href="/menu/">This Week's Menu</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p class="footer-copy">&copy; 2026 Gainz Train. All rights reserved.</p>
+        <div class="footer-social">
+          <a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener" aria-label="Instagram">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Image load failure -> swap to the meal's emoji so a missing photo never shows a broken image.
+    window.mealImgErr = function (img, emoji) {
+      var d = document.createElement('div');
+      d.className = 'meal-card-img meal-emoji-fallback';
+      d.textContent = emoji || '🍽️';
+      img.replaceWith(d);
+    };
+    (async function () {
+      var esc = function (s) {
+        return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+        });
+      };
+      try {
+        var res = await fetch('/data/menus.json', { cache: 'no-cache' });
+        if (!res.ok) throw new Error('fetch ' + res.status);
+        var data = await res.json();
+        var menus = (data.menus || data || []).slice();
+        // Prefer the week Brycen labels "This Week"; otherwise the latest week_of on file.
+        var cur = menus.find(function (w) { return /this week/i.test(w.label || ''); });
+        if (!cur) { menus.sort(function (a, b) { return (a.week_of < b.week_of) ? 1 : -1; }); cur = menus[0]; }
+        if (!cur || !Array.isArray(cur.meals) || !cur.meals.length) throw new Error('no menu');
+
+        var wk = new Date(cur.week_of + 'T12:00:00');
+        var wkStr = wk.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+        document.getElementById('weekPill').textContent = 'Week of ' + wkStr;
+
+        document.getElementById('menuGrid').innerHTML = cur.meals.map(function (m) {
+          var up = Number(m.upcharge_per_meal) > 0
+            ? '<span class="menu-upcharge">+$' + Number(m.upcharge_per_meal).toFixed(2) + '</span>' : '';
+          var emoji = esc(m.emoji || '');
+          var img = m.image
+            ? '<img src="' + esc(m.image) + '" alt="' + esc(m.name) + '" class="meal-card-img" loading="lazy" onerror="mealImgErr(this,\'' + emoji + '\')" />'
+            : '<div class="meal-card-img meal-emoji-fallback">' + (emoji || '🍽️') + '</div>';
+          return '<div class="meal-card fade-up">' + img +
+            '<div class="meal-card-body">' +
+            '<p class="meal-card-name">' + esc(m.name) + up + '</p>' +
+            (m.description ? '<p class="menu-meal-desc">' + esc(m.description) + '</p>' : '') +
+            '<div class="meal-macros">' +
+            '<div class="macro-pill"><span class="macro-val">' + esc(m.protein) + 'g</span><span class="macro-key">Protein</span></div>' +
+            '<div class="macro-divider"></div>' +
+            '<div class="macro-pill"><span class="macro-val">' + esc(m.carbs) + 'g</span><span class="macro-key">Carbs</span></div>' +
+            '<div class="macro-divider"></div>' +
+            '<div class="macro-pill"><span class="macro-val">' + esc(m.fat) + 'g</span><span class="macro-key">Fat</span></div>' +
+            '<div class="macro-divider"></div>' +
+            '<div class="macro-pill"><span class="macro-val">' + esc(m.calories) + '</span><span class="macro-key">Cal</span></div>' +
+            '</div></div></div>';
+        }).join('');
+        document.getElementById('menuLoading').style.display = 'none';
+      } catch (e) {
+        document.getElementById('menuLoading').style.display = 'none';
+        document.getElementById('weekPill').style.display = 'none';
+        document.getElementById('menuEmpty').style.display = 'block';
+      }
+    })();
+  </script>
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

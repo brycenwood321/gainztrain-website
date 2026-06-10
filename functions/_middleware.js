@@ -46,9 +46,9 @@ export async function onRequest(context) {
     if (denied) return denied;
   }
 
-  // menu.gainztrainprep.com → the dynamic menu picker page (same site serves both hosts).
+  // menu.gainztrainprep.com → the public "this week's menu" page (same site serves both hosts).
   if (url.hostname === 'menu.gainztrainprep.com') {
-    const target = new URL('https://gainztrainprep.com/menu-selection/');
+    const target = new URL('https://gainztrainprep.com/menu/');
     target.search = url.search;
     return Response.redirect(target.toString(), 301);
   }

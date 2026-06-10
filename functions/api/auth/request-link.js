@@ -46,7 +46,8 @@ export async function onRequestPost(context) {
     `<p>Hey${greeting},</p>` +
     `<p>Tap below to log into your Gainz Train account:</p>` +
     `<p><a href="${link}">Log in to Gainz Train</a></p>` +
-    `<p>This link expires in 15 minutes. If you didn't request it, you can ignore this email.</p>`;
+    `<p>This link expires in 15 minutes. If you didn't request it, you can ignore this email.</p>` +
+    `<p style="color:#888;font-size:13px">Found this in spam? Tap "Not spam" so future Gainz Train emails reach your inbox.</p>`;
 
   await ghlSendToCustomer(env, customer, {
     channel: 'email',

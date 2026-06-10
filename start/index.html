@@ -188,7 +188,7 @@
             const log=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})});
             if(log.status!==200){
               await api('/api/auth/request-link',{method:'POST',body:JSON.stringify({email})});
-              showMsg('You already have an account. We just emailed you a login link — click it, then come back here and tap continue.');btn.disabled=false;return;
+              showMsg('You already have an account. We just emailed you a login link — click it, then come back here and tap continue. Don\'t see it within a minute? Check your spam/junk folder, and mark it "Not spam" so the rest of your Gainz Train emails land in your inbox.');btn.disabled=false;return;
             }
           }else if(reg.status!==200){showMsg(reg.body.detail||'Could not create your account. Try again.');btn.disabled=false;return;}
           loggedIn=true;
@@ -204,6 +204,10 @@
     (async()=>{
       const{body}=await api('/api/plans');
       PLANS=body.plans||[];MIN=body.min_meals||6;MAX=body.max_meals||16;
+      // Seed the meal count from ?meals=N (customer arriving from the pricing calculator),
+      // clamped to the valid range, so they land on exactly the plan they picked.
+      const qsMeals=parseInt(new URLSearchParams(location.search).get('meals'),10);
+      if(!isNaN(qsMeals))meals=Math.min(MAX,Math.max(MIN,qsMeals));
       const me=await api('/api/me');
       if(me.status===200&&me.body.ok){
         loggedIn=true;

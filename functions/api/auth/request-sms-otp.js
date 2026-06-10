@@ -5,6 +5,7 @@ import { one, all, run, nowIso, addMinutesIso } from '../../_lib/db.js';
 import { randomToken, randomDigits, sha256hex } from '../../_lib/crypto.js';
 import { ghlSend } from '../../_lib/ghl.js';
 import { toE164 } from '../../_lib/validate.js';
+import { rateLimit, clientIp } from '../../_lib/ratelimit.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -17,6 +18,8 @@ export async function onRequestPost(context) {
   if (!phone) return fail(400, 'invalid_phone', 'Enter a valid phone number.');
 
   const generic = (extra = {}) => ok({ message: 'If that number is on file, a code is on its way.', ...extra });
+  // Per-IP throttle so an attacker can't phone-enumerate / SMS-pump (real $ cost). Stays non-enumerable.
+  if (!(await rateLimit(env, `smsotp:ip:${clientIp(request)}`, 10, 3600))) return generic();
   const customer = await one(env.DB, `SELECT id, ghl_contact_id FROM customers WHERE phone = ?`, phone);
   if (!customer) return generic();
 

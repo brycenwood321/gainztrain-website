@@ -3,7 +3,7 @@
 // Auth: X-Admin-Token = env.ADMIN_TOKEN. Run after editing menus.json each week.
 import { ok, fail } from '../../_lib/respond.js';
 import { requireAdmin } from '../../_lib/admin.js';
-import { all, run, nowIso } from '../../_lib/db.js';
+import { one, all, run, nowIso } from '../../_lib/db.js';
 import { orderableWeek } from '../../_lib/menu.js';
 import { notify } from '../../_lib/notify.js';
 
@@ -38,6 +38,10 @@ export async function onRequestPost(context) {
       && new Date(`${m.week_of}T12:00:00Z`).getUTCDay() === 0;
     if (!okDate) { skipped.push({ week_of: m.week_of ?? null, reason: 'week_of not a Sunday (YYYY-MM-DD)' }); continue; }
     if (!Array.isArray(m.meals) || m.meals.length === 0) { skipped.push({ week_of: m.week_of, reason: 'meals empty/missing' }); continue; }
+    // Never overwrite a week the kitchen has already locked — that would retroactively change what
+    // they're cooking. Republish only affects future/unlocked weeks.
+    const locked = await one(env.DB, `SELECT 1 AS x FROM orders WHERE week_of = ? AND status = 'locked' LIMIT 1`, m.week_of);
+    if (locked) { skipped.push({ week_of: m.week_of, reason: 'week already locked — menu frozen' }); continue; }
     await run(env.DB,
       `INSERT INTO weekly_menus (week_of, label, meals_json, published_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)

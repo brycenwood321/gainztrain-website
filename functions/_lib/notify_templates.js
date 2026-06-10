@@ -25,6 +25,15 @@ function prettyDate(iso) {
     return new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
   } catch { return String(iso); }
 }
+// For Stripe timestamps (renewal / cancel dates): render in the business timezone so the date lines up
+// with when the charge actually happens, not a UTC date that can read a day off. (week_of date-only
+// strings keep using prettyDate/UTC.)
+function prettyDateLocal(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Denver' });
+  } catch { return String(iso); }
+}
 
 // Branded email shell. `cta` is optional { label, href }.
 function layout(env, { heading, intro, rows = [], note, cta }) {
@@ -118,14 +127,14 @@ export const TEMPLATES = {
   }),
 
   canceled: (d, env) => ({
-    subject: 'Your Gainz Train plan ends ' + (prettyDate(d.ends) || 'soon'),
+    subject: 'Your Gainz Train plan ends ' + (prettyDateLocal(d.ends) || 'soon'),
     html: layout(env, {
       heading: 'Your plan is set to cancel',
-      intro: `We\'ve scheduled your cancellation. You\'ll keep getting meals through the end of the period you already paid for${d.ends ? `, ending ${prettyDate(d.ends)}` : ''}. No further charges after that.`,
+      intro: `We\'ve scheduled your cancellation. You\'ll keep getting meals through the end of the period you already paid for${d.ends ? `, ending ${prettyDateLocal(d.ends)}` : ''}. No further charges after that.`,
       note: 'Changed your mind? You can undo the cancellation anytime before it ends — nothing is lost.',
       cta: { label: 'Undo cancellation', href: link(env, '/app/manage/') },
     }),
-    sms: `Gainz Train: your plan is set to cancel${d.ends ? ' on ' + prettyDate(d.ends) : ''}. Undo anytime before then: ` + link(env, '/app/manage/'),
+    sms: `Gainz Train: your plan is set to cancel${d.ends ? ' on ' + prettyDateLocal(d.ends) : ''}. Undo anytime before then: ` + link(env, '/app/manage/'),
   }),
 
   reactivated: (d, env) => ({
@@ -336,6 +345,7 @@ export const TEMPLATES = {
       note: d.invoiceUrl ? `View or download this receipt anytime.` : undefined,
       cta: d.invoiceUrl ? { label: 'View receipt', href: d.invoiceUrl } : { label: 'Pick your meals', href: link(env, '/app/menu/') },
     }),
+    sms: `Gainz Train: you were charged ${money(d.amount)} for this week's meals. 💪`,
   }),
 
   payment_failed: (d, env) => ({
@@ -360,13 +370,13 @@ export const TEMPLATES = {
   }),
 
   renewal_upcoming: (d, env) => ({
-    subject: `Heads up — your Gainz Train meals renew ${d.when ? prettyDate(d.when) : 'soon'}`,
+    subject: `Heads up — your Gainz Train meals renew ${d.when ? prettyDateLocal(d.when) : 'soon'}`,
     html: layout(env, {
       heading: 'Your next week is coming up',
-      intro: `Quick heads up: your Gainz Train subscription renews${d.when ? ` on ${prettyDate(d.when)}` : ' soon'}${d.amount ? ` for ${money(d.amount)}` : ''}. Want to change your meals, pause, or switch plans? Do it before then and it\'ll be reflected on this charge.`,
+      intro: `Quick heads up: your Gainz Train subscription renews${d.when ? ` on ${prettyDateLocal(d.when)}` : ' soon'}${d.amount ? ` for ${money(d.amount)}` : ''}. Want to change your meals, pause, or switch plans? Do it before then and it\'ll be reflected on this charge.`,
       cta: { label: 'Pick your meals', href: link(env, '/app/menu/') },
     }),
-    sms: `Gainz Train: your meals renew${d.when ? ' ' + prettyDate(d.when) : ' soon'}${d.amount ? ' for ' + money(d.amount) : ''}. Change anything before then: ` + link(env, '/app/manage/'),
+    sms: `Gainz Train: your meals renew${d.when ? ' ' + prettyDateLocal(d.when) : ' soon'}${d.amount ? ' for ' + money(d.amount) : ''}. Change anything before then: ` + link(env, '/app/manage/'),
   }),
 
   card_expiring: (d, env) => ({

@@ -180,11 +180,18 @@
         `<div class="zone"><h3><span>Zone ${z.zone}</span><span class="stat-sub">${z.stop_count} stops · ${z.meals} meals</span></h3>`
         + z.stops.map(s=>`<div class="stop"><div class="nm">${esc((s.first_name||'')+' '+(s.last_name||''))} <span class="badge ${esc(s.delivery_status||'scheduled')}">${esc(s.delivery_status||'scheduled')}</span></div><div class="ad">${esc(s.address||'')}, ${esc(s.city||'')} ${esc(s.zip||'')} · ${s.total_meals} meals${s.phone?(' · '+esc(s.phone)):''}</div></div>`).join('')
         + '</div>').join('');
+      // Optimized drive order from the kitchen + one-tap Google Maps route.
+      const driveRows = (d.route||[]).map(s=>`<div class="stop"><div class="nm"><b>${s.stop_order}.</b> ${esc((s.first_name||'')+' '+(s.last_name||''))} <span class="badge ${esc(s.delivery_status||'scheduled')}">${esc(s.delivery_status||'scheduled')}</span></div><div class="ad">${esc(s.address||'')}, ${esc(s.city||'')} ${esc(s.zip||'')} · ${s.total_meals} meals${s.phone?(' · '+esc(s.phone)):''}</div></div>`).join('');
+      const missing = (d.geocode_missing||[]);
+      const driveCard = (d.route&&d.route.length)
+        ? `<div class="card"><h2>Drive order (from kitchen)</h2>${d.maps_url?`<div class="ctl"><a class="btn" href="${esc(d.maps_url)}" target="_blank" rel="noopener">Open route in Google Maps</a></div>`:''}${driveRows}${missing.length?`<div class="stat-sub" style="margin-top:.6rem;color:var(--red)">${missing.length} stop(s) missing map coordinates (not in drive order): ${missing.map(m=>esc(m.name||m.zip)).join(', ')}</div>`:''}</div>`
+        : '';
       $('view').innerHTML =
         `<div class="grid">
           <div class="card"><h2>Delivery stops</h2><div class="stat">${d.total_stops}</div></div>
           <div class="card"><h2>Meals out</h2><div class="stat">${d.total_meals}</div></div>
         </div>
+        ${driveCard}
         ${zones || '<div class="card"><div class="stat-sub" style="padding:1rem 0;">No delivery orders locked for this week.</div></div>'}
         <div class="ctl">
           <button class="btn" id="mOut">Mark all out for delivery</button>

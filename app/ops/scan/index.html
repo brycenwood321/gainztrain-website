@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scan · Gainz Train Ops</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <style>
+    :root{--black:#1a1614;--bg:#fafaf8;--mid:#f5f2ee;--line:#ede9e3;--muted:#7a7270;--orange:#ff6b35;--orange-dark:#cc5520;--green:#16a34a;--red:#dc2626;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--black);line-height:1.5;-webkit-font-smoothing:antialiased;padding:1.25rem;max-width:480px;margin:0 auto;}
+    h1{font-size:1.4rem;margin-bottom:1rem;}
+    .brand{font-weight:800;letter-spacing:.02em;}.brand .t{color:var(--orange);}
+    .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1.4rem;margin-top:1rem;box-shadow:0 4px 18px rgba(0,0,0,.03);}
+    .name{font-size:1.3rem;font-weight:700;}
+    .meta{color:var(--muted);font-size:.92rem;margin-top:.3rem;}
+    .status{display:inline-block;margin-top:.8rem;padding:.3rem .8rem;border-radius:999px;font-weight:700;font-size:.95rem;background:var(--mid);text-transform:capitalize;}
+    .status.delivered,.status.picked_up{background:#f0fdf4;color:var(--green);}
+    .status.out_for_delivery,.status.pickup_ready{background:#fff7ed;color:var(--orange-dark);}
+    .btn{display:block;width:100%;font:inherit;font-weight:700;font-size:1.1rem;border:none;border-radius:12px;padding:1rem;margin-top:1.2rem;cursor:pointer;background:var(--orange);color:#fff;}
+    .btn:disabled{opacity:.5;}
+    .btn.sec{background:#fff;color:var(--gray);border:1px solid var(--line);font-size:.95rem;font-weight:600;padding:.7rem;}
+    input{width:100%;font:inherit;padding:.8rem;border:1px solid var(--line);border-radius:10px;margin-top:.6rem;}
+    .msg{padding:.8rem;border-radius:10px;margin-top:1rem;font-size:.95rem;display:none;}
+    .msg.show{display:block;}.msg.ok{background:#f0fdf4;color:var(--green);}.msg.err{background:#fef2f2;color:var(--red);}
+    .done{text-align:center;color:var(--green);font-weight:700;font-size:1.1rem;padding:1rem;}
+  </style>
+</head>
+<body>
+  <h1 class="brand">GAINZ<span class="t">TRAIN</span> · Scan</h1>
+  <div id="gate" class="card" style="display:none">
+    <p>Enter the ops token (one time on this phone).</p>
+    <input id="tok" type="password" placeholder="Admin token" />
+    <button class="btn" id="tokGo">Save</button>
+  </div>
+  <div id="main"></div>
+  <div id="msg" class="msg"></div>
+
+  <script>
+    const $=id=>document.getElementById(id);
+    const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const LABEL={prepping:'Prepping',out_for_delivery:'Out for delivery',delivered:'Delivered',pickup_ready:'Ready for pickup',picked_up:'Picked up',scheduled:'Scheduled'};
+    let TOKEN=localStorage.getItem('gt_admin_token')||'';
+    const ORDER=new URLSearchParams(location.search).get('o')||'';
+
+    function msg(t,k){const m=$('msg');m.textContent=t;m.className='msg show '+(k||'ok');}
+    function admin(path,method){return fetch(path,{method:method||'GET',headers:{'X-Admin-Token':TOKEN}}).then(async r=>({status:r.status,body:await r.json().catch(()=>({}))}));}
+
+    $('tokGo').onclick=()=>{TOKEN=$('tok').value.trim();localStorage.setItem('gt_admin_token',TOKEN);$('gate').style.display='none';load();};
+
+    async function load(){
+      if(!ORDER){$('main').innerHTML='<div class="card">No order code in this QR. Scan a meal-bag label.</div>';return;}
+      if(!TOKEN){$('gate').style.display='block';return;}
+      $('main').innerHTML='<div class="card">Loading…</div>';
+      const r=await admin('/api/admin/delivery-status?order_id='+encodeURIComponent(ORDER));
+      if(r.status===401){TOKEN='';localStorage.removeItem('gt_admin_token');$('gate').style.display='block';$('main').innerHTML='';return;}
+      if(r.status!==200||!r.body.order){$('main').innerHTML='<div class="card">Could not find that order.</div>';return;}
+      draw(r.body.order);
+    }
+
+    function draw(o){
+      const cur=o.delivery_status||'scheduled';
+      const next=o.next;
+      const where=o.method==='delivery'?(esc(o.address||'')+', '+esc(o.city||'')+' '+esc(o.zip||'')):'Pickup';
+      let html=`<div class="card"><div class="name">${esc((o.first_name||'')+' '+(o.last_name||''))}</div>`+
+        `<div class="meta">${o.total_meals} meals · ${esc(o.method||'')} · ${where}</div>`+
+        `<div class="meta">Week of ${esc(o.week_of)}</div>`+
+        `<div class="status ${esc(cur)}">${LABEL[cur]||esc(cur)}</div>`;
+      if(next){html+=`<button class="btn" id="adv">Mark “${LABEL[next]||next}” →</button>`;}
+      else{html+=`<div class="done">✅ ${LABEL[cur]||cur} — all done</div>`;}
+      html+=`</div>`;
+      $('main').innerHTML=html;
+      if(next){$('adv').onclick=async()=>{$('adv').disabled=true;
+        const r=await admin('/api/admin/delivery-status?order_id='+encodeURIComponent(ORDER)+'&status=next','POST');
+        if(r.status===200){msg('Updated → '+(LABEL[r.body.status]||r.body.status)+(r.body.summary&&r.body.summary.notified?' (customer notified)':''),'ok');load();}
+        else{$('adv').disabled=false;msg(r.body.detail||'Could not update.','err');}};}
+    }
+
+    load();
+  </script>
+</body>
+</html>

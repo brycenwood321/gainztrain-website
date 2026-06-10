@@ -143,6 +143,18 @@
     const money=c=>'$'+(c/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
     let PLANS=[],MIN=6,MAX=16,meals=9,method='pickup',loggedIn=false;
 
+    // Cart persistence: a magic-link login opens a NEW tab (so sessionStorage is empty there) — keep the
+    // half-filled cart in localStorage with a 24h TTL so a returning customer never loses their progress.
+    const CART_KEY='gt_start_cart';
+    function saveCart(){try{localStorage.setItem(CART_KEY,JSON.stringify({meals,method,address:$('address').value,city:$('city').value,zip:$('zip').value,code:$('code').value,ts:Date.now()}));}catch(e){}}
+    function restoreCart(seedMeals){try{const raw=localStorage.getItem(CART_KEY);if(!raw)return;const c=JSON.parse(raw);
+      if(!c||!c.ts||Date.now()-c.ts>864e5){localStorage.removeItem(CART_KEY);return;}
+      if(c.zip)$('zip').value=c.zip;if(c.address)$('address').value=c.address;if(c.city)$('city').value=c.city;if(c.code)$('code').value=c.code;
+      if(c.method==='delivery')setMethod('delivery');
+      if(seedMeals&&Number.isInteger(c.meals))meals=Math.min(MAX,Math.max(MIN,c.meals));
+    }catch(e){}}
+    function clearCart(){try{localStorage.removeItem(CART_KEY);}catch(e){}}
+
     function tierFor(n){return PLANS.find(p=>n>=p.min&&n<=p.max);}
     function render(){
       const t=tierFor(meals);
@@ -157,9 +169,13 @@
       // cta
       $('ctaTotal').textContent=money(total)+'/wk';
       $('ctaSub').textContent=`${meals} meals · ${method}`;
+      saveCart();
     }
     function showMsg(t,k='err'){const m=$('msg');m.textContent=t;m.className='msg show '+k;}
+    function showMsgHtml(h,k='err'){const m=$('msg');m.innerHTML=h;m.className='msg show '+k;}
     function clearMsg(){$('msg').className='msg';}
+    // Persist address/zip/code edits too (render() only fires on meals/method changes).
+    ['address','city','zip','code'].forEach(id=>{const el=$(id);if(el)el.addEventListener('input',saveCart);});
 
     $('minus').onclick=()=>{if(meals>MIN){meals--;render();}};
     $('plus').onclick=()=>{if(meals<MAX){meals++;render();}};
@@ -184,11 +200,16 @@
           if(!email||password.length<8){showMsg('Enter your email and a password of at least 8 characters.');btn.disabled=false;return;}
           const reg=await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password,first_name:firstName,last_name:lastName,phone})});
           if(reg.status===409){
-            // returning customer — try the password they typed; if that fails, email a login link.
+            // Returning customer — try the password they typed. Password is the PRIMARY path because
+            // magic-link emails currently land in spam; we do NOT auto-send a link (it dead-ends the cart
+            // in a new tab). On a wrong password, ask them to retry in place; offer a link as a fallback.
             const log=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})});
             if(log.status!==200){
-              await api('/api/auth/request-link',{method:'POST',body:JSON.stringify({email})});
-              showMsg('You already have an account. We just emailed you a login link — click it, then come back here and tap continue. Don\'t see it within a minute? Check your spam/junk folder, and mark it "Not spam" so the rest of your Gainz Train emails land in your inbox.');btn.disabled=false;return;
+              showMsgHtml('You already have an account. Enter your account <b>password</b> above and tap Continue again. '+
+                '<a id="sendLink" style="cursor:pointer;text-decoration:underline">Forgot it? Email me a login link</a>');
+              const sl=$('sendLink');if(sl)sl.onclick=async()=>{await api('/api/auth/request-link',{method:'POST',body:JSON.stringify({email})});
+                showMsg('Login link sent. Open it (check spam/junk and mark "Not spam"), then come back to this tab — your cart is saved — and tap Continue.','ok');};
+              btn.disabled=false;return;
             }
           }else if(reg.status!==200){showMsg(reg.body.detail||'Could not create your account. Try again.');btn.disabled=false;return;}
           loggedIn=true;
@@ -196,7 +217,7 @@
         // checkout
         const code=($('code').value||'').trim().toUpperCase();
         const co=await api('/api/checkout/create',{method:'POST',body:JSON.stringify({meals,delivery_method:method,address,city,zip,code})});
-        if(co.status===200&&co.body.url){window.location.href=co.body.url;return;}
+        if(co.status===200&&co.body.url){clearCart();window.location.href=co.body.url;return;}
         showMsg(co.body.detail||'Could not start checkout. Try again.');btn.disabled=false;
       }catch(e){showMsg('Something went wrong. Try again.');btn.disabled=false;}
     };
@@ -208,6 +229,8 @@
       // clamped to the valid range, so they land on exactly the plan they picked.
       const qsMeals=parseInt(new URLSearchParams(location.search).get('meals'),10);
       if(!isNaN(qsMeals))meals=Math.min(MAX,Math.max(MIN,qsMeals));
+      // Restore a saved cart (zip/address/method/code, and meals only when ?meals= wasn't supplied).
+      restoreCart(isNaN(qsMeals));
       const me=await api('/api/me');
       if(me.status===200&&me.body.ok){
         loggedIn=true;

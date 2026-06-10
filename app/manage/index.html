@@ -26,6 +26,7 @@
     .badge{display:inline-block;padding:.2rem .6rem;border-radius:999px;font-size:.78rem;font-weight:600;text-transform:capitalize;}
     .badge.active,.badge.trialing{background:#f0fdf4;color:var(--green);}.badge.paused{background:#fffbeb;color:#b45309;}
     .badge.canceled,.badge.past_due{background:#fef2f2;color:var(--red);}
+    .badge.cancel_scheduled{background:#fffbeb;color:#b45309;}
     .row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.6rem 0;border-bottom:1px solid var(--line);}
     .row:last-child{border-bottom:none;}
     label{display:block;font-size:.82rem;font-weight:600;color:var(--gray);margin:.7rem 0 .35rem;}
@@ -71,11 +72,12 @@
         <div class="row"><span>Meals per week</span>
           <div class="stepper"><button class="stepbtn" id="tMinus">–</button><span class="qn" id="tMeals">0</span><button class="stepbtn" id="tPlus">+</button></div>
         </div>
+        <div class="sub" id="tPreview" style="margin-top:.4rem"></div>
         <div class="acts">
           <button class="btn" id="tSave" disabled>Save meal count</button>
           <button class="btn ghost" id="pauseBtn">Pause</button>
           <button class="btn ghost" id="resumeBtn">Resume</button>
-          <button class="btn ghost" id="cardBtn">Update card</button>
+          <button class="btn ghost" id="cardBtn">Manage billing</button>
           <button class="btn danger" id="cancelBtn">Cancel plan</button>
         </div>
       </div>
@@ -125,9 +127,16 @@
     const api=(p,o={})=>fetch(p,{credentials:'same-origin',headers:{'Content-Type':'application/json'},...o}).then(async r=>({status:r.status,body:await r.json().catch(()=>({}))}));
     const post=(p,b)=>api(p,{method:'POST',body:JSON.stringify(b||{})});
     function msg(t,k){const m=$('msg');m.textContent=t;m.className='msg show '+k;window.scrollTo(0,0);}
-    let ME=null,sub=null,tier=9,method='pickup';
+    const money=c=>'$'+((c||0)/100).toFixed(2);
+    const fmtDate=s=>{try{return new Date(s).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});}catch(e){return s;}};
+    let ME=null,sub=null,tier=9,method='pickup',PLANS=[];
+    // Per-meal price for a given meal count, from the public plan bands (fallback to current sub rate).
+    function perMealCents(n){const p=PLANS.find(p=>n>=p.min&&n<=p.max);return p?p.per_meal_cents:(sub?sub.tier_price_cents:0);}
+    function renderPreview(){const wk=tier*perMealCents(tier);const changed=sub&&tier!==sub.meals_per_week;
+      $('tPreview').innerHTML=`${tier} meals × ${money(perMealCents(tier))} = <b>${money(wk)}/week</b>`+(changed?' <span style="color:var(--muted)">(new)</span>':'');}
 
     async function load(){
+      try{const pr=await api('/api/plans');if(pr.status===200&&pr.body.plans)PLANS=pr.body.plans;}catch(e){}
       const r=await api('/api/me');
       $('loading').classList.add('hidden');
       if(r.status!==200||!r.body.ok){location.href='/app/';return;}
@@ -140,8 +149,14 @@
       }
       $('app').classList.remove('hidden');
       const st=sub.status||'';
-      $('planSub').innerHTML=`<span class="badge ${st}">${st.replace('_',' ')}</span> · ${sub.meals_per_week} meals/week`+(sub.cancel_at_period_end?' · <b>cancels at period end</b>':'');
-      tier=Math.min(16,Math.max(6,sub.meals_per_week||9));$('tMeals').textContent=tier;
+      const badgeCls=sub.cancel_at_period_end?'cancel_scheduled':st;
+      const badgeTxt=sub.cancel_at_period_end?'cancel scheduled':st.replace('_',' ');
+      const wk=sub.meals_per_week*(sub.tier_price_cents||0);
+      let line=`<span class="badge ${badgeCls}">${badgeTxt}</span> · ${sub.meals_per_week} meals × ${money(sub.tier_price_cents)} = <b>${money(wk)}/week</b>`;
+      if(sub.coupon_code&&sub.discount_active)line+=` · <span style="color:var(--green)">${sub.coupon_code} applied</span>`;
+      if(sub.cancel_at_period_end&&sub.current_period_end)line+=`<br><span style="color:#b45309">Your meals continue through ${fmtDate(sub.current_period_end)}.</span>`;
+      $('planSub').innerHTML=line;
+      tier=Math.min(16,Math.max(6,sub.meals_per_week||9));$('tMeals').textContent=tier;renderPreview();
       $('pauseBtn').classList.toggle('hidden',st==='paused');
       $('resumeBtn').classList.toggle('hidden',st!=='paused');
       $('cancelBtn').textContent=sub.cancel_at_period_end?'Undo cancellation':'Cancel plan';
@@ -161,19 +176,28 @@
     $('optPickup').onclick=()=>setMethod('pickup');$('optDelivery').onclick=()=>setMethod('delivery');
 
     // meal count
-    $('tMinus').onclick=()=>{if(tier>6){tier--;$('tMeals').textContent=tier;$('tSave').disabled=(tier===sub.meals_per_week);}};
-    $('tPlus').onclick=()=>{if(tier<16){tier++;$('tMeals').textContent=tier;$('tSave').disabled=(tier===sub.meals_per_week);}};
-    async function act(btn,fn){const b=$(btn);const old=b.textContent;b.disabled=true;b.textContent='…';const r=await fn();b.disabled=false;b.textContent=old;
-      if(r.status===200&&r.body.ok!==false){msg('Saved.','ok');await load();}else{msg(r.body.detail||'Could not save. Try again.','err');}}
-    $('tSave').onclick=()=>act('tSave',()=>post('/api/account/tier',{meals:tier}));
-    $('pauseBtn').onclick=()=>act('pauseBtn',()=>post('/api/account/pause'));
-    $('resumeBtn').onclick=()=>act('resumeBtn',()=>post('/api/account/resume'));
-    $('cancelBtn').onclick=()=>act('cancelBtn',()=>post('/api/account/cancel',{undo:!!(sub&&sub.cancel_at_period_end)}));
+    $('tMinus').onclick=()=>{if(tier>6){tier--;$('tMeals').textContent=tier;$('tSave').disabled=(tier===sub.meals_per_week);renderPreview();}};
+    $('tPlus').onclick=()=>{if(tier<16){tier++;$('tMeals').textContent=tier;$('tSave').disabled=(tier===sub.meals_per_week);renderPreview();}};
+    // act(btn, fn, okMsg?) — okMsg can be a string or a fn(body)=>string for a tailored confirmation.
+    async function act(btn,fn,okMsg){const b=$(btn);const old=b.textContent;b.disabled=true;b.textContent='…';const r=await fn();b.disabled=false;b.textContent=old;
+      if(r.status===200&&r.body.ok!==false){msg(typeof okMsg==='function'?okMsg(r.body):(okMsg||'Saved.'),'ok');await load();}else{msg(r.body.detail||'Could not save. Try again.','err');}}
+    $('tSave').onclick=()=>act('tSave',()=>post('/api/account/tier',{meals:tier}),
+      b=>b.effective==='next_week'?'Saved — your new meal count starts next week (this week’s order is already locked).':'Saved — pick your meals for the new count on the menu page.');
+    $('pauseBtn').onclick=()=>act('pauseBtn',()=>post('/api/account/pause'),'Plan paused — no meals or charges until you resume.');
+    $('resumeBtn').onclick=()=>act('resumeBtn',()=>post('/api/account/resume'),'Welcome back — your plan is active again.');
+    $('cancelBtn').onclick=()=>{
+      const undo=!!(sub&&sub.cancel_at_period_end);
+      if(!undo){const through=sub&&sub.current_period_end?(' You keep your meals through '+fmtDate(sub.current_period_end)+'.'):'';
+        if(!confirm('Cancel your plan?'+through+' You can undo any time before then.'))return;}
+      act('cancelBtn',()=>post('/api/account/cancel',{undo}),
+        b=>undo?'Cancellation undone — your plan will keep renewing.':('Plan cancelled.'+(b.ends?(' You keep meals through '+fmtDate(b.ends)+'.'):'')+' Changed your mind? Tap “Undo cancellation”.'));
+    };
     $('goalSave').onclick=()=>act('goalSave',()=>post('/api/account/goal',{goal:$('goal').value,sex:$('sex').value}));
-    $('addrSave').onclick=()=>act('addrSave',()=>post('/api/account/address',{delivery_method:method,address:$('address').value,city:$('city').value,zip:$('zip').value}));
+    $('addrSave').onclick=()=>act('addrSave',()=>post('/api/account/address',{delivery_method:method,address:$('address').value,city:$('city').value,zip:$('zip').value}),
+      b=>b.delivery_method==='pickup'?'Saved — free pickup at our Orem kitchen.':('Saved — Zone '+b.delivery_zone+' delivery, '+money(b.delivery_fee_cents)+'/week'+(b.effective==='next_week'?' starting next week.':', prorated this week.')));
     $('pwSave').onclick=async()=>{const pw=$('newpw').value;if(pw.length<8){msg('Password must be at least 8 characters.','err');return;}await act('pwSave',()=>post('/api/auth/set-password',{password:pw}));$('newpw').value='';};
     $('npSave').onclick=()=>act('npSave',()=>post('/api/account/notification-prefs',{email_account:$('np_email_account').checked,email_marketing:$('np_email_marketing').checked,sms_account:$('np_sms_marketing').checked,sms_marketing:$('np_sms_marketing').checked}));
-    $('cardBtn').onclick=async()=>{const b=$('cardBtn');b.disabled=true;b.textContent='…';const r=await post('/api/account/portal');if(r.body.url){location.href=r.body.url;return;}b.disabled=false;b.textContent='Update card';msg(r.body.detail||'Could not open billing.','err');};
+    $('cardBtn').onclick=async()=>{const b=$('cardBtn');b.disabled=true;b.textContent='…';const r=await post('/api/account/portal');if(r.body.url){location.href=r.body.url;return;}b.disabled=false;b.textContent='Manage billing';msg(r.body.detail||'Could not open billing.','err');};
 
     load();
   </script>

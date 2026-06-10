@@ -15,7 +15,8 @@
           "fat": 24,
           "image": "/assets/images/meals/chicken-bro-tato-bowl.jpg",
           "emoji": "🥔",
-          "upcharge_per_meal": 0
+          "upcharge_per_meal": 0,
+          "slug": "chicken-brotato"
         },
         {
           "position": 2,
@@ -27,7 +28,8 @@
           "fat": 18,
           "image": "/assets/images/meals/beef-fajita-bowl.jpg",
           "emoji": "🌶️",
-          "upcharge_per_meal": 1.00
+          "upcharge_per_meal": 1,
+          "slug": "beef-fajita"
         },
         {
           "position": 3,
@@ -39,7 +41,8 @@
           "fat": 14,
           "image": "/assets/images/meals/teriyaki-turkey-bowl.jpg",
           "emoji": "🍱",
-          "upcharge_per_meal": 0
+          "upcharge_per_meal": 0,
+          "slug": "teriyaki-turkey"
         },
         {
           "position": 4,
@@ -51,7 +54,8 @@
           "fat": 10,
           "image": "/assets/images/meals/chicken-broccoli-rice.jpg",
           "emoji": "🥦",
-          "upcharge_per_meal": 0
+          "upcharge_per_meal": 0,
+          "slug": "chicken-broccoli-rice"
         }
       ]
     },
@@ -69,7 +73,8 @@
           "fat": 24,
           "image": "/assets/images/meals/chicken-bro-tato-bowl.jpg",
           "emoji": "🥔",
-          "upcharge_per_meal": 0
+          "upcharge_per_meal": 0,
+          "slug": "chicken-brotato"
         },
         {
           "position": 2,
@@ -81,7 +86,8 @@
           "fat": 18,
           "image": "/assets/images/meals/beef-sweet-potato-bowl.jpg",
           "emoji": "🍠",
-          "upcharge_per_meal": 1.00
+          "upcharge_per_meal": 1,
+          "slug": "beef-sweet-potato"
         },
         {
           "position": 3,
@@ -93,7 +99,8 @@
           "fat": 10,
           "image": "/assets/images/meals/chicken-broccoli-rice.jpg",
           "emoji": "🥦",
-          "upcharge_per_meal": 0
+          "upcharge_per_meal": 0,
+          "slug": "teriyaki-chicken"
         },
         {
           "position": 4,
@@ -105,7 +112,8 @@
           "fat": 14,
           "image": "/assets/images/meals/teriyaki-turkey-bowl.jpg",
           "emoji": "🍱",
-          "upcharge_per_meal": 0
+          "upcharge_per_meal": 0,
+          "slug": "teriyaki-turkey"
         }
       ]
     },
@@ -123,7 +131,8 @@
           "fat": 24,
           "image": "/assets/images/meals/chicken-bro-tato-bowl.jpg",
           "emoji": "🥔",
-          "upcharge_per_meal": 0
+          "upcharge_per_meal": 0,
+          "slug": "chicken-brotato"
         },
         {
           "position": 2,
@@ -135,7 +144,8 @@
           "fat": 18,
           "image": "/assets/images/meals/beef-sweet-potato-bowl.jpg",
           "emoji": "🍠",
-          "upcharge_per_meal": 1.00
+          "upcharge_per_meal": 1,
+          "slug": "beef-sweet-potato"
         },
         {
           "position": 3,
@@ -147,7 +157,8 @@
           "fat": 10,
           "image": "/assets/images/meals/chicken-broccoli-rice.jpg",
           "emoji": "🥦",
-          "upcharge_per_meal": 0
+          "upcharge_per_meal": 0,
+          "slug": "teriyaki-chicken"
         },
         {
           "position": 4,
@@ -159,7 +170,8 @@
           "fat": 14,
           "image": "/assets/images/meals/teriyaki-turkey-bowl.jpg",
           "emoji": "🍱",
-          "upcharge_per_meal": 0
+          "upcharge_per_meal": 0,
+          "slug": "teriyaki-turkey"
         }
       ]
     },
@@ -177,7 +189,8 @@
           "fat": 12,
           "image": "/assets/images/meals/meal-rice-bowl.jpg",
           "emoji": "🌮",
-          "upcharge_per_meal": 0
+          "upcharge_per_meal": 0,
+          "slug": "fiesta-chicken"
         },
         {
           "position": 2,
@@ -189,7 +202,8 @@
           "fat": 16,
           "image": "/assets/images/meals/meal-rice-bowl.jpg",
           "emoji": "🍝",
-          "upcharge_per_meal": 1.00
+          "upcharge_per_meal": 1,
+          "slug": "protein-ziti"
         },
         {
           "position": 3,
@@ -201,7 +215,8 @@
           "fat": 18,
           "image": "/assets/images/meals/beef-sweet-potato-bowl.jpg",
           "emoji": "🍠",
-          "upcharge_per_meal": 1.00
+          "upcharge_per_meal": 1,
+          "slug": "beef-sweet-potato"
         },
         {
           "position": 4,
@@ -213,7 +228,8 @@
           "fat": 10,
           "image": "/assets/images/meals/chicken-broccoli-rice.jpg",
           "emoji": "🥦",
-          "upcharge_per_meal": 0
+          "upcharge_per_meal": 0,
+          "slug": "chicken-broccoli-rice"
         },
         {
           "position": 5,
@@ -225,7 +241,8 @@
           "fat": 14,
           "image": "/assets/images/meals/teriyaki-turkey-bowl.jpg",
           "emoji": "🍱",
-          "upcharge_per_meal": 0
+          "upcharge_per_meal": 0,
+          "slug": "teriyaki-turkey"
         }
       ]
     }

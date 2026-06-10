@@ -62,6 +62,7 @@
     <div class="tabs" id="tabs">
       <div class="tab active" data-tab="overview">Overview</div>
       <div class="tab" data-tab="kitchen">Kitchen prep</div>
+      <div class="tab" data-tab="shopping">Shopping</div>
       <div class="tab" data-tab="route">Route</div>
       <div class="tab" data-tab="customers">Customers</div>
       <div class="tab" data-tab="activity">Activity</div>
@@ -131,6 +132,7 @@
       try {
         if (TAB==='overview') return renderOverview();
         if (TAB==='kitchen') return renderKitchen();
+        if (TAB==='shopping') return renderShopping();
         if (TAB==='route') return renderRoute();
         if (TAB==='customers') return renderCustomers();
         if (TAB==='activity') return renderActivity();
@@ -161,15 +163,51 @@
     async function renderKitchen(){
       const d = await adminGet('/api/admin/kitchen-prep' + weekParam());
       $('weekLabel').textContent = 'Cook list for week of ' + fmtDate(d.week_of);
+      const wp = ($('week').value)?('&week_of='+$('week').value):'';
       const rows = (d.meals||[]).map(m=>`<div class="mealrow"><span>${esc(m.name)}</span><span class="q">${m.total_qty}</span></div>`).join('');
+      // Cook batches (per meal: how much of each component to cook).
+      const batches = (d.batches||[]).map(b=>{
+        const comps = (b.components||[]).map(c=>`<div class="mealrow"><span>${esc(c.name)}</span><span class="q">${c.kg_raw} kg raw <span class="stat-sub">(${c.kg_cooked} kg cooked)</span></span></div>`).join('');
+        return `<div class="card"><h2>${esc(b.name)} <span class="stat-sub">×${b.total_qty}</span></h2>${comps||'<div class="stat-sub">no recipe</div>'}</div>`;
+      }).join('');
+      // Packing list (per customer, for packing day + labels).
+      const packing = (d.packing||[]).map(o=>`<div class="stop"><div class="nm">${esc(o.customer)} <span class="badge">${esc(o.profile||'')}</span></div><div class="ad">${(o.meals||[]).map(m=>`${m.qty}× ${esc(m.name)}`).join(', ')} · ${esc(o.method||'')}</div></div>`).join('');
+      const warn = (!d.recipes_loaded) ? '<div class="card" style="border-color:#fca5a5"><b style="color:var(--red)">Recipe data not loaded</b> — cook batches + shopping list unavailable. Check data/recipes.json.</div>'
+        : (d.unmatched&&d.unmatched.length ? `<div class="card" style="border-color:#fca5a5"><b style="color:var(--red)">No recipe for:</b> ${d.unmatched.map(u=>esc(u.name)).join(', ')} — add it to data/recipes.json so its ingredients are counted.</div>` : '');
       $('view').innerHTML =
         `<div class="grid">
           <div class="card"><h2>Orders</h2><div class="stat">${d.totals.orders}</div></div>
           <div class="card"><h2>Total meals</h2><div class="stat">${d.totals.meals}</div></div>
         </div>
+        ${warn}
         <div class="card"><h2>Make this many of each</h2>${rows||'<div class="stat-sub" style="padding:1rem 0;">No locked orders yet for this week.</div>'}</div>
-        <div class="ctl"><button class="btn ghost" id="markPrep">Mark all "prepping"</button></div>`;
-      const mp = $('markPrep'); if (mp) mp.onclick = async () => { mp.disabled=true; const r=await adminPost('/api/admin/delivery-status?status=prepping'+(($('week').value)?('&week_of='+$('week').value):'')); mp.disabled=false; msg(`Marked ${r.summary?.updated||0} orders prepping, notified ${r.summary?.notified||0}.`); };
+        ${batches?('<h2 style="margin:1rem 0 .3rem;">Cook batches</h2>'+batches):''}
+        ${packing?('<div class="card"><h2>Packing day</h2>'+packing+'</div>'):''}
+        <div class="ctl">
+          <button class="btn ghost" id="markPrep">Mark all "prepping"</button>
+          <a class="btn" href="/app/ops/labels/?week_of=${encodeURIComponent(d.week_of)}" target="_blank" rel="noopener">Print labels</a>
+        </div>`;
+      const mp = $('markPrep'); if (mp) mp.onclick = async () => { mp.disabled=true; const r=await adminPost('/api/admin/delivery-status?status=prepping'+wp); mp.disabled=false; msg(`Marked ${r.summary?.updated||0} orders prepping, notified ${r.summary?.notified||0}.`); };
+    }
+
+    async function renderShopping(){
+      const buf = (renderShopping._buf!=null)?renderShopping._buf:10;
+      const d = await adminGet('/api/admin/shopping-list'+weekParam()+(weekParam()?'&':'?')+'buffer='+buf);
+      $('weekLabel').textContent = 'Shopping list for week of ' + fmtDate(d.week_of);
+      if(!d.recipes_loaded){ $('view').innerHTML='<div class="card"><b style="color:var(--red)">Recipe data not loaded.</b> Check data/recipes.json.</div>'; return; }
+      const cats = (d.categories||[]).map(c=>{
+        const items = c.items.map(i=>`<div class="mealrow"><span>${esc(i.name)} <span class="stat-sub">${i.used_in&&i.used_in.length?('· '+esc(i.used_in.join(', '))):''}</span></span><span class="q">${i.lb_buffered} lb <span class="stat-sub">(${i.kg_buffered} kg)</span></span></div>`).join('');
+        return `<div class="card"><h2 style="text-transform:capitalize">${esc(c.category)}</h2>${items}</div>`;
+      }).join('');
+      const warn = (d.unmatched&&d.unmatched.length)?`<div class="card" style="border-color:#fca5a5"><b style="color:var(--red)">Incomplete — no recipe for:</b> ${d.unmatched.map(u=>esc(u.name)).join(', ')}</div>`:'';
+      $('view').innerHTML =
+        `<div class="ctl"><label style="font-size:.85rem;color:var(--gray)">Over-buy buffer %</label>
+          <input id="buf" type="number" min="0" max="50" value="${d.buffer_pct}" style="width:70px;" />
+          <button class="btn ghost" id="bufGo">Apply</button>
+          <span class="stat-sub">${d.totals.orders} orders · ${d.totals.meals} meals</span></div>
+        ${warn}
+        ${cats||'<div class="card"><div class="stat-sub" style="padding:1rem 0;">No locked orders yet for this week.</div></div>'}`;
+      if($('bufGo')) $('bufGo').onclick=()=>{ renderShopping._buf = Math.max(0,Math.min(50,parseInt($('buf').value,10)||10)); render(); };
     }
 
     async function renderRoute(){

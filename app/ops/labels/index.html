@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Labels · Gainz Train Ops</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <style>
+    :root{--black:#1a1614;--muted:#7a7270;--orange:#ff6b35;--line:#ddd;}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:system-ui,sans-serif;color:var(--black);background:#f0eee9;}
+    .toolbar{padding:1rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;}
+    .toolbar input{font:inherit;padding:.5rem;border:1px solid var(--line);border-radius:8px;}
+    .btn{font:inherit;font-weight:700;border:none;border-radius:8px;padding:.55rem 1.1rem;cursor:pointer;background:var(--orange);color:#fff;}
+    .btn.sec{background:#fff;color:var(--black);border:1px solid var(--line);font-weight:600;}
+    .hint{color:var(--muted);font-size:.85rem;}
+    /* Avery 5163: 2" x 4", 2 cols x 5 rows = 10 per US-Letter sheet. */
+    .sheet{width:8.5in;margin:0 auto;padding:.5in;background:#fff;}
+    .grid{display:grid;grid-template-columns:4in 4in;grid-auto-rows:2in;gap:0;}
+    .label{width:4in;height:2in;padding:.18in .22in;border:1px dashed #e5e5e5;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;}
+    .label .top{display:flex;justify-content:space-between;align-items:flex-start;gap:.2in;}
+    .label .brand{font-weight:800;font-size:11pt;letter-spacing:.02em;}
+    .label .brand .t{color:var(--orange);}
+    .label .meal{font-weight:700;font-size:15pt;line-height:1.05;margin-top:.04in;}
+    .label .macros{font-size:9.5pt;color:#333;margin-top:.03in;}
+    .label .who{font-weight:700;font-size:11pt;}
+    .label .sub{font-size:8.5pt;color:var(--muted);}
+    .label .qr{width:.9in;height:.9in;}
+    .label .tag{display:inline-block;font-size:7.5pt;font-weight:700;border:1px solid #ccc;border-radius:4px;padding:0 .04in;text-transform:uppercase;}
+    .loading{padding:3rem;text-align:center;color:var(--muted);}
+    @media print{
+      .toolbar{display:none;}
+      body{background:#fff;}
+      .sheet{padding:.5in;width:auto;}
+      .label{border:none;}
+      @page{size:letter;margin:0;}
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <strong>Labels</strong>
+    <input id="week" type="date" />
+    <button class="btn sec" id="load">Load</button>
+    <button class="btn" id="print">Print</button>
+    <span class="hint">Avery 5163 (2"×4", 10/sheet). One label per container. QR scans the order to advance status.</span>
+  </div>
+  <div id="out" class="loading">Enter a week and Load.</div>
+
+  <script>
+    const $=id=>document.getElementById(id);
+    const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    let TOKEN=localStorage.getItem('gt_admin_token')||'';
+    const BASE=location.origin;
+    const PROFILE={maintain_male:'MAINT-M',maintain_female:'MAINT-F',cut_male:'CUT-M',cut_female:'CUT-F',build_male:'BUILD-M',build_female:'BUILD-F'};
+    // QR via image API (CSP allows https img). Swap to a vendored encoder later if offline printing is needed.
+    const qr=data=>`https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=0&data=${encodeURIComponent(data)}`;
+
+    function defaultWeek(){const t=new Date();const add=(7-t.getUTCDay())%7;const s=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth(),t.getUTCDate()+add));return s.toISOString().slice(0,10);}
+    $('week').value=defaultWeek();
+
+    async function load(){
+      if(!TOKEN){TOKEN=prompt('Ops admin token:')||'';localStorage.setItem('gt_admin_token',TOKEN);}
+      $('out').innerHTML='<div class="loading">Loading…</div>';
+      const r=await fetch('/api/admin/kitchen-prep?week_of='+$('week').value,{headers:{'X-Admin-Token':TOKEN}});
+      if(r.status===401){localStorage.removeItem('gt_admin_token');TOKEN='';$('out').innerHTML='<div class="loading">Bad token — reload and try again.</div>';return;}
+      const d=await r.json().catch(()=>({}));
+      const packing=(d&&d.packing)||[];
+      if(!packing.length){$('out').innerHTML='<div class="loading">No locked orders for this week yet.</div>';return;}
+      const wkLabel=new Date(($('week').value)+'T12:00:00Z').toLocaleDateString(undefined,{month:'short',day:'numeric'});
+      // One label per container (each qty unit of each meal).
+      const labels=[];
+      packing.forEach(o=>{
+        const scanUrl=`${BASE}/app/ops/scan/?o=${encodeURIComponent(o.order_id)}`;
+        (o.meals||[]).forEach(m=>{
+          for(let i=0;i<(m.qty||0);i++){
+            const macros=[m.calories?m.calories+' cal':null,m.protein?m.protein+'P':null,m.carbs?m.carbs+'C':null,m.fat?m.fat+'F':null].filter(Boolean).join(' · ');
+            labels.push(`<div class="label">
+              <div class="top">
+                <div><div class="brand">GAINZ<span class="t">TRAIN</span></div>
+                  <div class="meal">${esc(m.name)}</div>
+                  <div class="macros">${esc(macros)}</div></div>
+                <img class="qr" src="${qr(scanUrl)}" alt="scan" />
+              </div>
+              <div><div class="who">${esc(o.customer)} <span class="tag">${PROFILE[o.profile]||esc(o.profile||'')}</span></div>
+                <div class="sub">Week of ${esc(wkLabel)} · ${esc(o.method||'')} · Keep refrigerated</div></div>
+            </div>`);
+          }
+        });
+      });
+      $('out').innerHTML=`<div class="sheet"><div class="grid">${labels.join('')}</div></div>`;
+    }
+    $('load').onclick=load;
+    $('print').onclick=()=>window.print();
+    load();
+  </script>
+</body>
+</html>

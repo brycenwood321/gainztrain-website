@@ -1,0 +1,103 @@
+{
+  "_note": "PLACEHOLDER QUANTITIES. grams_cooked = grams of each component portioned into one container (what the kitchen scale shows). Raw purchase weight = grams_cooked / yield_factor. These numbers are estimates from the menu macros — REPLACE with Marissa's ingredient-calculator values when her Google Sheet is shared with brycenwood321@gmail.com. Profiles are also placeholders for Marissa to confirm. Adding/renaming a meal in menus.json: give it a matching `slug`, and add that name to the recipe's `names` array here.",
+  "yield_reference": "yield_factor = cooked grams per 1 raw gram. Chicken/beef/turkey shrink (~0.75). Dry rice/pasta expand (3.0 / 2.2). Potatoes ~0.8. Default 1.0.",
+  "ingredients": {
+    "chicken-breast":  { "name": "Chicken breast",          "category": "protein", "yield_factor": 0.75 },
+    "ground-beef-92":  { "name": "Ground beef 92/8",        "category": "protein", "yield_factor": 0.72 },
+    "ground-turkey":   { "name": "Ground turkey 93/7",      "category": "protein", "yield_factor": 0.75 },
+    "jasmine-rice":    { "name": "Jasmine rice (dry)",      "category": "carb",    "yield_factor": 3.0 },
+    "sweet-potato":    { "name": "Sweet potato (raw)",      "category": "carb",    "yield_factor": 0.8 },
+    "russet-potato":   { "name": "Russet potato (raw)",     "category": "carb",    "yield_factor": 0.8 },
+    "protein-pasta":   { "name": "High-protein ziti (dry)", "category": "carb",    "yield_factor": 2.2 },
+    "black-beans":     { "name": "Black beans (cooked)",    "category": "pantry",  "yield_factor": 1.0 },
+    "corn":            { "name": "Corn",                    "category": "produce", "yield_factor": 1.0 },
+    "broccoli":        { "name": "Broccoli (raw)",          "category": "produce", "yield_factor": 0.9 },
+    "zucchini":        { "name": "Zucchini (raw)",          "category": "produce", "yield_factor": 0.85 },
+    "peppers-onions":  { "name": "Peppers & onions",        "category": "produce", "yield_factor": 0.85 },
+    "teriyaki-sauce":  { "name": "Teriyaki sauce",          "category": "pantry",  "yield_factor": 1.0 },
+    "fajita-seasoning":{ "name": "Fajita seasoning + oil",  "category": "pantry",  "yield_factor": 1.0 },
+    "marinara":        { "name": "Marinara / meat sauce",   "category": "pantry",  "yield_factor": 1.0 },
+    "cheese":          { "name": "Shredded cheese",         "category": "pantry",  "yield_factor": 1.0 }
+  },
+  "profiles": {
+    "_note": "Category-level multipliers on grams_cooked per goal×sex. maintain_male = 1.0 baseline. PLACEHOLDER — confirm with Marissa.",
+    "maintain_male":   { "protein": 1.00, "carb": 1.00, "fat": 1.00, "produce": 1.00, "pantry": 1.00 },
+    "maintain_female": { "protein": 0.85, "carb": 0.85, "fat": 0.85, "produce": 1.00, "pantry": 1.00 },
+    "cut_male":        { "protein": 1.05, "carb": 0.70, "fat": 0.80, "produce": 1.20, "pantry": 1.00 },
+    "cut_female":      { "protein": 0.90, "carb": 0.60, "fat": 0.70, "produce": 1.20, "pantry": 1.00 },
+    "build_male":      { "protein": 1.20, "carb": 1.30, "fat": 1.00, "produce": 1.00, "pantry": 1.00 },
+    "build_female":    { "protein": 1.00, "carb": 1.10, "fat": 0.90, "produce": 1.00, "pantry": 1.00 }
+  },
+  "recipes": {
+    "chicken-brotato": {
+      "names": ["Chicken Bro-Tato Bowl"],
+      "items": [
+        { "ingredient": "chicken-breast", "grams_cooked": 185 },
+        { "ingredient": "russet-potato", "grams_cooked": 150 },
+        { "ingredient": "broccoli", "grams_cooked": 90 }
+      ]
+    },
+    "beef-fajita": {
+      "names": ["Beef Fajita Bowl"],
+      "items": [
+        { "ingredient": "ground-beef-92", "grams_cooked": 150 },
+        { "ingredient": "jasmine-rice", "grams_cooked": 160 },
+        { "ingredient": "peppers-onions", "grams_cooked": 100 },
+        { "ingredient": "fajita-seasoning", "grams_cooked": 15 }
+      ]
+    },
+    "teriyaki-turkey": {
+      "names": ["Teriyaki Turkey Bowl"],
+      "items": [
+        { "ingredient": "ground-turkey", "grams_cooked": 150 },
+        { "ingredient": "jasmine-rice", "grams_cooked": 185 },
+        { "ingredient": "zucchini", "grams_cooked": 90 },
+        { "ingredient": "teriyaki-sauce", "grams_cooked": 30 }
+      ]
+    },
+    "chicken-broccoli-rice": {
+      "names": ["Chicken Broccoli & Rice"],
+      "items": [
+        { "ingredient": "chicken-breast", "grams_cooked": 190 },
+        { "ingredient": "jasmine-rice", "grams_cooked": 150 },
+        { "ingredient": "broccoli", "grams_cooked": 110 }
+      ]
+    },
+    "teriyaki-chicken": {
+      "names": ["Teriyaki Chicken Bowl"],
+      "items": [
+        { "ingredient": "chicken-breast", "grams_cooked": 185 },
+        { "ingredient": "jasmine-rice", "grams_cooked": 185 },
+        { "ingredient": "broccoli", "grams_cooked": 90 },
+        { "ingredient": "teriyaki-sauce", "grams_cooked": 30 }
+      ]
+    },
+    "beef-sweet-potato": {
+      "names": ["Beef Sweet Potato Bowl", "Ground Beef Sweet Potato Bowl"],
+      "items": [
+        { "ingredient": "ground-beef-92", "grams_cooked": 150 },
+        { "ingredient": "sweet-potato", "grams_cooked": 175 },
+        { "ingredient": "peppers-onions", "grams_cooked": 80 }
+      ]
+    },
+    "fiesta-chicken": {
+      "names": ["Fiesta Chicken"],
+      "items": [
+        { "ingredient": "chicken-breast", "grams_cooked": 150 },
+        { "ingredient": "jasmine-rice", "grams_cooked": 170 },
+        { "ingredient": "black-beans", "grams_cooked": 60 },
+        { "ingredient": "corn", "grams_cooked": 50 }
+      ]
+    },
+    "protein-ziti": {
+      "names": ["Protein Ziti Bake"],
+      "items": [
+        { "ingredient": "ground-beef-92", "grams_cooked": 130 },
+        { "ingredient": "protein-pasta", "grams_cooked": 160 },
+        { "ingredient": "zucchini", "grams_cooked": 70 },
+        { "ingredient": "marinara", "grams_cooked": 80 },
+        { "ingredient": "cheese", "grams_cooked": 25 }
+      ]
+    }
+  }
+}

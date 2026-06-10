@@ -16,6 +16,7 @@ import { one, run, nowIso } from '../_lib/db.js';
 import { hmacSign, constantTimeEqual } from '../_lib/crypto.js';
 import { ensureCustomer, mirrorSubscription, mirrorInvoice, mirrorPayment, audit } from '../_lib/mirror.js';
 import { notify } from '../_lib/notify.js';
+import { ownerNotify } from '../_lib/owner_notify.js';
 
 const SIG_TOLERANCE_SECONDS = 300; // reject events whose timestamp is >5 min skewed
 
@@ -77,6 +78,45 @@ async function dispatch(env, event) {
   // webhook, or Stripe would retry and re-mirror. Dedup keys are natural Stripe ids so the
   // invoice.paid / invoice.payment_succeeded twin events + retries all collapse to one send.
   await safeNotifyBilling(env, event);
+  // OWNER alerts (signup / payment failed / refund). NOT gated by BILLING_NOTIFY_ENABLED — that gate is
+  // for customer emails during cutover; the owners want to know about money events regardless.
+  await safeNotifyOwner(env, event);
+}
+
+async function safeNotifyOwner(env, event) {
+  try {
+    const obj = event.data?.object || {};
+    switch (event.type) {
+      case 'customer.subscription.created': {
+        const cust = await ensureCustomer(env, obj.customer);
+        const meals = (obj.metadata && obj.metadata.meals_per_week) || '?';
+        const who = cust ? (cust.first_name || cust.email) : (obj.customer || 'someone');
+        await ownerNotify(env, 'owner_new_signup', `New signup: ${who} — ${meals} meals/wk 🎉`,
+          { entity: cust ? `customer:${cust.id}` : 'system' });
+        break;
+      }
+      case 'invoice.payment_failed': {
+        const cust = await ensureCustomer(env, obj.customer);
+        const who = cust ? (cust.first_name || cust.email) : (obj.customer || 'someone');
+        const amt = ((obj.amount_due ?? obj.amount_remaining ?? 0) / 100).toFixed(2);
+        await ownerNotify(env, 'owner_payment_failed', `⚠️ Payment failed: ${who} — $${amt} (attempt ${obj.attempt_count || 1})`,
+          { entity: cust ? `customer:${cust.id}` : 'system' });
+        break;
+      }
+      case 'charge.refunded': {
+        const latest = obj.refunds && obj.refunds.data && obj.refunds.data[0];
+        const amount = latest ? latest.amount : (obj.amount_refunded || 0);
+        if (amount <= 0) break;
+        const cust = await ensureCustomer(env, obj.customer);
+        const who = cust ? (cust.first_name || cust.email) : (obj.customer || 'someone');
+        await ownerNotify(env, 'owner_refund', `Refund issued: ${who} — $${(amount / 100).toFixed(2)}`,
+          { entity: cust ? `customer:${cust.id}` : 'system' });
+        break;
+      }
+      default:
+        break;
+    }
+  } catch { /* owner alerts must never fail the webhook */ }
 }
 
 async function safeNotifyBilling(env, event) {

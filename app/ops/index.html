@@ -64,6 +64,7 @@
       <div class="tab" data-tab="kitchen">Kitchen prep</div>
       <div class="tab" data-tab="route">Route</div>
       <div class="tab" data-tab="customers">Customers</div>
+      <div class="tab" data-tab="activity">Activity</div>
     </div>
   </div>
 
@@ -132,6 +133,7 @@
         if (TAB==='kitchen') return renderKitchen();
         if (TAB==='route') return renderRoute();
         if (TAB==='customers') return renderCustomers();
+        if (TAB==='activity') return renderActivity();
       } catch(e){ if(String(e.message)!=='unauthorized') $('view').innerHTML = '<div class="loading">Something went wrong loading this view.</div>'; }
     }
 
@@ -226,6 +228,17 @@
          <div class="card"><h2>Subscriptions</h2><table><tbody>${(d.subscriptions||[]).map(s=>`<tr><td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td><td>${s.meals_per_week} meals</td><td>${s.coupon_code?esc(s.coupon_code):''}</td><td>${s.cancel_at_period_end?'cancels '+fmtDate(s.current_period_end):(s.current_period_end?'renews '+fmtDate(s.current_period_end):'')}</td></tr>`).join('')||'<tr><td class="stat-sub">none</td></tr>'}</tbody></table></div>
          <div class="card"><h2>Invoices</h2><table><thead><tr><th>Date</th><th>Status</th><th>Paid</th><th></th></tr></thead><tbody>${(d.invoices||[]).map(i=>`<tr><td>${fmtDate(i.created_at)}</td><td><span class="badge ${esc(i.status||'incomplete')}">${esc(i.status||'—')}</span></td><td>${money(i.status==='paid'?i.amount_paid_cents:i.amount_due_cents)}</td><td>${i.hosted_invoice_url?`<a href="${esc(i.hosted_invoice_url)}" target="_blank" rel="noopener" class="link">view</a>`:''}</td></tr>`).join('')||'<tr><td class="stat-sub">no invoices</td></tr>'}</tbody></table></div>`;
       $('backCust').onclick = renderCustomers;
+    }
+
+    async function renderActivity(){
+      const d = await adminGet('/api/admin/activity?limit=150');
+      $('weekLabel').textContent = 'Recent activity';
+      const fmtT = s => { try { return new Date(s).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); } catch(e){ return s; } };
+      const rows = (d.events||[]).map(e=>{
+        const desc = e.summary || (esc(e.action.replace(/_/g,' '))+' · '+esc(e.entity||''));
+        return `<div class="stop"><div class="nm">${esc(desc)}</div><div class="ad">${fmtT(e.at)} · ${esc(e.actor||'')}</div></div>`;
+      }).join('');
+      $('view').innerHTML = `<div class="card"><h2>Customer & system activity</h2>${rows||'<div class="stat-sub" style="padding:1rem 0;">No activity recorded yet. Customer pause/cancel/upgrade and signups/payments will appear here.</div>'}</div>`;
     }
 
     function boot(){

@@ -5,6 +5,7 @@ import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
 import { currentSub } from '../../_lib/account.js';
 import { notify } from '../../_lib/notify.js';
+import { ownerNotify } from '../../_lib/owner_notify.js';
 
 export async function onRequestPost(context) {
   const auth = await getSessionCustomer(context);
@@ -26,5 +27,6 @@ export async function onRequestPost(context) {
   const status = live?.status === 'active' ? 'active' : (live?.status || 'active');
   await run(env.DB, `UPDATE subscriptions SET status=?, paused_at=NULL, updated_at=? WHERE id=?`, status, now, sub.id);
   try { await notify(env, auth.customer, 'resumed'); } catch { /* non-fatal */ }
+  try { const c = auth.customer; await ownerNotify(env, 'owner_resumed', `${c.first_name || c.email} resumed their plan (${sub.meals_per_week} meals/wk)`, { entity: `customer:${c.id}` }); } catch { /* non-fatal */ }
   return ok({ status });
 }

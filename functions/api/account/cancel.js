@@ -6,6 +6,7 @@ import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
 import { currentSub } from '../../_lib/account.js';
 import { notify } from '../../_lib/notify.js';
+import { ownerNotify } from '../../_lib/owner_notify.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -28,5 +29,12 @@ export async function onRequestPost(context) {
   await run(env.DB, `UPDATE subscriptions SET cancel_at_period_end=?, current_period_end=?, updated_at=? WHERE id=?`,
     undo ? 0 : 1, end, now, sub.id);
   try { await notify(env, auth.customer, undo ? 'reactivated' : 'canceled', { ends: end }); } catch { /* non-fatal */ }
+  try {
+    const c = auth.customer;
+    await ownerNotify(env, undo ? 'owner_reactivated' : 'owner_canceled',
+      undo ? `${c.first_name || c.email} undid their cancellation (${sub.meals_per_week} meals/wk)`
+           : `${c.first_name || c.email} canceled — ${sub.meals_per_week} meals/wk, ends ${String(end).slice(0, 10)}`,
+      { entity: `customer:${c.id}` });
+  } catch { /* non-fatal */ }
   return ok({ cancel_at_period_end: !undo, ends: end });
 }

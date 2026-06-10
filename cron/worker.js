@@ -43,6 +43,10 @@ export default {
     } else if (event.cron === '0 8 * * 1') {
       // Monday 08:00 UTC — prune in-app feed rows older than 120 days (storage hygiene).
       ctx.waitUntil(hit(env, '/api/admin/prune-notifications'));
+    } else if (event.cron === '0 13 * * *') {
+      // Daily 13:00 UTC (~7am MDT / 6am MST) — owner morning digest + health probe. Emails the owners
+      // only if OWNER_NOTIFY_ENABLED=true; escalates an SMS if a health signal trips.
+      ctx.waitUntil(hit(env, '/api/admin/daily-digest'));
     }
   },
 };

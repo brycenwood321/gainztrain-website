@@ -13,6 +13,7 @@ import { currentSub, findItem } from '../../_lib/account.js';
 import { tierForMeals, ensureStripePrice, MIN_MEALS, MAX_MEALS } from '../../_lib/plans.js';
 import { orderableWeek, isLocked } from '../../_lib/menu.js';
 import { notify } from '../../_lib/notify.js';
+import { ownerNotify } from '../../_lib/owner_notify.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -61,5 +62,6 @@ export async function onRequestPost(context) {
     } catch { /* non-fatal */ }
   }
   try { await notify(env, auth.customer, 'tier_changed', { meals, perMealCents: tier.perMealCents, nextWeek: !!weekLocked }); } catch { /* non-fatal */ }
+  try { const c = auth.customer; await ownerNotify(env, 'owner_tier_changed', `${c.first_name || c.email} changed plan: ${sub.meals_per_week} → ${meals} meals/wk ($${(tier.perMealCents / 100).toFixed(2)}/meal)`, { entity: `customer:${c.id}` }); } catch { /* non-fatal */ }
   return ok({ meals, tier: tier.key, per_meal_cents: tier.perMealCents, effective: weekLocked ? 'next_week' : 'this_week' });
 }

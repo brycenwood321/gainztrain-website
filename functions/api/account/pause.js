@@ -6,6 +6,7 @@ import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
 import { currentSub } from '../../_lib/account.js';
 import { notify } from '../../_lib/notify.js';
+import { ownerNotify } from '../../_lib/owner_notify.js';
 
 export async function onRequestPost(context) {
   const auth = await getSessionCustomer(context);
@@ -24,5 +25,6 @@ export async function onRequestPost(context) {
   const now = nowIso();
   await run(env.DB, `UPDATE subscriptions SET status='paused', paused_at=?, updated_at=? WHERE id=?`, now, now, sub.id);
   try { await notify(env, auth.customer, 'paused'); } catch { /* non-fatal */ }
+  try { const c = auth.customer; await ownerNotify(env, 'owner_paused', `${c.first_name || c.email} paused their plan (${sub.meals_per_week} meals/wk)`, { entity: `customer:${c.id}` }); } catch { /* non-fatal */ }
   return ok({ status: 'paused' });
 }

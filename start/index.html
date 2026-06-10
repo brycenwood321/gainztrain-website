@@ -111,10 +111,14 @@
         <h2>Create your account</h2>
         <p class="lead">This is where you'll pick meals and manage your plan.</p>
         <div id="acctFields">
-          <label for="firstName">First name</label>
-          <input id="firstName" type="text" autocomplete="given-name" />
+          <div class="row2">
+            <div><label for="firstName">First name</label><input id="firstName" type="text" autocomplete="given-name" /></div>
+            <div><label for="lastName">Last name</label><input id="lastName" type="text" autocomplete="family-name" /></div>
+          </div>
           <label for="email">Email</label>
           <input id="email" type="email" autocomplete="email" />
+          <label for="phone">Phone</label>
+          <input id="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(801) 555-1234" />
           <label for="password">Password</label>
           <input id="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
         </div>
@@ -176,13 +180,16 @@
         }
         // account gate
         if(!loggedIn){
-          const email=$('email').value.trim(),password=$('password').value,firstName=$('firstName').value.trim();
+          const email=$('email').value.trim(),password=$('password').value,firstName=$('firstName').value.trim(),lastName=$('lastName').value.trim(),phone=$('phone').value.trim();
           if(!email||password.length<8){showMsg('Enter your email and a password of at least 8 characters.');btn.disabled=false;return;}
-          const reg=await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password,first_name:firstName})});
+          const reg=await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password,first_name:firstName,last_name:lastName,phone})});
           if(reg.status===409){
-            // returning customer — try logging them in with what they typed
+            // returning customer — try the password they typed; if that fails, email a login link.
             const log=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})});
-            if(log.status!==200){showMsg('You already have an account. Check your password, or log in at /app.');btn.disabled=false;return;}
+            if(log.status!==200){
+              await api('/api/auth/request-link',{method:'POST',body:JSON.stringify({email})});
+              showMsg('You already have an account. We just emailed you a login link — click it, then come back here and tap continue.');btn.disabled=false;return;
+            }
           }else if(reg.status!==200){showMsg(reg.body.detail||'Could not create your account. Try again.');btn.disabled=false;return;}
           loggedIn=true;
         }

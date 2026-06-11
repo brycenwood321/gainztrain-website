@@ -60,10 +60,11 @@
     $('week').value=defaultWeek();
 
     async function load(){
-      if(!TOKEN){TOKEN=prompt('Ops admin token:')||'';localStorage.setItem('gt_admin_token',TOKEN);}
       $('out').innerHTML='<div class="loading">Loading…</div>';
-      const r=await fetch('/api/admin/kitchen-prep?week_of='+$('week').value,{headers:{'X-Admin-Token':TOKEN}});
-      if(r.status===401){localStorage.removeItem('gt_admin_token');TOKEN='';$('out').innerHTML='<div class="loading">Bad token — reload and try again.</div>';return;}
+      // Staff session (credentials) OR token. Only prompt for a token if the session path 401s.
+      let r=await fetch('/api/admin/kitchen-prep?week_of='+$('week').value,{credentials:'same-origin',headers:TOKEN?{'X-Admin-Token':TOKEN}:{}});
+      if(r.status===401 && !TOKEN){TOKEN=prompt('Not logged in as staff. Enter ops admin token:')||'';if(TOKEN){localStorage.setItem('gt_admin_token',TOKEN);r=await fetch('/api/admin/kitchen-prep?week_of='+$('week').value,{credentials:'same-origin',headers:{'X-Admin-Token':TOKEN}});}}
+      if(r.status===401){localStorage.removeItem('gt_admin_token');TOKEN='';$('out').innerHTML='<div class="loading">Not authorized — log in at /app/ as staff, or reload and enter the token.</div>';return;}
       const d=await r.json().catch(()=>({}));
       const packing=(d&&d.packing)||[];
       if(!packing.length){$('out').innerHTML='<div class="loading">No locked orders for this week yet.</div>';return;}

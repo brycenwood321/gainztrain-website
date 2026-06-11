@@ -6,14 +6,14 @@
 //   packing[]  — per order: customer + profile tag + their meals×qty + macros (packing-day + labels source)
 //   unmatched / recipes_loaded — meals with no recipe (shopping/batches incomplete) + load status
 import { ok, fail } from '../../_lib/respond.js';
-import { requireAdmin } from '../../_lib/admin.js';
+import { requireStaffOrAdmin } from '../../_lib/admin.js';
 import { one, all } from '../../_lib/db.js';
 import { upcomingSunday } from '../../_lib/menu.js';
 import { loadRecipes, computeBatches, profileKey } from '../../_lib/recipes.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
-  const denied = await requireAdmin(context);
+  const denied = await requireStaffOrAdmin(context);
   if (denied) return denied;
 
   const week = new URL(request.url).searchParams.get('week_of') || upcomingSunday();

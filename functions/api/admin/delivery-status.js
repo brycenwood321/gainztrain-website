@@ -10,7 +10,7 @@
 //
 // Forward-only: a status may only advance, never regress. Notifications are deduped per (status, order).
 import { ok, fail } from '../../_lib/respond.js';
-import { requireAdmin } from '../../_lib/admin.js';
+import { requireStaffOrAdmin } from '../../_lib/admin.js';
 import { all, one, run, nowIso } from '../../_lib/db.js';
 import { upcomingSunday } from '../../_lib/menu.js';
 import { randomToken } from '../../_lib/crypto.js';
@@ -30,7 +30,7 @@ function nextStatus(method, cur) {
 
 // GET — read one order (by order_id) for the scan page: current status + who + the next step.
 export async function onRequestGet(context) {
-  const denied = await requireAdmin(context);
+  const denied = await requireStaffOrAdmin(context);
   if (denied) return denied;
   const orderId = new URL(context.request.url).searchParams.get('order_id') || '';
   if (!orderId) return fail(400, 'order_id_required', 'order_id is required.');
@@ -46,7 +46,7 @@ export async function onRequestGet(context) {
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const denied = await requireAdmin(context);
+  const denied = await requireStaffOrAdmin(context);
   if (denied) return denied;
 
   const u = new URL(request.url);

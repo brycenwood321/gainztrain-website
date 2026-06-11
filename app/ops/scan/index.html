@@ -44,13 +44,13 @@
     const ORDER=new URLSearchParams(location.search).get('o')||'';
 
     function msg(t,k){const m=$('msg');m.textContent=t;m.className='msg show '+(k||'ok');}
-    function admin(path,method){return fetch(path,{method:method||'GET',headers:{'X-Admin-Token':TOKEN}}).then(async r=>({status:r.status,body:await r.json().catch(()=>({}))}));}
+    // Staff session (credentials) OR token authorizes. Token box is the fallback for token-only access.
+    function admin(path,method){return fetch(path,{method:method||'GET',credentials:'same-origin',headers:TOKEN?{'X-Admin-Token':TOKEN}:{}}).then(async r=>({status:r.status,body:await r.json().catch(()=>({}))}));}
 
     $('tokGo').onclick=()=>{TOKEN=$('tok').value.trim();localStorage.setItem('gt_admin_token',TOKEN);$('gate').style.display='none';load();};
 
     async function load(){
       if(!ORDER){$('main').innerHTML='<div class="card">No order code in this QR. Scan a meal-bag label.</div>';return;}
-      if(!TOKEN){$('gate').style.display='block';return;}
       $('main').innerHTML='<div class="card">Loading…</div>';
       const r=await admin('/api/admin/delivery-status?order_id='+encodeURIComponent(ORDER));
       if(r.status===401){TOKEN='';localStorage.removeItem('gt_admin_token');$('gate').style.display='block';$('main').innerHTML='';return;}

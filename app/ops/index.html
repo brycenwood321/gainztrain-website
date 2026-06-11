@@ -73,7 +73,7 @@
     <!-- token gate -->
     <div id="gate" class="card gate hidden">
       <h2 style="font-size:1.2rem;margin-bottom:.5rem;">Ops access</h2>
-      <p class="stat-sub" style="margin-bottom:.8rem;">Enter the admin token to view operations.</p>
+      <p class="stat-sub" style="margin-bottom:.8rem;">Staff: <a href="/app/" style="color:var(--orange);font-weight:600;">log in to your account →</a>. Or enter the admin token below.</p>
       <input id="tok" type="password" placeholder="Admin token" style="width:100%;margin-bottom:.6rem;" />
       <button class="btn" id="tokGo" style="width:100%;">Enter</button>
       <div id="gateMsg" class="msg err"></div>
@@ -100,14 +100,15 @@
     let TAB = 'overview';
 
     function weekParam(){ const w = $('week').value; return w ? ('?week_of=' + w) : ''; }
+    // Send BOTH the staff session cookie (credentials) AND the token (if present). Either authorizes.
     async function adminGet(path){
-      const r = await fetch(path, { headers: { 'X-Admin-Token': TOKEN } });
-      if (r.status === 401){ gate('Token rejected. Try again.'); throw new Error('unauthorized'); }
+      const r = await fetch(path, { credentials:'same-origin', headers: TOKEN?{ 'X-Admin-Token': TOKEN }:{} });
+      if (r.status === 401){ gate(TOKEN?'Token rejected. Try again.':null); throw new Error('unauthorized'); }
       return r.json().catch(()=>({}));
     }
     async function adminPost(path){
-      const r = await fetch(path, { method:'POST', headers: { 'X-Admin-Token': TOKEN } });
-      if (r.status === 401){ gate('Token rejected.'); throw new Error('unauthorized'); }
+      const r = await fetch(path, { method:'POST', credentials:'same-origin', headers: TOKEN?{ 'X-Admin-Token': TOKEN }:{} });
+      if (r.status === 401){ gate(TOKEN?'Token rejected.':null); throw new Error('unauthorized'); }
       return r.json().catch(()=>({}));
     }
     function msg(t,k){ const m=$('msg'); m.textContent=t; m.className='msg show '+(k||'ok'); setTimeout(()=>m.className='msg',3500); }
@@ -293,8 +294,9 @@
       render();
     }
 
-    // start
-    if (!TOKEN) gate(); else { $('main').classList.remove('hidden'); boot(); }
+    // start: try the staff session cookie OR a saved token. The first unauthorized request shows the
+    // gate (with a "log in" link for staff + the token box as fallback).
+    $('main').classList.remove('hidden'); boot();
   </script>
 </body>
 </html>

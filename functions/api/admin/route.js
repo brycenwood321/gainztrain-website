@@ -2,7 +2,7 @@
 // with its address, grouped by zone (nearest-first), with the per-stop meal count + live delivery
 // status. Admin-gated. This is the driver's list / the delivery location map source.
 import { ok, fail } from '../../_lib/respond.js';
-import { requireAdmin } from '../../_lib/admin.js';
+import { requireStaffOrAdmin } from '../../_lib/admin.js';
 import { all } from '../../_lib/db.js';
 import { upcomingSunday } from '../../_lib/menu.js';
 
@@ -39,7 +39,7 @@ function mapsUrl(ordered) {
 
 export async function onRequestGet(context) {
   const { request, env } = context;
-  const denied = await requireAdmin(context);
+  const denied = await requireStaffOrAdmin(context);
   if (denied) return denied;
 
   const week = new URL(request.url).searchParams.get('week_of') || upcomingSunday();

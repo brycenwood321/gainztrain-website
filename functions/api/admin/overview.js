@@ -2,7 +2,7 @@
 // One round of cheap aggregates: subscription mix, this week's locked production, delivery/pickup split,
 // weekly recurring meal revenue, 30-day paid revenue, and two health signals (failed comms, stuck webhooks).
 import { ok, fail } from '../../_lib/respond.js';
-import { requireAdmin } from '../../_lib/admin.js';
+import { requireStaffOrAdmin } from '../../_lib/admin.js';
 import { one, all, addDaysIso } from '../../_lib/db.js';
 import { upcomingSunday } from '../../_lib/menu.js';
 
@@ -11,7 +11,7 @@ const BILLING = ['active', 'trialing'];            // revenue set — past_due i
 
 export async function onRequestGet(context) {
   const { request, env } = context;
-  const denied = await requireAdmin(context);
+  const denied = await requireStaffOrAdmin(context);
   if (denied) return denied;
 
   const week = new URL(request.url).searchParams.get('week_of') || upcomingSunday();

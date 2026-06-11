@@ -2,14 +2,14 @@
 // orders: raw purchase quantities per ingredient, grouped by category, profile-adjusted (goal×sex),
 // with an over-buy buffer. Admin-gated. Reads recipes from data/recipes.json (no D1 table).
 import { ok, fail } from '../../_lib/respond.js';
-import { requireAdmin } from '../../_lib/admin.js';
+import { requireStaffOrAdmin } from '../../_lib/admin.js';
 import { one, all } from '../../_lib/db.js';
 import { upcomingSunday } from '../../_lib/menu.js';
 import { loadRecipes, computeShoppingList } from '../../_lib/recipes.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
-  const denied = await requireAdmin(context);
+  const denied = await requireStaffOrAdmin(context);
   if (denied) return denied;
 
   const u = new URL(request.url);

@@ -214,7 +214,7 @@
     $('forgotPw').addEventListener('click', () => {
       const e = $('email').value.trim(); if (e) $('linkEmail').value = e;
       selectTab('link');
-      showMsg('Enter your email and we\'ll send you a link to log in.', 'info');
+      showMsg('Enter your email and we\'ll send you a link to log in. Check your spam/junk folder if you don\'t see it.', 'info');
     });
 
     function toggleMode(){
@@ -254,7 +254,7 @@
       clearMsg();
       const email = $('linkEmail').value.trim();
       const { body } = await api('/api/auth/request-link', { method:'POST', body: JSON.stringify({ email }) });
-      showMsg(body.message || 'If that email is on file, a login link is on its way.', 'ok');
+      showMsg((body.message || 'If that email is on file, a login link is on its way.') + ' Check your spam/junk folder and mark it "Not spam" so it lands in your inbox.', 'ok');
       if (body.dev_magic_link) {
         const m=$('loginMsg'); m.innerHTML += `<br><br><strong>Dev link:</strong> <a href="${body.dev_magic_link}">${body.dev_magic_link}</a>`;
       }

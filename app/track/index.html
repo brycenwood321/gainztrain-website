@@ -84,9 +84,9 @@
           + `<div><div class="lbl">${s.lbl}</div>${meta?`<div class="meta">${meta}</div>`:''}</div></div>`;
       }).join('');
       const done = o.status === 'delivered' || o.status === 'picked_up';
-      $('summary').textContent = unknown ? "Your order is being handled — we'll email you with updates."
+      $('summary').textContent = unknown ? "Your order is being handled — we'll email you with updates (check your spam folder)."
         : done ? 'All done — enjoy your meals! 💪'
-        : (o.method === 'delivery' ? "We'll text + email you when your meals are on the way." : "We'll let you know the moment they're ready.");
+        : (o.method === 'delivery' ? "We'll text + email you when your meals are on the way (check your spam folder for the email)." : "We'll let you know the moment they're ready.");
       $('loading').style.display = 'none';
       $('content').style.display = 'block';
     }

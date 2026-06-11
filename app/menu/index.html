@@ -140,7 +140,7 @@
       }
       if(!body.has_menu||!body.meals||!body.meals.length){
         $('empty').classList.remove('hidden');
-        $('empty').innerHTML='Next week\'s menu isn\'t posted yet — check back soon. We\'ll text and email you when it\'s ready to pick.';
+        $('empty').innerHTML='Next week\'s menu isn\'t posted yet — check back soon. We\'ll text and email you when it\'s ready to pick (check your spam folder so you don\'t miss the email).';
         return;
       }
       MENU=body.meals;MENU_WEEK=body.week_of;need=body.meals_per_week;locked=body.locked;

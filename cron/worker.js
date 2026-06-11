@@ -40,13 +40,15 @@ export default {
       // Saturday 06:30 UTC — after the Friday 11pm Mountain cutoff (Sat 05:00Z MDT / 06:00Z MST) —
       // lock complete orders + auto-fill anyone who didn't pick.
       ctx.waitUntil(hit(env, '/api/admin/lock-week'));
-    } else if (event.cron === '0 8 * * 1') {
-      // Monday 08:00 UTC — prune in-app feed rows older than 120 days (storage hygiene).
-      ctx.waitUntil(hit(env, '/api/admin/prune-notifications'));
     } else if (event.cron === '0 13 * * *') {
       // Daily 13:00 UTC (~7am MDT / 6am MST) — owner morning digest + health probe. Emails the owners
       // only if OWNER_NOTIFY_ENABLED=true; escalates an SMS if a health signal trips.
       ctx.waitUntil(hit(env, '/api/admin/daily-digest'));
+      // Monday-only: also prune the in-app feed (>120d). Folded into this daily trigger to stay within
+      // the account's 5-cron-trigger limit (was its own '0 8 * * 1' before).
+      if (new Date(event.scheduledTime).getUTCDay() === 1) {
+        ctx.waitUntil(hit(env, '/api/admin/prune-notifications'));
+      }
     }
   },
 };

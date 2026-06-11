@@ -35,9 +35,20 @@ export async function onRequestPost(context) {
   // a free-forever sub. The code IS the Stripe coupon id; we apply it directly to the Checkout Session.
   const code = str(body.code).trim().toUpperCase();
   if (code) {
-    const c = await one(env.DB, `SELECT code, is_public, expires_at FROM coupons WHERE code = ?`, code);
+    const c = await one(env.DB, `SELECT code, is_public, expires_at, cap FROM coupons WHERE code = ?`, code);
     if (!c || !c.is_public) return fail(400, 'invalid_code', "That promo code isn't valid.");
     if (c.expires_at && new Date(c.expires_at) < new Date()) return fail(400, 'code_expired', 'That promo code has expired.');
+    // Enforce the redemption CAP via Stripe's own counter (the code IS the Stripe coupon id). This bounds
+    // a public forever-discount (e.g. FAMFRIENDS15, cap 25) to its intended number of redemptions even if
+    // the Stripe coupon was created without a native max_redemptions. Soft-fail if Stripe is unreachable
+    // so a transient outage never blocks a legit checkout — Stripe still enforces any native max itself.
+    try {
+      const sc = await stripe(env, 'GET', `coupons/${encodeURIComponent(code)}`);
+      if (sc && sc.valid === false) return fail(400, 'code_maxed', 'That promo code is no longer available.');
+      if (c.cap && sc && typeof sc.times_redeemed === 'number' && sc.times_redeemed >= c.cap) {
+        return fail(400, 'code_maxed', 'That promo code has reached its limit.');
+      }
+    } catch { /* Stripe unreachable — proceed; Stripe enforces any native max at checkout */ }
   }
 
   const deliveryMethod = str(body.delivery_method) === 'delivery' ? 'delivery' : 'pickup';
@@ -116,9 +127,10 @@ export async function onRequestPost(context) {
       success_url: `${base}/app/menu/?checkout=success`,
       cancel_url: `${base}/start/?checkout=cancel`,
     };
-    // A validated code applies its coupon directly; otherwise let Stripe accept promotion codes.
+    // A validated code applies its coupon directly. We deliberately DON'T enable Stripe's hosted
+    // promotion-code box — every code must go through our /start form so the is_public + cap gate can't
+    // be bypassed by typing a non-public code (e.g. OWNERS100) on Stripe's checkout page.
     if (code) sessionParams.discounts = [{ coupon: code }];
-    else sessionParams.allow_promotion_codes = true;
 
     const session = await stripe(env, 'POST', 'checkout/sessions', sessionParams,
       `gt_checkout_${customer.id}_${meals}_${deliveryMethod}_${zone}_${code}`);

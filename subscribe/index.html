@@ -247,6 +247,13 @@
       transform: translateY(-6px);
     }
     .tier-card.calc-dimmed { opacity: .45; transform: none; }
+
+    /* ── OBJECTION STRIP ── */
+    .objgrid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-md); max-width: 900px; margin: var(--gap-lg) auto 0; }
+    .objcard { background: var(--surface-light); border: 1px solid var(--surface-dark); border-radius: var(--radius-lg); padding: var(--gap-md); }
+    .objcard h4 { margin-bottom: .4rem; }
+    .objcard p { font-size: .92rem; margin: 0; }
+    @media (max-width: 600px) { .objgrid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -533,6 +540,8 @@
 
       </div>
 
+      <p style="text-align:center;font-family:var(--font-head);font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-size:.95rem;margin-top:var(--gap-md);">&#10003; Cancel anytime &nbsp;&bull;&nbsp; &#10003; Love week one or we make it right &nbsp;&bull;&nbsp; &#10003; Pickup free in Orem</p>
+
       <!-- SPECIALTY NOTE -->
       <div class="specialty-note fade-up">
         <p>Some specialty proteins (like <strong>steak or premium beef cuts</strong>) include a small $1.50 upcharge, billed separately. All base plan pricing is shown above.</p>
@@ -548,6 +557,34 @@
         </div>
       </div>
 
+    </div>
+  </section>
+
+  <!-- COMMON QUESTIONS (objection handling) -->
+  <section style="background:var(--white);">
+    <div class="container">
+      <div class="section-header" style="text-align:center;">
+        <div class="section-label" style="justify-content:center;">Still Deciding?</div>
+        <h2>The Honest <span class="highlight">Answers</span></h2>
+      </div>
+      <div class="objgrid">
+        <div class="objcard fade-up">
+          <h4>Will it actually taste good?</h4>
+          <p>Real ingredients, cooked fresh Saturday &mdash; never frozen, never shipped. Chicken Bro-Tato, Beef Fajita, Teriyaki Turkey, and a menu that rotates so you don't get bored.</p>
+        </div>
+        <div class="objcard fade-up">
+          <h4>Worth it vs. cooking myself?</h4>
+          <p>At $8.50&ndash;$10.50 a meal you skip the shopping, prep, and cleanup &mdash; and hit your protein without thinking. The time back is worth it on its own.</p>
+        </div>
+        <div class="objcard fade-up">
+          <h4>What if I miss Sunday pickup?</h4>
+          <p>Just text us &mdash; we'll work it out. Pickup is a 2&ndash;3 hour Sunday window and you get the exact time the day before.</p>
+        </div>
+        <div class="objcard fade-up">
+          <h4>Am I locked in?</h4>
+          <p>No contracts. Pause or cancel anytime from your account. Cancel before your next cycle and you're not charged again.</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -567,7 +604,7 @@
         <div class="step-item fade-up">
           <div class="step-number">2</div>
           <p class="step-title">Choose Meals Weekly</p>
-          <p class="step-desc">Each week, pick from the rotating menu at gainztrainprep.com/menu before Friday cutoff.</p>
+          <p class="step-desc">Each week, pick from the rotating menu at gainztrainprep.com/menu before the Friday 11:59&nbsp;pm MT cutoff.</p>
         </div>
         <div class="step-item fade-up">
           <div class="step-number">3</div>

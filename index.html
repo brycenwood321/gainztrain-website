@@ -922,6 +922,89 @@
     .fade-up:nth-child(2) { transition-delay: 0.08s; }
     .fade-up:nth-child(3) { transition-delay: 0.16s; }
     .fade-up:nth-child(4) { transition-delay: 0.24s; }
+
+    /* ── HERO NOTE (price + urgency) ── */
+    .hero-note {
+      font-family: var(--font-head);
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: rgba(255,255,255,0.7);
+      margin-top: 1.1rem;
+      opacity: 0;
+      animation: fadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.7s forwards;
+    }
+    .hero-note strong { color: #ffffff; }
+
+    /* ── PRICING SNAPSHOT ── */
+    .pricing-snap-section { padding: var(--gap-xl) 0; background: var(--white); }
+    .pricing-snap {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--gap-sm);
+      margin-top: var(--gap-lg);
+    }
+    .psnap-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 0.4rem;
+      padding: var(--gap-lg) var(--gap-md);
+      background: var(--surface-light);
+      border: 2px solid var(--surface-dark);
+      border-radius: var(--radius-lg);
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .psnap-card:hover { transform: translateY(-4px); border-color: var(--orange); }
+    .psnap-pop { border-color: var(--orange); }
+    .psnap-tag {
+      position: absolute;
+      top: -0.8rem; left: 50%;
+      transform: translateX(-50%);
+      background: var(--orange);
+      color: #ffffff;
+      font-family: var(--font-head);
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 0.3rem 0.7rem;
+      border-radius: 1rem;
+      white-space: nowrap;
+    }
+    .psnap-name {
+      font-family: var(--font-head);
+      font-weight: 800;
+      font-size: 1.1rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--black);
+    }
+    .psnap-price {
+      font-family: var(--font-head);
+      font-weight: 900;
+      font-size: 3rem;
+      line-height: 1;
+      color: var(--orange);
+    }
+    .psnap-price small { font-size: 1rem; color: var(--text-muted); font-weight: 700; }
+    .psnap-meta { font-size: 0.85rem; color: var(--text-muted); }
+    @media (max-width: 768px) { .pricing-snap { grid-template-columns: 1fr; } }
+
+    /* ── PROOF STRIP ── */
+    .proof-strip {
+      font-family: var(--font-head);
+      font-size: clamp(1.1rem, 2vw, 1.5rem);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      text-align: center;
+      margin: 0;
+    }
+    .proof-strip strong { color: var(--orange); }
   </style>
 </head>
 <body>
@@ -972,9 +1055,10 @@
         <h1>Eat Like<br>You <span class="highlight">Train.</span></h1>
         <p class="hero-sub">130+ fresh meals prepped every week for people who actually show up. Hit your protein. Skip the cooking. Stay consistent.</p>
         <div class="hero-actions">
-          <a href="/subscribe/" class="btn btn-primary btn-pulse">See Plans &rarr;</a>
+          <a href="/subscribe/" class="btn btn-primary btn-pulse">Build My Plan &rarr;</a>
           <a href="/menu/" target="_blank" rel="noopener" class="btn btn-outline">This Week's Menu</a>
         </div>
+        <p class="hero-note">Plans from <strong>$63/week</strong> &bull; Cancel anytime &bull; Order by Friday, eat this Sunday</p>
       </div>
       <div class="hero-right">
         <div class="hero-stat">
@@ -1061,7 +1145,45 @@
     </div>
   </section>
 
+  <!-- PRICING SNAPSHOT -->
+  <section class="pricing-snap-section">
+    <div class="container">
+      <div class="section-header fade-up" style="text-align:center;">
+        <div class="section-label" style="justify-content:center;display:inline-flex;align-items:center;gap:.75rem;font-family:var(--font-head);font-size:.8rem;font-weight:800;letter-spacing:.25em;text-transform:uppercase;color:var(--orange);margin-bottom:var(--gap-sm);"><span style="display:block;width:24px;height:2px;background:var(--orange);"></span>Simple Pricing</div>
+        <h2>Three Plans. <span class="highlight">No Contracts.</span></h2>
+        <p>The more meals, the lower the per-meal price. Cancel anytime.</p>
+      </div>
+      <div class="pricing-snap">
+        <a href="/subscribe/" class="psnap-card fade-up">
+          <span class="psnap-name">Starter</span>
+          <span class="psnap-price">$63<small>/wk</small></span>
+          <span class="psnap-meta">6&ndash;9 meals &bull; $10.50/meal</span>
+        </a>
+        <a href="/subscribe/" class="psnap-card psnap-pop fade-up">
+          <span class="psnap-tag">Most Popular</span>
+          <span class="psnap-name">Athlete</span>
+          <span class="psnap-price">$95<small>/wk</small></span>
+          <span class="psnap-meta">10&ndash;13 meals &bull; $9.50/meal</span>
+        </a>
+        <a href="/subscribe/" class="psnap-card fade-up">
+          <span class="psnap-name">Elite</span>
+          <span class="psnap-price">$119<small>/wk</small></span>
+          <span class="psnap-meta">14&ndash;16 meals &bull; $8.50/meal</span>
+        </a>
+      </div>
+      <p style="text-align:center;color:var(--text-muted);font-size:.85rem;margin-top:var(--gap-md);">Pickup free at our Orem kitchen &bull; Sunday delivery $10&ndash;$25/wk by zip</p>
+    </div>
+  </section>
+
+  <!-- SOCIAL PROOF STRIP -->
+  <section style="background:var(--surface-light);padding:var(--gap-lg) 0 0;">
+    <div class="container">
+      <p class="proof-strip fade-up">Fueling <strong>130+</strong> Utah lifters every week &mdash; here's one of them.</p>
+    </div>
+  </section>
+
   <!-- FEATURED QUOTE -->
+  <!-- TODO(Brycen): drop additional real customer quotes here as more quote blocks or a testimonial grid. Keep them real. -->
   <section class="quote-section">
     <div class="quote-bg-mark">&ldquo;</div>
     <div class="quote-inner">
@@ -1182,7 +1304,7 @@
           <span class="step-ghost-num">2</span>
           <span class="step-ed-num">Step 02</span>
           <h4>Choose Your Meals</h4>
-          <p>Every week, browse the rotating menu at gainztrainprep.com/menu and lock in your picks before Friday cutoff.</p>
+          <p>Every week, browse the rotating menu at gainztrainprep.com/menu and lock in your picks before the <strong>Friday 11:59&nbsp;pm MT</strong> cutoff.</p>
         </div>
         <div class="step-ed fade-up">
           <span class="step-ghost-num">3</span>
@@ -1237,9 +1359,9 @@
     <div class="container">
       <div class="section-label">Ready to Board?</div>
       <h2>Stop Guessing.<br>Start <span style="color:rgba(255,255,255,0.5);">Fueling.</span></h2>
-      <p>Pick your plan, choose your meals, and show up to Sunday pickup ready to win your week.</p>
+      <p>Order by Friday, eat by Sunday &mdash; your first pickup could be this weekend. Cancel anytime.</p>
       <div class="cta-actions">
-        <a href="/subscribe/" class="btn btn-primary btn-pulse">See All Plans &rarr;</a>
+        <a href="/subscribe/" class="btn btn-primary btn-pulse">Build My Plan &rarr;</a>
         <a href="/how-it-works/" class="btn btn-outline">How It Works</a>
       </div>
     </div>

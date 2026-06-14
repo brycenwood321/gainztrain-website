@@ -65,6 +65,7 @@
         <div class="wk" id="weekLine"></div>
       </div>
       <div id="lockBanner" class="banner hidden"></div>
+      <div id="openBanner" class="banner hidden"></div>
       <div id="meals"></div>
     </div>
   </div>
@@ -147,7 +148,8 @@
       (body.selections||[]).forEach(s=>{qty[s.meal_position]=s.qty;});
       const d=new Date(body.week_of+'T00:00:00Z');
       $('weekLine').textContent=`Week of ${d.toLocaleDateString('en-US',{month:'long',day:'numeric',timeZone:'UTC'})} · choose ${need} meals`;
-      if(locked){$('lockBanner').classList.remove('hidden');$('lockBanner').textContent='Ordering for this week has closed (Friday cutoff). These are your locked-in meals.';}
+      if(locked){$('lockBanner').classList.remove('hidden');$('lockBanner').textContent='Ordering for this week has closed (Friday 11:59 pm MT cutoff). These are your locked-in meals.';}
+      else{$('openBanner').classList.remove('hidden');$('openBanner').textContent='Pick by Friday 11:59 pm MT — after that we lock your order and prep Saturday.';}
       $('app').classList.remove('hidden');$('bar').classList.remove('hidden');
       renderMeals();refresh();
     })();

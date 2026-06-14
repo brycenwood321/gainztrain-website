@@ -52,6 +52,9 @@
     .msg{margin-top:1rem;padding:.75rem .9rem;border-radius:10px;font-size:.9rem;display:none;}
     .msg.show{display:block;}.msg.err{background:#fef2f2;color:var(--red);border:1px solid #fecaca;}
     .msg.info{background:var(--mid);color:var(--gray);border:1px solid var(--line);}
+    .zipmsg{font-size:.85rem;margin-top:.5rem;}
+    .zipmsg.ok{color:var(--green);font-weight:600;}
+    .zipmsg.bad{color:var(--red);font-weight:600;}
     .loggedin{font-size:.9rem;color:var(--gray);background:var(--mid);border-radius:10px;padding:.7rem .9rem;}
     /* sticky CTA */
     .cta{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:.9rem 1.25rem;box-shadow:0 -4px 16px rgba(0,0,0,.05);}
@@ -98,6 +101,7 @@
         <label for="zip">Your zip code</label>
         <input id="zip" type="text" inputmode="numeric" maxlength="5" autocomplete="postal-code" placeholder="84601" />
         <p class="note">We'll confirm we serve your area before checkout. Delivery fee (if any) is added based on your zip.</p>
+        <div id="zipMsg" class="zipmsg"></div>
         <div id="addrFields" class="hidden">
           <label for="address">Street address</label>
           <input id="address" type="text" autocomplete="street-address" placeholder="123 Center St" />
@@ -129,6 +133,8 @@
         <div id="loggedInBox" class="loggedin hidden"></div>
         <label for="code" style="margin-top:1rem;">Promo code (optional)</label>
         <input id="code" type="text" autocapitalize="characters" placeholder="e.g. FOUNDER25" />
+        <div id="codeMsg" class="zipmsg"></div>
+        <p class="note" style="margin-top:.85rem;">🔒 This is a <b>weekly subscription</b> — billed each week, pause or cancel anytime. <b>Love your first week or we make it right.</b></p>
         <div id="msg" class="msg"></div>
       </div>
     </div>
@@ -145,7 +151,7 @@
     const $=id=>document.getElementById(id);
     const api=(p,o={})=>fetch(p,{credentials:'same-origin',headers:{'Content-Type':'application/json'},...o}).then(async r=>({status:r.status,body:await r.json().catch(()=>({}))}));
     const money=c=>'$'+(c/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-    let PLANS=[],MIN=6,MAX=16,meals=9,method='pickup',loggedIn=false,returning=false;
+    let PLANS=[],MIN=6,MAX=16,meals=9,method='pickup',loggedIn=false,returning=false,deliveryFeeCents=0,deliveryServed=null;
 
     // Cart persistence: a magic-link login opens a NEW tab (so sessionStorage is empty there) — keep the
     // half-filled cart in localStorage with a 24h TTL so a returning customer never loses their progress.
@@ -170,9 +176,10 @@
       $('minus').disabled=meals<=MIN;$('plus').disabled=meals>=MAX;
       // bands
       $('bands').innerHTML=PLANS.map(p=>`<div class="band ${t&&p.name===t.name?'active':''}"><b>${p.name}</b>${p.min}-${p.max} · ${money(p.per_meal_cents)}</div>`).join('');
-      // cta
-      $('ctaTotal').textContent=money(total)+'/wk';
-      $('ctaSub').textContent=`${meals} meals · ${method}`;
+      // cta — fold in the delivery fee so the sticky total matches what Stripe will charge
+      const delivery=(method==='delivery'&&deliveryFeeCents>0)?deliveryFeeCents:0;
+      $('ctaTotal').textContent=money(total+delivery)+'/wk';
+      $('ctaSub').textContent=(delivery>0)?`${meals} meals + ${money(delivery)} delivery`:`${meals} meals · ${method}`;
       saveCart();
     }
     function showMsg(t,k='err'){const m=$('msg');m.textContent=t;m.className='msg show '+k;}
@@ -185,7 +192,32 @@
     $('plus').onclick=()=>{if(meals<MAX){meals++;render();}};
     $('optPickup').onclick=()=>setMethod('pickup');
     $('optDelivery').onclick=()=>setMethod('delivery');
-    function setMethod(m){method=m;$('optPickup').classList.toggle('sel',m==='pickup');$('optDelivery').classList.toggle('sel',m==='delivery');$('addrFields').classList.toggle('hidden',m!=='delivery');render();}
+    function setMethod(m){method=m;$('optPickup').classList.toggle('sel',m==='pickup');$('optDelivery').classList.toggle('sel',m==='delivery');$('addrFields').classList.toggle('hidden',m!=='delivery');render();if((($('zip').value)||'').replace(/[^0-9]/g,'').length===5)quoteZip();}
+
+    // Check the zip against our service area on blur: confirm we serve it (no more late, misleading
+    // "enter your zip" rejection) and surface the delivery fee NOW so the total never surprises at Stripe.
+    async function quoteZip(){
+      const zip=($('zip').value||'').replace(/[^0-9]/g,'').slice(0,5);const el=$('zipMsg');
+      if(zip.length!==5){el.className='zipmsg';el.textContent='';deliveryServed=null;deliveryFeeCents=0;render();return;}
+      try{const r=await api('/api/delivery-quote?zip='+zip);
+        if(r.status===200&&r.body.served===true){deliveryServed=true;deliveryFeeCents=r.body.fee_cents||0;el.className='zipmsg ok';
+          el.textContent=method==='delivery'?`✓ ${r.body.zone_name} — delivery ${money(deliveryFeeCents)}/wk (added to your total).`:'✓ We serve your area — free pickup at our Orem kitchen.';}
+        else if(r.status===200&&r.body.served===false){deliveryServed=false;deliveryFeeCents=0;el.className='zipmsg bad';el.textContent="Sorry — we don't serve your area yet. Gainz Train is Utah-only for now.";}
+        else{deliveryServed=null;deliveryFeeCents=0;el.className='zipmsg';el.textContent='';}
+      }catch(e){deliveryServed=null;el.className='zipmsg';el.textContent='';}
+      render();
+    }
+    $('zip').addEventListener('blur',quoteZip);
+    // Live promo-code feedback (display only; checkout does the authoritative enforcement).
+    $('code').addEventListener('blur',async()=>{
+      const code=($('code').value||'').trim().toUpperCase();const el=$('codeMsg');
+      if(!code){el.className='zipmsg';el.textContent='';return;}
+      try{const r=await api('/api/coupons/validate?code='+encodeURIComponent(code));
+        if(r.status===200&&r.body.valid===true){el.className='zipmsg ok';el.textContent=r.body.percent_off?`✓ ${r.body.percent_off}% off applied at checkout.`:'✓ Code applied at checkout.';}
+        else if(r.status===200&&r.body.valid===false){el.className='zipmsg bad';el.textContent=(r.body.reason==='expired')?'That code has expired.':"That code isn't valid.";}
+        else{el.className='zipmsg';el.textContent='';}
+      }catch(e){el.className='zipmsg';el.textContent='';}
+    });
 
     // Returning-customer pre-check: on email blur, if an account already exists, flip Step 3 into a
     // friendly "welcome back, log in" mode BEFORE they fill out name/phone + a new password and hit a
@@ -222,33 +254,36 @@
 
     $('continueBtn').onclick=async()=>{
       clearMsg();
-      const btn=$('continueBtn');btn.disabled=true;
+      const btn=$('continueBtn');
+      const reset=()=>{btn.disabled=!1;btn.textContent='Continue to payment →';};
+      btn.disabled=true;btn.textContent='Processing…';
       try{
         // Service-area gate: every signup needs a served zip (pickup OR delivery).
         let address='',city='',zip=$('zip').value.replace(/[^0-9]/g,'').slice(0,5);
-        if(zip.length!==5){showMsg('Enter your 5-digit zip so we can check we serve your area.');btn.disabled=false;return;}
+        if(zip.length!==5){showMsg('Enter your 5-digit zip so we can check we serve your area.');reset();return;}
+        if(deliveryServed===false){showMsg("We don't serve that zip yet — Gainz Train is Utah-only for now.");reset();return;}
         if(method==='delivery'){
           address=$('address').value.trim();city=$('city').value.trim();
-          if(!address){showMsg('Enter your delivery address.');btn.disabled=false;return;}
+          if(!address){showMsg('Enter your delivery address.');reset();return;}
         }
         // account gate
         if(!loggedIn){
           const email=$('email').value.trim(),password=$('password').value,firstName=$('firstName').value.trim(),lastName=$('lastName').value.trim(),phone=$('phone').value.trim();
-          if(!email||!email.includes('@')){showMsg('Enter your email.');btn.disabled=false;return;}
+          if(!email||!email.includes('@')){showMsg('Enter your email.');reset();return;}
           // Magic-link emails currently land in spam, so PASSWORD is the primary path; we never auto-send
           // a link that dead-ends the cart in a new tab — we offer it only as an explicit fallback.
           if(returning){
             // Known account (pre-checked on email blur) — log in directly, skip a guaranteed-409 register.
-            if(!password){showMsg('Enter your account password to continue.');btn.disabled=false;return;}
+            if(!password){showMsg('Enter your account password to continue.');reset();return;}
             const log=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})});
             if(log.status!==200){
               showMsgHtml('That password didn\'t match. Try again, or <a id="sendLink" style="cursor:pointer;text-decoration:underline">email me a login link</a>.');
               const sl=$('sendLink');if(sl)sl.onclick=async()=>{await api('/api/auth/request-link',{method:'POST',body:JSON.stringify({email})});
                 showMsg('Login link sent. Check spam/junk and mark "Not spam", open it, then come back — your cart is saved — and tap Continue.','info');};
-              btn.disabled=false;return;
+              reset();return;
             }
           }else{
-            if(password.length<8){showMsg('Choose a password of at least 8 characters.');btn.disabled=false;return;}
+            if(password.length<8){showMsg('Choose a password of at least 8 characters.');reset();return;}
             const reg=await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password,first_name:firstName,last_name:lastName,phone})});
             if(reg.status===409){
               // Slipped past the blur pre-check (e.g. paste + immediate tap) — try the typed password and
@@ -260,9 +295,9 @@
                   '<a id="sendLink" style="cursor:pointer;text-decoration:underline">Forgot it? Email me a login link</a>');
                 const sl=$('sendLink');if(sl)sl.onclick=async()=>{await api('/api/auth/request-link',{method:'POST',body:JSON.stringify({email})});
                   showMsg('Login link sent. Check spam/junk and mark "Not spam", open it, then come back to this tab — your cart is saved — and tap Continue.','info');};
-                btn.disabled=false;return;
+                reset();return;
               }
-            }else if(reg.status!==200){showMsg(reg.body.detail||'Could not create your account. Try again.');btn.disabled=false;return;}
+            }else if(reg.status!==200){showMsg(reg.body.detail||'Could not create your account. Try again.');reset();return;}
           }
           loggedIn=true;
         }
@@ -270,8 +305,8 @@
         const code=($('code').value||'').trim().toUpperCase();
         const co=await api('/api/checkout/create',{method:'POST',body:JSON.stringify({meals,delivery_method:method,address,city,zip,code})});
         if(co.status===200&&co.body.url){clearCart();window.location.href=co.body.url;return;}
-        showMsg(co.body.detail||'Could not start checkout. Try again.');btn.disabled=false;
-      }catch(e){showMsg('Something went wrong. Try again.');btn.disabled=false;}
+        showMsg(co.body.detail||'Could not start checkout. Try again.');reset();
+      }catch(e){showMsg('Something went wrong. Try again.');reset();}
     };
 
     (async()=>{

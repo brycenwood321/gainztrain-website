@@ -77,7 +77,7 @@
           <button class="btn" id="tSave" disabled>Save meal count</button>
           <button class="btn ghost" id="pauseBtn">Pause</button>
           <button class="btn ghost" id="resumeBtn">Resume</button>
-          <button class="btn ghost" id="cardBtn">Manage billing</button>
+          <button class="btn ghost" id="cardBtn">Update card &amp; billing</button>
           <button class="btn danger" id="cancelBtn">Cancel plan</button>
         </div>
       </div>
@@ -192,12 +192,12 @@
       act('cancelBtn',()=>post('/api/account/cancel',{undo}),
         b=>undo?'Cancellation undone — your plan will keep renewing.':('Plan cancelled.'+(b.ends?(' You keep meals through '+fmtDate(b.ends)+'.'):'')+' Changed your mind? Tap “Undo cancellation”.'));
     };
-    $('goalSave').onclick=()=>act('goalSave',()=>post('/api/account/goal',{goal:$('goal').value,sex:$('sex').value}));
+    $('goalSave').onclick=()=>act('goalSave',()=>post('/api/account/goal',{goal:$('goal').value,sex:$('sex').value}),'Saved — your new macros apply to next week\'s meals.');
     $('addrSave').onclick=()=>act('addrSave',()=>post('/api/account/address',{delivery_method:method,address:$('address').value,city:$('city').value,zip:$('zip').value}),
       b=>b.delivery_method==='pickup'?'Saved — free pickup at our Orem kitchen.':('Saved — Zone '+b.delivery_zone+' delivery, '+money(b.delivery_fee_cents)+'/week'+(b.effective==='next_week'?' starting next week.':', prorated this week.')));
-    $('pwSave').onclick=async()=>{const pw=$('newpw').value;if(pw.length<8){msg('Password must be at least 8 characters.','err');return;}await act('pwSave',()=>post('/api/auth/set-password',{password:pw}));$('newpw').value='';};
-    $('npSave').onclick=()=>act('npSave',()=>post('/api/account/notification-prefs',{email_account:$('np_email_account').checked,email_marketing:$('np_email_marketing').checked,sms_account:$('np_sms_marketing').checked,sms_marketing:$('np_sms_marketing').checked}));
-    $('cardBtn').onclick=async()=>{const b=$('cardBtn');b.disabled=true;b.textContent='…';const r=await post('/api/account/portal');if(r.body.url){location.href=r.body.url;return;}b.disabled=false;b.textContent='Manage billing';msg(r.body.detail||'Could not open billing.','err');};
+    $('pwSave').onclick=async()=>{const pw=$('newpw').value;if(pw.length<8){msg('Password must be at least 8 characters.','err');return;}await act('pwSave',()=>post('/api/auth/set-password',{password:pw}),'Password updated.');$('newpw').value='';};
+    $('npSave').onclick=()=>act('npSave',()=>post('/api/account/notification-prefs',{email_account:$('np_email_account').checked,email_marketing:$('np_email_marketing').checked,sms_account:$('np_sms_marketing').checked,sms_marketing:$('np_sms_marketing').checked}),'Preferences saved.');
+    $('cardBtn').onclick=async()=>{const b=$('cardBtn');b.disabled=true;b.textContent='…';const r=await post('/api/account/portal');if(r.body.url){location.href=r.body.url;return;}b.disabled=false;b.textContent='Update card & billing';msg(r.body.detail||'Could not open billing.','err');};
 
     load();
   </script>

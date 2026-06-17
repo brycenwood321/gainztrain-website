@@ -182,7 +182,8 @@
         var wkStr = wk.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
         document.getElementById('weekPill').textContent = 'Week of ' + wkStr;
 
-        document.getElementById('menuGrid').innerHTML = cur.meals.map(function (m) {
+        var grid = document.getElementById('menuGrid');
+        grid.innerHTML = cur.meals.map(function (m) {
           var up = Number(m.upcharge_per_meal) > 0
             ? '<span class="menu-upcharge">+$' + Number(m.upcharge_per_meal).toFixed(2) + '</span>' : '';
           var emoji = esc(m.emoji || '');
@@ -203,6 +204,12 @@
             '<div class="macro-pill"><span class="macro-val">' + esc(m.calories) + '</span><span class="macro-key">Cal</span></div>' +
             '</div></div></div>';
         }).join('');
+        // main.js's fade-up observer already ran on the initial DOM, so it never
+        // sees these dynamically-injected cards. Reveal them directly (rAF lets the
+        // opacity:0 paint first so the transition still animates).
+        requestAnimationFrame(function () {
+          grid.querySelectorAll('.fade-up').forEach(function (el) { el.classList.add('visible'); });
+        });
         document.getElementById('menuLoading').style.display = 'none';
       } catch (e) {
         document.getElementById('menuLoading').style.display = 'none';

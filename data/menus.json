@@ -252,6 +252,19 @@
       "meals": [
         {
           "position": 1,
+          "name": "Steak Fajita Bowl",
+          "description": "Seasoned sirloin steak over rice with sautéed bell peppers and onions — fajita-style, fork-ready.",
+          "calories": 540,
+          "protein": 48,
+          "carbs": 48,
+          "fat": 16,
+          "image": "/assets/images/meals/beef-fajita-bowl.jpg",
+          "emoji": "🥩",
+          "upcharge_per_meal": 3,
+          "slug": "steak-fajita"
+        },
+        {
+          "position": 2,
           "name": "Fiesta Chicken",
           "description": "Grilled chicken over rice with black beans, pinto beans, corn, and roasted tomatoes. Tex-Mex flavor, macro-friendly.",
           "calories": 550,
@@ -262,19 +275,6 @@
           "emoji": "🌮",
           "upcharge_per_meal": 0,
           "slug": "fiesta-chicken"
-        },
-        {
-          "position": 2,
-          "name": "Protein Ziti Bake",
-          "description": "High-protein pasta baked in a ground-beef meat sauce with zucchini. Comfort food that still hits your protein.",
-          "calories": 510,
-          "protein": 42,
-          "carbs": 48,
-          "fat": 16,
-          "image": "/assets/images/meals/meal-rice-bowl.jpg",
-          "emoji": "🍝",
-          "upcharge_per_meal": 1,
-          "slug": "protein-ziti"
         },
         {
           "position": 3,

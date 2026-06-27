@@ -197,12 +197,24 @@
       $('weekLabel').textContent = 'Shopping list for week of ' + fmtDate(d.week_of);
       if(!d.recipes_loaded){ $('view').innerHTML='<div class="card"><b style="color:var(--red)">Recipe data not loaded.</b> Check data/recipes.json.</div>'; return; }
       const cats = (d.categories||[]).map(c=>{
-        const items = c.items.map(i=>`<div class="mealrow"><span>${esc(i.name)} <span class="stat-sub">${i.used_in&&i.used_in.length?('· '+esc(i.used_in.join(', '))):''}</span></span><span class="q">${i.lb_buffered} lb <span class="stat-sub">(${i.kg_buffered} kg)</span></span></div>`).join('');
-        return `<div class="card"><h2 style="text-transform:capitalize">${esc(c.category)}</h2>${items}</div>`;
+        const items = c.items.map(i=>`<div class="mealrow"><span>${esc(i.name)} <span class="stat-sub">${i.used_in&&i.used_in.length?('· '+esc(i.used_in.join(', '))):''}</span></span><span class="q">${i.lb_buffered} lb <span class="stat-sub">(${i.kg_buffered} kg${i.cost_cents!=null?(' · '+money(i.cost_cents)):' · no price'})</span></span></div>`).join('');
+        const sub = (c.cost_cents!=null)?`<span class="stat-sub">${money(c.cost_cents)}</span>`:'';
+        return `<div class="card"><h2 style="text-transform:capitalize;display:flex;justify-content:space-between;align-items:baseline">${esc(c.category)} ${sub}</h2>${items}</div>`;
       }).join('');
       const warn = (d.unmatched&&d.unmatched.length)?`<div class="card" style="border-color:#fca5a5"><b style="color:var(--red)">Incomplete — no recipe for:</b> ${d.unmatched.map(u=>esc(u.name)).join(', ')}</div>`:'';
+      // Food-cost summary. cost/meal uses exact food (no buffer) vs the ~$8.50 base meal price → unit margin.
+      const cpm = (d.cost&&d.cost.cost_per_meal_cents)||0;
+      const PRICE = 850; // base per-meal price (cents); tiers run $8.50–$10.50
+      const marginPct = cpm>0 ? Math.round(((PRICE-cpm)/PRICE)*100) : null;
+      const unpriced = (d.cost&&d.cost.unpriced)||[];
+      const estTag = `<span class="stat-sub" style="color:var(--gray)">estimate — placeholder prices${unpriced.length?(' · '+unpriced.length+' unpriced'):''}</span>`;
+      const costCards = (d.cost && d.totals.meals>0) ? `<div class="grid">
+          <div class="card"><h2>Food cost this week</h2><div class="stat">${money(d.cost.food_cost_cents)}</div><div class="stat-sub">what you buy (incl. ${d.buffer_pct}% buffer) · ${d.totals.meals} meals</div></div>
+          <div class="card"><h2>Cost per meal</h2><div class="stat">${money(cpm)}</div><div class="stat-sub">${marginPct!=null?('~'+marginPct+'% gross margin at $8.50/meal'):''}</div></div>
+        </div><div class="ctl" style="margin:-.3rem 0 .2rem">${estTag}${unpriced.length?(`<span class="stat-sub" style="color:var(--red)">missing price: ${unpriced.map(esc).join(', ')}</span>`):''}</div>` : '';
       $('view').innerHTML =
-        `<div class="ctl"><label style="font-size:.85rem;color:var(--gray)">Over-buy buffer %</label>
+        `${costCards}
+        <div class="ctl"><label style="font-size:.85rem;color:var(--gray)">Over-buy buffer %</label>
           <input id="buf" type="number" min="0" max="50" value="${d.buffer_pct}" style="width:70px;" />
           <button class="btn ghost" id="bufGo">Apply</button>
           <span class="stat-sub">${d.totals.orders} orders · ${d.totals.meals} meals</span></div>

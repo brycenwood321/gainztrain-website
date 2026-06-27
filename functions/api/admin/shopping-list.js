@@ -36,10 +36,15 @@ export async function onRequestGet(context) {
   try { lib = await loadRecipes(request); }
   catch (e) { return ok({ week_of: week, recipes_loaded: false, error: String(e).slice(0, 120), totals: { orders: totals?.orders || 0, meals: totals?.meals || 0 }, categories: [], unmatched: [] }); }
 
-  const { categories, unmatched } = computeShoppingList(rows, slugByPosition, lib, buffer);
+  const { categories, unmatched, cost } = computeShoppingList(rows, slugByPosition, lib, buffer);
+  const meals = totals?.meals || 0;
+  // Cost per meal uses the EXACT food cost (no over-buy buffer) — that's the true per-container ingredient
+  // cost to compare against the ~$8.50/meal price. Buffer is a purchasing reality, not per-meal economics.
+  const costPerMealCents = meals > 0 ? Math.round((cost?.food_cost_exact_cents || 0) / meals) : 0;
   return ok({
     week_of: week, recipes_loaded: true, buffer_pct: buffer,
-    totals: { orders: totals?.orders || 0, meals: totals?.meals || 0 },
+    totals: { orders: totals?.orders || 0, meals },
+    cost: { ...cost, cost_per_meal_cents: costPerMealCents },
     categories, unmatched,
   });
 }

@@ -68,12 +68,23 @@ export function computeShoppingList(rows, slugByPosition, lib, bufferPct = 10) {
   }
   const buf = 1 + Math.max(0, bufferPct) / 100;
   const byCat = {};
+  // Food-cost rollup. cost_per_kg (raw $/kg) lives on each ingredient in recipes.json (placeholder
+  // averages until Brycen drops in real supplier pricing). We cost the BUFFERED raw weight = what you
+  // actually buy. exact = the food that ends up in containers (no over-buy). Any ingredient missing a
+  // price is listed in `unpriced` so the UI can flag that the total is understated.
+  let foodCostCents = 0, foodCostExactCents = 0;
+  const unpriced = [];
   for (const [slug, cookedG] of Object.entries(cooked)) {
     const ing = ingredients[slug] || { name: slug, category: 'pantry', yield_factor: 1 };
     const cat = ing.category || 'pantry';
     const yf = ing.yield_factor || 1;
     const rawExact = cookedG / yf;
     const rawBuf = rawExact * buf;
+    const pricePerKg = (typeof ing.cost_per_kg === 'number' && ing.cost_per_kg >= 0) ? ing.cost_per_kg : null;
+    const costCents = pricePerKg != null ? Math.round((rawBuf / 1000) * pricePerKg * 100) : null;
+    const costExactCents = pricePerKg != null ? Math.round((rawExact / 1000) * pricePerKg * 100) : null;
+    if (pricePerKg == null) unpriced.push(ing.name || slug);
+    else { foodCostCents += costCents; foodCostExactCents += costExactCents; }
     (byCat[cat] = byCat[cat] || []).push({
       ingredient: slug, name: ing.name, category: cat,
       grams_cooked_total: Math.round(cookedG),
@@ -81,14 +92,22 @@ export function computeShoppingList(rows, slugByPosition, lib, bufferPct = 10) {
       grams_raw_buffered: Math.round(rawBuf),
       lb_buffered: Math.round((rawBuf / LB) * 100) / 100,
       kg_buffered: Math.round((rawBuf / 1000) * 100) / 100,
+      cost_per_kg: pricePerKg,
+      cost_cents: costCents,
       used_in: [...(usedIn[slug] || [])],
     });
   }
   const categories = CATS.filter((c) => byCat[c]).map((c) => ({
     category: c,
     items: byCat[c].sort((a, b) => b.grams_raw_buffered - a.grams_raw_buffered),
+    cost_cents: byCat[c].reduce((s, i) => s + (i.cost_cents || 0), 0),
   }));
-  return { categories, unmatched };
+  const cost = {
+    food_cost_cents: foodCostCents,            // what you BUY this week (incl. over-buy buffer)
+    food_cost_exact_cents: foodCostExactCents, // food that ends up in containers (no buffer)
+    unpriced,                                  // ingredient names with no cost_per_kg set
+  };
+  return { categories, unmatched, cost };
 }
 
 // Per-meal cook batches: total cooked + raw grams of each component for that meal (profile-adjusted),

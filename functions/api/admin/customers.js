@@ -24,12 +24,22 @@ export async function onRequestGet(context) {
          FROM invoices WHERE customer_id = ? ORDER BY created_at DESC LIMIT 50`, id);
     const payments = await all(env.DB,
       `SELECT id, amount_cents, status, created_at FROM payments WHERE customer_id = ? ORDER BY created_at DESC LIMIT 50`, id);
+    // Meal picks per week (most recent first) + that week's order lock status, so the team can see exactly
+    // what someone selected and whether it's locked into the kitchen yet.
+    const selections = await all(env.DB,
+      `SELECT ms.week_of, ms.meal_position, ms.meal_name, ms.qty
+         FROM meal_selections ms
+         JOIN subscriptions s ON s.id = ms.subscription_id
+        WHERE s.customer_id = ? AND ms.qty > 0
+        ORDER BY ms.week_of DESC, ms.meal_position ASC LIMIT 80`, id);
+    const orders = await all(env.DB,
+      `SELECT week_of, status, total_meals FROM orders WHERE customer_id = ? ORDER BY week_of DESC LIMIT 8`, id);
     // NET lifetime spend = paid invoices + refunds (refund rows are stored negative).
     const spent = await one(env.DB,
       `SELECT COALESCE(SUM(amount_paid_cents),0) AS cents FROM invoices WHERE customer_id = ? AND status = 'paid'`, id);
     const refunded = await one(env.DB,
       `SELECT COALESCE(SUM(amount_cents),0) AS cents FROM payments WHERE customer_id = ? AND status = 'refunded'`, id);
-    return ok({ customer, subscriptions, invoices, payments, total_spent_cents: (spent?.cents || 0) + (refunded?.cents || 0) });
+    return ok({ customer, subscriptions, invoices, payments, selections, orders, total_spent_cents: (spent?.cents || 0) + (refunded?.cents || 0) });
   }
 
   const customers = await all(env.DB,

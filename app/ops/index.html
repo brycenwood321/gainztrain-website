@@ -275,6 +275,16 @@
       $('view').innerHTML = '<div class="loading">Loading…</div>';
       const d = await adminGet('/api/admin/customers?id='+encodeURIComponent(id));
       const c = d.customer;
+      // Meal picks grouped by week, with that week's order lock status (locked = in the kitchen list).
+      const ordByWeek = {}; (d.orders||[]).forEach(o=>{ ordByWeek[o.week_of]=o; });
+      const weeks = [...new Set((d.selections||[]).map(s=>s.week_of))];
+      const mealsCard = `<div class="card"><h2>Meal picks</h2>${weeks.length ? weeks.map(w=>{
+          const items=(d.selections||[]).filter(s=>s.week_of===w);
+          const total=items.reduce((a,s)=>a+(s.qty||0),0);
+          const ord=ordByWeek[w];
+          const badge=ord?`<span class="badge ${esc(ord.status)}">${esc(ord.status)}</span>`:'<span class="stat-sub">(no order row)</span>';
+          return `<div style="margin-bottom:.7rem"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.2rem"><b>Week of ${fmtDate(w)}</b><span class="stat-sub">${total} meals · ${badge}</span></div>${items.map(s=>`<div class="mealrow"><span>${esc(s.meal_name)}</span><span class="q">×${s.qty}</span></div>`).join('')}</div>`;
+        }).join('') : '<div class="stat-sub" style="padding:.4rem 0">No meal selections on record yet.</div>'}</div>`;
       $('view').innerHTML =
         `<div class="ctl"><span class="link" id="backCust">← All customers</span></div>
          <div class="card"><h2 style="font-size:1.1rem;color:var(--black);">${esc((c.first_name||'')+' '+(c.last_name||''))}</h2>
@@ -284,6 +294,7 @@
            <div class="stat" style="margin-top:.5rem;">${money(d.total_spent_cents)} <span class="stat-sub">lifetime</span></div>
          </div>
          <div class="card"><h2>Subscriptions</h2><table><tbody>${(d.subscriptions||[]).map(s=>`<tr><td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td><td>${s.meals_per_week} meals</td><td>${s.coupon_code?esc(s.coupon_code):''}</td><td>${s.cancel_at_period_end?'cancels '+fmtDate(s.current_period_end):(s.current_period_end?'renews '+fmtDate(s.current_period_end):'')}</td></tr>`).join('')||'<tr><td class="stat-sub">none</td></tr>'}</tbody></table></div>
+         ${mealsCard}
          <div class="card"><h2>Invoices</h2><table><thead><tr><th>Date</th><th>Status</th><th>Paid</th><th></th></tr></thead><tbody>${(d.invoices||[]).map(i=>`<tr><td>${fmtDate(i.created_at)}</td><td><span class="badge ${esc(i.status||'incomplete')}">${esc(i.status||'—')}</span></td><td>${money(i.status==='paid'?i.amount_paid_cents:i.amount_due_cents)}</td><td>${i.hosted_invoice_url?`<a href="${esc(i.hosted_invoice_url)}" target="_blank" rel="noopener" class="link">view</a>`:''}</td></tr>`).join('')||'<tr><td class="stat-sub">no invoices</td></tr>'}</tbody></table></div>`;
       $('backCust').onclick = renderCustomers;
     }

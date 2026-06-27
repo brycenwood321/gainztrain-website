@@ -109,6 +109,7 @@
           <div id="feedList"></div>
         </div>
       </div>
+      <a id="opsLink" href="/app/ops/" class="btn btn-ghost hidden">⚙ Ops Dashboard</a>
       <button id="logoutBtn" class="btn btn-ghost hidden">Log out</button>
     </div>
   </div>
@@ -271,6 +272,8 @@
       const c = d.customer, s = d.subscription;
       $('dashTitle').textContent = c.first_name ? `Welcome back, ${c.first_name}` : 'Welcome back';
       $('dashEmail').textContent = c.email;
+      // Staff (Brycen/Jayson/Marissa/Alyssa) get a link to the backend ops dashboard. Customers don't see it.
+      if (c.role === 'staff') $('opsLink').classList.remove('hidden');
 
       // subscription
       if (s) {

@@ -2,6 +2,19 @@
 // Read-only feed of a single prep week's cookable orders for the Sunday meal-prep assembly dashboard
 // (a separate browser-only app, no backend). Designed to be fetched cross-origin.
 //
+// ⚠️ FROZEN CONTRACT — LIVE IN PRODUCTION (the Sunday prep dashboard prints labels + draws the delivery
+// map from this). DO NOT change the following without telling MARISSA first, or the dashboard breaks
+// SILENTLY (no error, wrong labels or a blank map):
+//   • the path /api/gainztrain-orders
+//   • any JSON field name (week_of, orders, customer_id, first_name, last_name, gender, goal,
+//     fulfillment, address, meals, meal_name, quantity)
+//   • the allowed values: gender = "F"|"M"; goal = "Cut"|"Maintain"|"Bulk"; fulfillment = "delivery"|"pickup"
+//   • the Access-Control-Allow-Origin header (removing it = browser CORS-blocks ALL orders)
+//   • the KITCHEN_FEED_TOKEN (if rotating, give Marissa the NEW token BEFORE killing the old one)
+//   • address: full street address for delivery, and null (NOT "") for pickup — partial = geocode fails
+// Safe to change freely: new meal names, new customers, internal DB structure (as long as this JSON
+// shape is unchanged). See memory project_gt_orders_api_contract_2026-06-27.
+//
 // AUTH: a DEDICATED secret (env.KITCHEN_FEED_TOKEN), NOT the master ADMIN_TOKEN. This is deliberate —
 // a client-side app must embed its token in JS where anyone who loads the app can read it, so this
 // token can ONLY read one week's order list. It can never mutate billing, lock weeks, or touch any

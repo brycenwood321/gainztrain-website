@@ -3,6 +3,7 @@
 import { ok, fail } from '../_lib/respond.js';
 import { all, one } from '../_lib/db.js';
 import { getSessionCustomer } from '../_lib/auth.js';
+import { tierForMeals } from '../_lib/plans.js';
 
 export async function onRequestGet(context) {
   const auth = await getSessionCustomer(context);
@@ -68,6 +69,10 @@ export async function onRequestGet(context) {
           status: sub.status,
           meals_per_week: sub.meals_per_week,
           tier_price_cents: sub.tier_price_cents,
+          // Trustworthy per-meal rate from the public plan bands, by meal count. Legacy subs
+          // (e.g. a flat $X/week line item) stored the WEEKLY total in tier_price_cents, which the
+          // UI would otherwise multiply by meals again — derive from the band instead.
+          per_meal_cents: tierForMeals(sub.meals_per_week)?.perMealCents ?? sub.tier_price_cents,
           current_period_end: sub.current_period_end,
           cancel_at_period_end: !!sub.cancel_at_period_end,
           coupon_code: sub.coupon_code,

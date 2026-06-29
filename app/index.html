@@ -169,9 +169,8 @@
           <div id="subStatus"></div>
         </div>
         <div class="card">
-          <h2>Total spent</h2>
-          <div class="stat" id="totalSpent">$0</div>
-          <div class="stat-sub" id="deliveryLine"></div>
+          <h2>Delivery</h2>
+          <div class="stat" id="deliveryLine" style="font-size:1.25rem;"></div>
         </div>
       </div>
 
@@ -278,7 +277,8 @@
       // subscription
       if (s) {
         const tier = s.meals_per_week ? `${s.meals_per_week} meals/week` : '';
-        const price = s.tier_price_cents ? ` · ${money(s.tier_price_cents)}/meal` : '';
+        const perMeal = s.per_meal_cents || s.tier_price_cents;
+        const price = perMeal ? ` · ${money(perMeal)}/meal` : '';
         const coupon = s.coupon_code ? `<div class="row"><span class="k">Discount</span><span class="v">${s.coupon_code}${s.discount_active?'':' (inactive)'}</span></div>` : '';
         const renews = s.cancel_at_period_end
           ? `<div class="row"><span class="k">Ends</span><span class="v">${fmtDate(s.current_period_end)}</span></div>`
@@ -292,8 +292,7 @@
         $('subStatus').innerHTML = `<div class="empty">No active subscription. <a href="/start/">Start one →</a></div>`;
       }
 
-      // total spent + delivery
-      $('totalSpent').textContent = money(d.total_spent_cents);
+      // delivery method
       const dm = c.delivery_method === 'delivery' ? `Delivery (zone ${c.delivery_zone ?? '—'})` : 'Pickup';
       $('deliveryLine').textContent = dm;
 

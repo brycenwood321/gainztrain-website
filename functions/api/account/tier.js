@@ -9,7 +9,7 @@ import { ok, fail, readJson } from '../../_lib/respond.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
-import { currentSub, findItem } from '../../_lib/account.js';
+import { currentSub, findMealItem } from '../../_lib/account.js';
 import { tierForMeals, ensureStripePrice, MIN_MEALS, MAX_MEALS } from '../../_lib/plans.js';
 import { orderableWeek, isLocked } from '../../_lib/menu.js';
 import { notify } from '../../_lib/notify.js';
@@ -36,7 +36,7 @@ export async function onRequestPost(context) {
 
   try {
     const stripeSub = await stripe(env, 'GET', `subscriptions/${sub.stripe_subscription_id}`);
-    const mealItem = findItem(stripeSub, 'gt_meal');
+    const mealItem = findMealItem(stripeSub);
     if (!mealItem) return fail(409, 'meal_item_missing', 'Could not find your meal plan on file — contact us.');
     const priceId = await ensureStripePrice(env, tier);
     // Open week → create_prorations (charge/credit the difference this week). Locked week → none (new

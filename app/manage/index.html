@@ -58,7 +58,7 @@
   </style>
 </head>
 <body>
-  <div class="topbar"><div class="brand">GAINZ<span class="t">TRAIN</span></div><a href="/app/">← My account</a></div>
+  <div class="topbar"><div class="brand">GAINZ<span class="t">TRAIN</span></div><div style="display:flex;gap:1.25rem;"><a href="/app/menu/">This week's menu</a><a href="/app/">← My account</a></div></div>
   <div class="wrap">
     <div id="loading" class="loading">Loading…</div>
     <div id="msg" class="msg"></div>
@@ -151,8 +151,8 @@
       const st=sub.status||'';
       const badgeCls=sub.cancel_at_period_end?'cancel_scheduled':st;
       const badgeTxt=sub.cancel_at_period_end?'cancel scheduled':st.replace('_',' ');
-      const wk=sub.meals_per_week*(sub.tier_price_cents||0);
-      let line=`<span class="badge ${badgeCls}">${badgeTxt}</span> · ${sub.meals_per_week} meals × ${money(sub.tier_price_cents)} = <b>${money(wk)}/week</b>`;
+      const perMeal=perMealCents(sub.meals_per_week);const wk=sub.meals_per_week*perMeal;
+      let line=`<span class="badge ${badgeCls}">${badgeTxt}</span> · ${sub.meals_per_week} meals × ${money(perMeal)} = <b>${money(wk)}/week</b>`;
       if(sub.coupon_code&&sub.discount_active)line+=` · <span style="color:var(--green)">${sub.coupon_code} applied</span>`;
       if(sub.cancel_at_period_end&&sub.current_period_end)line+=`<br><span style="color:#b45309">Your meals continue through ${fmtDate(sub.current_period_end)}.</span>`;
       $('planSub').innerHTML=line;

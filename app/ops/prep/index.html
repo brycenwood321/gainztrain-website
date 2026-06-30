@@ -2040,6 +2040,13 @@
       catch { return []; }
     }
 
+    // Persist the working order list (pulled/added/edited orders) to localStorage. Called by
+    // pullOrders, addOrder, and deleteOrder — was referenced but never defined, so any order write
+    // threw "saveOrders is not defined" the moment a real order existed to save.
+    function saveOrders(orders) {
+      localStorage.setItem("gainztrain_orders", JSON.stringify(orders || []));
+    }
+
     function loadScanned() {
       try { return JSON.parse(localStorage.getItem("gainztrain_scanned") || "[]"); }
       catch { return []; }

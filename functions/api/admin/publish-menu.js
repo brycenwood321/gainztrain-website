@@ -42,6 +42,10 @@ export async function onRequestPost(context) {
     // they're cooking. Republish only affects future/unlocked weeks.
     const locked = await one(env.DB, `SELECT 1 AS x FROM orders WHERE week_of = ? AND status = 'locked' LIMIT 1`, m.week_of);
     if (locked) { skipped.push({ week_of: m.week_of, reason: 'week already locked — menu frozen' }); continue; }
+    // Don't clobber a week finalized from the prep dashboard (Marissa's Menu tab is the source of truth
+    // for those weeks; this file-based sync must stay hands-off). See migration 0015 + finalize-menu.js.
+    const owned = await one(env.DB, `SELECT source FROM weekly_menus WHERE week_of = ?`, m.week_of);
+    if (owned && owned.source === 'dashboard') { skipped.push({ week_of: m.week_of, reason: 'finalized from prep dashboard — staff-owned' }); continue; }
     await run(env.DB,
       `INSERT INTO weekly_menus (week_of, label, meals_json, published_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)

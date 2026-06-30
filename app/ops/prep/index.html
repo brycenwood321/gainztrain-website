@@ -3038,18 +3038,51 @@
     }
 
     // ── FINALIZE MENU ──
-    function finalizeMenu() {
+    async function finalizeMenu() {
       const confirmed = menuMeals().filter(m => m.status === "confirmed");
       if (confirmed.length === 0) {
         showToast("Confirm at least one meal before finalizing.");
         return;
       }
-      // Save confirmed meals as next week's starting point
+
+      // Pretty target week for the confirm prompt (server re-derives the authoritative week on write).
+      const wk = getWeekStr();                                  // YYYYMMDD
+      const wkPretty = `${wk.slice(0,4)}-${wk.slice(4,6)}-${wk.slice(6,8)}`;
+      const proceed = confirm(
+        `Publish this menu LIVE for customers to order?\n\n` +
+        `${confirmed.length} meal${confirmed.length !== 1 ? "s" : ""} → week of ${wkPretty}\n\n` +
+        `Customers are NOT messaged yet — the "new menu" text turns on once A2P + email are fixed.`
+      );
+      if (!proceed) return;
+
+      // Save confirmed meals as next week's starting point (local convenience, unchanged).
       savePreviousMenu(confirmed.map(m => ({
         id: m.id, name: m.name, macros: m.macros, ingredients: m.ingredients
       })));
-      // TODO: POST to Brycen's /api/gainztrain-menu once endpoint is ready
-      showToast(`✓ Menu finalized — ${confirmed.length} meal${confirmed.length !== 1 ? "s" : ""} confirmed.`);
+
+      const btn = document.querySelector(".menu-topbar-btn.finalize");
+      const orig = btn ? btn.textContent : "";
+      if (btn) { btn.disabled = true; btn.textContent = "Publishing…"; }
+
+      try {
+        const res = await fetch("/api/admin/finalize-menu", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            week_of: wkPretty,
+            meals: confirmed.map(m => ({ name: m.name, macros: m.macros })),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) { showToast("Not logged in as staff — open this from the Ops Dashboard and log in first."); return; }
+        if (!res.ok) { showToast(`Publish failed: ${data.detail || data.error || ("HTTP " + res.status)}`); return; }
+        showToast(`✓ Published LIVE for week of ${data.week_of} — ${data.meals} meals. Customers can order now.`);
+      } catch (err) {
+        showToast(`Publish failed: ${err.message}`);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = orig || "✓ Finalize Menu"; }
+      }
     }
 
     // ── INGREDIENTS TAB ──

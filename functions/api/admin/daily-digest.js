@@ -5,7 +5,7 @@
 import { ok } from '../../_lib/respond.js';
 import { requireAdmin } from '../../_lib/admin.js';
 import { one, all, addDaysIso } from '../../_lib/db.js';
-import { upcomingSunday } from '../../_lib/menu.js';
+import { upcomingSunday, orderableWeek } from '../../_lib/menu.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
 
 const ACTIVE = ['active', 'trialing', 'past_due'];
@@ -67,6 +67,20 @@ export async function onRequestPost(context) {
     await ownerNotify(env, 'owner_health_alert',
       `GT health: ${failed} failed comms, ${stuck} webhooks stuck >1h — check /app/ops`,
       { entity: 'system', lines: [`failed_comms_24h: ${failed}`, `stuck_webhooks: ${stuck}`] });
+  }
+
+  // Sunday morning (this digest runs 13:00 UTC ≈ 7am MT, so UTC-Sunday == Sunday morning in Denver):
+  // remind Brycen + Jayson to set + finalize this week's menu in the prep dashboard.
+  if (new Date().getUTCDay() === 0) {
+    const orderWk = orderableWeek();
+    await ownerNotify(env, 'owner_set_menu', `Sunday: set this week's Gainz Train menu (week of ${orderWk})`, {
+      entity: 'system',
+      lines: [
+        "Open the prep dashboard → Menu tab, build this week's menu, then hit Finalize to publish it for customers.",
+        'Dashboard: https://gainztrainprep.com/app/ops/prep/ (log in first)',
+        `Customers can order the week of ${orderWk} until Friday 11:59pm MT.`,
+      ],
+    });
   }
 
   return ok({ summary, health: { failed_comms_24h: failed, stuck_webhooks: stuck, ok: healthOk }, activity });

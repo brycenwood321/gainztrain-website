@@ -5,7 +5,7 @@
   <title>GainzTrain — Print Labels</title>
 
   <!-- JsBarcode: generates Code 128 barcodes in the browser, no internet needed after first load -->
-  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="lib/JsBarcode.all.min.js"></script>
 
   <style>
     /* ── SCREEN STYLES (what you see before printing) ── */
@@ -407,14 +407,17 @@
         const el = renderLabel(label, idx);
         grid.appendChild(el);
 
-        // Generate the barcode after the element is in the DOM
-        JsBarcode(`#barcode-${idx}`, label.mealId, {
-          format: "CODE128",
-          width: 1.4,
-          height: 40,
-          displayValue: false,
-          margin: 0
-        });
+        // Generate the barcode after the element is in the DOM. Wrapped so one bad/failed barcode
+        // can't throw out of the forEach and halt the whole sheet (that bug printed only 1 label).
+        try {
+          JsBarcode(`#barcode-${idx}`, label.mealId, {
+            format: "CODE128",
+            width: 1.4,
+            height: 40,
+            displayValue: false,
+            margin: 0
+          });
+        } catch (e) { /* keep rendering the rest of the labels */ }
       });
     }
 

@@ -2568,9 +2568,46 @@
     function loadPreviousMenu()  { try { return JSON.parse(localStorage.getItem("gainztrain_menu_previous") || "[]");  } catch { return []; } }
     function savePreviousMenu(a) { localStorage.setItem("gainztrain_menu_previous", JSON.stringify(a)); }
     function loadMealLibrary()   { try { return JSON.parse(localStorage.getItem("gainztrain_meal_library")  || "[]");  } catch { return []; } }
-    function saveMealLibrary(a)  { localStorage.setItem("gainztrain_meal_library",  JSON.stringify(a)); }
+    function saveMealLibrary(a)  { localStorage.setItem("gainztrain_meal_library",  JSON.stringify(a)); pushSharedStore("meal_library", a); }
     function loadCustomIngs()    { try { return JSON.parse(localStorage.getItem("gainztrain_ingredients")   || "[]");  } catch { return []; } }
-    function saveCustomIngs(a)   { localStorage.setItem("gainztrain_ingredients",   JSON.stringify(a)); }
+    function saveCustomIngs(a)   { localStorage.setItem("gainztrain_ingredients",   JSON.stringify(a)); pushSharedStore("custom_ingredients", a); }
+
+    // ── SHARED STORE (server-backed) ──────────────────────────────────────────────────────────────
+    // The meal library + custom ingredients now live in the DATABASE so they persist forever and are
+    // shared across every staff member + device. localStorage stays as a fast local cache; the server
+    // is the source of truth, pulled on load by hydrateSharedStores(). Writes go through to the server
+    // fire-and-forget (the UI never blocks on the network — localStorage already has the value).
+    const SHARED_STORES = [["meal_library", "gainztrain_meal_library"], ["custom_ingredients", "gainztrain_ingredients"]];
+
+    function pushSharedStore(key, value) {
+      fetch("/api/admin/ops-store", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value }),
+      }).catch(() => {});
+    }
+
+    async function hydrateSharedStores() {
+      let changed = false;
+      for (const [key, lsKey] of SHARED_STORES) {
+        try {
+          const res = await fetch(`/api/admin/ops-store?key=${key}`, { credentials: "include" });
+          if (!res.ok) continue;                                  // not logged in / error → keep local cache
+          const data = await res.json();
+          const serverVal = Array.isArray(data.value) ? data.value : [];
+          if (serverVal.length > 0) {
+            localStorage.setItem(lsKey, JSON.stringify(serverVal)); // server wins (shared truth)
+            changed = true;
+          } else {
+            // Server empty (first run) — seed it from whatever's local; never wipe local data.
+            let local = [];
+            try { local = JSON.parse(localStorage.getItem(lsKey) || "[]"); } catch { local = []; }
+            if (local.length) pushSharedStore(key, local);
+          }
+        } catch { /* offline → keep local cache */ }
+      }
+      if (changed) { try { initMenuTab(); } catch { /* menu tab may not be active yet */ } }
+    }
     function allIngredients()    { return [...DEFAULT_INGREDIENTS, ...loadCustomIngs().map(i => i.name)]; }
     function menuUid()           { return "m" + Date.now() + Math.random().toString(36).slice(2,6); }
 
@@ -2814,6 +2851,7 @@
       document.getElementById("new-meal-carbs").value   = "";
       document.getElementById("new-meal-fat").value     = "";
       document.getElementById("new-meal-cal").value     = "";
+      document.getElementById("new-meal-upcharge").value = "";
       document.getElementById("ing-rows-container").innerHTML = "";
       hideAllModals();
       document.getElementById("add-meal-modal").style.display = "";
@@ -2835,6 +2873,7 @@
       document.getElementById("new-meal-carbs").value   = meal.macros?.carbs   ?? "";
       document.getElementById("new-meal-fat").value     = meal.macros?.fat     ?? "";
       document.getElementById("new-meal-cal").value     = meal.macros?.cal     ?? "";
+      document.getElementById("new-meal-upcharge").value = meal.upcharge ?? "";
 
       // Pre-populate ingredient rows
       const container = document.getElementById("ing-rows-container");
@@ -2948,6 +2987,7 @@
       const carbs   = parseInt(document.getElementById("new-meal-carbs").value);
       const fat     = parseInt(document.getElementById("new-meal-fat").value)   || 0;
       const cal     = parseInt(document.getElementById("new-meal-cal").value)   || 0;
+      const upcharge = parseFloat(document.getElementById("new-meal-upcharge").value) || 0;
 
       if (!name)                         { showToast("Please enter a meal name.");         return; }
       if (isNaN(protein) || protein < 0) { showToast("Enter a valid protein amount (g)."); return; }
@@ -2975,7 +3015,7 @@
         if (!stored) { showToast("Save failed — menu data missing. Please refresh."); return; }
         const idx = (stored.meals || []).findIndex(m => m.id === menuEditingId);
         if (idx === -1) { showToast("Save failed — meal not found. Please refresh."); return; }
-        stored.meals[idx] = { ...stored.meals[idx], name, macros, ingredients };
+        stored.meals[idx] = { ...stored.meals[idx], name, macros, ingredients, upcharge };
         saveCurrentMenu(stored);
         closeMenuOverlay();
         renderMenuTab();
@@ -2986,7 +3026,7 @@
       } else {
         // Add mode — single ID used for both library and menu entries
         const newId  = menuUid();
-        const newMeal = { id: newId, name, macros, ingredients };
+        const newMeal = { id: newId, name, macros, ingredients, upcharge };
         const library = loadMealLibrary();
         library.unshift({ ...newMeal });
         saveMealLibrary(library);
@@ -3057,7 +3097,7 @@
 
       // Save confirmed meals as next week's starting point (local convenience, unchanged).
       savePreviousMenu(confirmed.map(m => ({
-        id: m.id, name: m.name, macros: m.macros, ingredients: m.ingredients
+        id: m.id, name: m.name, macros: m.macros, ingredients: m.ingredients, upcharge: m.upcharge || 0
       })));
 
       const btn = document.querySelector(".menu-topbar-btn.finalize");
@@ -3071,7 +3111,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             week_of: wkPretty,
-            meals: confirmed.map(m => ({ name: m.name, macros: m.macros })),
+            meals: confirmed.map(m => ({ name: m.name, macros: m.macros, upcharge_per_meal: m.upcharge || 0 })),
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -3808,6 +3848,9 @@
     // Assembly/Pickup/Delivery will refresh state when switched to.
     renderOrders();
 
+    // Pull the shared meal library + custom ingredients from the server (durable + team-wide).
+    hydrateSharedStores();
+
     // If there were already scanned items (page refresh), show the last one
     if (scanned.length > 0 && scanned.length < allMealIds.length) {
       const lastId = scanned[scanned.length - 1];
@@ -3909,6 +3952,10 @@
             <label class="menu-field-label">Calories (kcal)</label>
             <input type="number" id="new-meal-cal" class="menu-field-input" min="0" placeholder="500" />
           </div>
+        </div>
+        <div class="menu-field-group">
+          <label class="menu-field-label">Specialty upcharge ($ per meal) — optional</label>
+          <input type="number" id="new-meal-upcharge" class="menu-field-input" min="0" step="0.50" placeholder="0" />
         </div>
         <div class="menu-field-label" style="margin-bottom:8px;">Ingredients</div>
         <div id="ing-rows-container"></div>

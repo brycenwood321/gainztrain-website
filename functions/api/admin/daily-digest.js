@@ -78,7 +78,7 @@ export async function onRequestPost(context) {
       lines: [
         "Open the prep dashboard → Menu tab, build this week's menu, then hit Finalize to publish it for customers.",
         'Dashboard: https://gainztrainprep.com/app/ops/prep/ (log in first)',
-        `Customers can order the week of ${orderWk} until Friday 11:59pm MT.`,
+        `Customers can order the week of ${orderWk} until Friday 11:59am MT.`,
       ],
     });
   }

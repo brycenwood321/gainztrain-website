@@ -1,6 +1,6 @@
 // Weekly menu helpers. Menus live in data/menus.json (hand-edited) and are published into the
 // weekly_menus D1 table (source of truth for the app + ops). week_of is always a Sunday (YYYY-MM-DD).
-// Order cutoff is FRIDAY night before that Sunday (groceries are bought Saturday).
+// Order cutoff is FRIDAY 11:59am before that Sunday (kitchen shops Friday afternoon, preps Saturday).
 
 function iso(d) { return d.toISOString().slice(0, 10); }
 
@@ -22,15 +22,15 @@ function denverOffsetHours(date) {
   } catch { return -7; }
 }
 
-// Order cutoff for a given week: FRIDAY 11pm Mountain (groceries are bought Saturday).
-// Computed as Friday 23:00 America/Denver → UTC, DST-correct (Sat 05:00Z in summer, 06:00Z in winter).
+// Order cutoff for a given week: FRIDAY 11:59am Mountain (kitchen shops Friday afternoon, preps Saturday).
+// Computed as Friday 11:59 America/Denver → UTC, DST-correct (Fri 17:59Z in summer / 18:59Z in winter).
 export function cutoffForWeek(weekOfISO) {
   const sunday = new Date(`${weekOfISO}T12:00:00Z`);            // noon avoids date rollover
   const friday = new Date(sunday);
   friday.setUTCDate(friday.getUTCDate() - 2);
   const off = denverOffsetHours(friday);                        // -7 or -6
-  // 23:00 local Denver → UTC hour = 23 - offset (Date.UTC rolls the +1 day automatically)
-  return new Date(Date.UTC(friday.getUTCFullYear(), friday.getUTCMonth(), friday.getUTCDate(), 23 - off, 0, 0));
+  // 11:59 local Denver → UTC hour = 11 - offset (MDT -6 → 17:59Z, MST -7 → 18:59Z)
+  return new Date(Date.UTC(friday.getUTCFullYear(), friday.getUTCMonth(), friday.getUTCDate(), 11 - off, 59, 0));
 }
 
 export function isLocked(weekOfISO, now = new Date()) {

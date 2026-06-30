@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>GainzTrain — Print Labels</title>
+
+  <!-- JsBarcode: generates Code 128 barcodes in the browser, no internet needed after first load -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+
+  <style>
+    /* ── SCREEN STYLES (what you see before printing) ── */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f4f4f5;
+      padding: 24px;
+    }
+
+    .screen-header {
+      max-width: 800px;
+      margin: 0 auto 24px;
+    }
+
+    .screen-header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .screen-header p {
+      color: #71717a;
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-primary { background: #22c55e; color: #fff; }
+    .btn-secondary { background: #e4e4e7; color: #3f3f46; }
+
+    .label-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: #a1a1aa;
+      padding: 60px 0;
+      font-size: 0.95rem;
+      width: 100%;
+    }
+
+    /* ── LABEL STYLES (both screen preview and print) ── */
+    /*
+      Target size: 2" × 3" portrait
+      At 96dpi screen: 192px × 288px
+      At 203dpi thermal printer: will be set via @page in print CSS
+    */
+    .label {
+      width: 192px;
+      height: 288px;
+      background: #fff;
+      border: 1.5px solid #d4d4d8;
+      border-radius: 6px;
+      padding: 10px 10px 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      font-family: Arial, Helvetica, sans-serif; /* Arial prints cleanly on thermal */
+      overflow: hidden;
+    }
+
+    .label-name {
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1.15;
+      color: #000;
+      letter-spacing: -0.01em;
+    }
+
+    .label-meal {
+      font-size: 10px;
+      font-weight: 600;
+      color: #333;
+      line-height: 1.3;
+      margin-top: 4px;
+    }
+
+    .label-prepped {
+      font-size: 8px;
+      color: #a1a1aa;
+      margin-top: 5px;
+      margin-bottom: 2px;
+      letter-spacing: 0.02em;
+      flex: 1;
+    }
+
+    .label-macros {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+      gap: 4px;
+    }
+
+    .macro-chip {
+      flex: 1;
+      background: #f4f4f5;
+      border-radius: 4px;
+      padding: 4px 2px;
+      text-align: center;
+    }
+
+    .macro-chip .macro-label {
+      font-size: 7px;
+      font-weight: 700;
+      color: #71717a;
+      letter-spacing: 0.05em;
+      display: block;
+    }
+
+    .macro-chip .macro-value {
+      font-size: 12px;
+      font-weight: 900;
+      color: #000;
+      display: block;
+      line-height: 1.1;
+    }
+
+    .macro-chip .macro-unit {
+      font-size: 7px;
+      color: #71717a;
+    }
+
+    .label-barcode {
+      margin-top: 6px;
+      text-align: center;
+    }
+
+    .label-barcode svg {
+      width: 100%;
+      height: auto;
+      max-height: 56px;
+    }
+
+    .label-barcode .meal-id-text {
+      font-size: 7px;
+      color: #a1a1aa;
+      margin-top: 2px;
+      font-family: monospace;
+    }
+
+    /* ── PRINT STYLES ── */
+    @media print {
+      body {
+        background: #fff;
+        padding: 0;
+        margin: 0;
+      }
+
+      .screen-header { display: none; }
+
+      .label-grid {
+        display: block;
+        max-width: none;
+        margin: 0;
+        gap: 0;
+      }
+
+      /*
+        Each label gets its own "page" — Chrome will size it to whatever
+        paper size you select in the print dialog. Select "2 x 3" custom
+        size or your thermal printer's label size.
+      */
+      .label {
+        width: 2in;
+        height: 3in;
+        border: none;
+        border-radius: 0;
+        padding: 0.1in 0.1in 0.08in;
+        page-break-after: always;
+        break-after: page;
+        margin: 0;
+      }
+
+      .label:last-child {
+        page-break-after: avoid;
+        break-after: avoid;
+      }
+
+      @page {
+        size: 2in 3in;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="screen-header">
+    <h1>Label Preview</h1>
+    <p id="label-summary">Loading orders...</p>
+    <div class="btn-row" style="align-items:center;">
+      <button class="btn-primary" onclick="window.print()">🖨 Print All Labels</button>
+      <button class="btn-secondary" onclick="window.location.href='dashboard.html'">← Back to Orders</button>
+      <label style="font-size:0.85rem;font-weight:600;color:#3f3f46;display:flex;align-items:center;gap:8px;">
+        Prepped on:
+        <input type="date" id="prep-date"
+          style="padding:8px 10px;border:1px solid #d4d4d8;border-radius:8px;font-size:0.9rem;background:#fafafa;" />
+      </label>
+    </div>
+  </div>
+
+  <div class="label-grid" id="label-grid"></div>
+
+  <script>
+    // ── WEEK STRING (shared with index.html via localStorage) ──
+    function getWeekStr() {
+      let w = localStorage.getItem("gainztrain_week");
+      if (!w) {
+        const today = new Date();
+        const daysUntilSunday = (7 - today.getDay()) % 7 || 7;
+        const sunday = new Date(today);
+        sunday.setDate(today.getDate() + daysUntilSunday);
+        w = `${sunday.getFullYear()}${String(sunday.getMonth()+1).padStart(2,"0")}${String(sunday.getDate()).padStart(2,"0")}`;
+        localStorage.setItem("gainztrain_week", w);
+      }
+      return w;
+    }
+
+    // ── NORMALIZE MEAL IDs ──
+    // Any meal missing meal_ids gets them generated and saved to localStorage.
+    // Safe to call multiple times — skips meals that already have correct IDs.
+    function normalizeMealIds(orders) {
+      const weekStr = getWeekStr();
+      let globalIndex = 1;
+      let changed = false;
+
+      orders.forEach(order => {
+        order.meals.forEach(meal => {
+          if (!meal.meal_ids || meal.meal_ids.length !== meal.quantity) {
+            meal.meal_ids = [];
+            for (let i = 0; i < meal.quantity; i++) {
+              meal.meal_ids.push(`GT-${weekStr}-${order.customer_id}-${String(globalIndex).padStart(3,"0")}`);
+              globalIndex++;
+            }
+            changed = true;
+          } else {
+            globalIndex += meal.quantity;
+          }
+        });
+      });
+
+      if (changed) localStorage.setItem("gainztrain_orders", JSON.stringify(orders));
+      return orders;
+    }
+
+    // ── PLACEHOLDER MACRO TABLE ──
+    // ⚠️ PLACEHOLDER: These values need to be confirmed with Brycen before go-live.
+    // See go-live checklist in project memory.
+    const MACROS = {
+      "F": {
+        "Cut":      { protein: 115, carbs: 100, veggies: 60 },
+        "Maintain": { protein: 115, carbs: 100, veggies: 60 },
+        "Bulk":     { protein: 115, carbs: 100, veggies: 60 }
+      },
+      "M": {
+        "Cut":      { protein: 170, carbs: 140, veggies: 100 },
+        "Maintain": { protein: 170, carbs: 140, veggies: 100 },
+        "Bulk":     { protein: 170, carbs: 140, veggies: 100 }
+      }
+    };
+
+    // ── BUILD FLAT LIST OF INDIVIDUAL MEAL LABELS ──
+    // Reads meal IDs that were stored when the order was saved — never regenerates them.
+    function buildLabels(orders, prepDateStr) {
+      const labels = [];
+      const preppedOn = formatPrepDate(prepDateStr);
+
+      orders.forEach(order => {
+        const macros = (MACROS[order.gender] || {})[order.goal] || { protein: "?", carbs: "?", veggies: "?" };
+        const firstName = order.first_name || "";
+        const lastInitial = order.last_name ? order.last_name[0] + "." : "";
+        const totalMeals = order.meals.reduce((sum, m) => sum + m.quantity, 0);
+
+        order.meals.forEach(meal => {
+          const ids = meal.meal_ids || [];
+          for (let i = 0; i < meal.quantity; i++) {
+            labels.push({
+              mealId: ids[i] || "ID-MISSING",
+              name: `${firstName} ${lastInitial}`,
+              mealName: meal.meal_name,
+              macros,
+              fulfillment: order.fulfillment,
+              preppedOn
+            });
+          }
+        });
+      });
+
+      return labels;
+    }
+
+    // ── FORMAT DATE FOR DISPLAY ──
+    // Turns "2026-03-29" into "Sun Mar 29, 2026"
+    function formatPrepDate(dateStr) {
+      if (!dateStr) return "";
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const d = new Date(year, month - 1, day);
+      return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    }
+
+    // ── GET UPCOMING SUNDAY ──
+    function upcomingSunday() {
+      const today = new Date();
+      const daysUntilSunday = (7 - today.getDay()) % 7 || 7;
+      const sunday = new Date(today);
+      sunday.setDate(today.getDate() + daysUntilSunday);
+      // Use local date parts — toISOString() uses UTC and can shift the date
+      const year = sunday.getFullYear();
+      const month = String(sunday.getMonth() + 1).padStart(2, "0");
+      const day = String(sunday.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    // ── RENDER ONE LABEL ──
+    function renderLabel(label, idx) {
+      const div = document.createElement("div");
+      div.className = "label";
+
+      div.innerHTML = `
+        <div>
+          <div class="label-name">${label.name}</div>
+          <div class="label-meal">${label.mealName}</div>
+          <div class="label-prepped">Prepped: ${label.preppedOn}</div>
+        </div>
+
+        <div class="label-macros">
+          <div class="macro-chip">
+            <span class="macro-label">PROTEIN</span>
+            <span class="macro-value">${label.macros.protein}</span>
+            <span class="macro-unit">g</span>
+          </div>
+          <div class="macro-chip">
+            <span class="macro-label">CARBS</span>
+            <span class="macro-value">${label.macros.carbs}</span>
+            <span class="macro-unit">g</span>
+          </div>
+          <div class="macro-chip">
+            <span class="macro-label">VEGGIES</span>
+            <span class="macro-value">${label.macros.veggies}</span>
+            <span class="macro-unit">g</span>
+          </div>
+        </div>
+
+        <div class="label-barcode">
+          <svg id="barcode-${idx}"></svg>
+          <div class="meal-id-text">${label.mealId}</div>
+        </div>
+      `;
+
+      return div;
+    }
+
+    // ── MAIN: LOAD ORDERS + BUILD PAGE ──
+    function renderAll() {
+      let orders = [];
+      try {
+        orders = JSON.parse(localStorage.getItem("gainztrain_orders") || "[]");
+      } catch { orders = []; }
+
+      const grid = document.getElementById("label-grid");
+      const summary = document.getElementById("label-summary");
+      const prepDateStr = document.getElementById("prep-date").value;
+
+      grid.innerHTML = "";
+
+      if (orders.length === 0) {
+        summary.textContent = "No orders found. Go back and add orders first.";
+        grid.innerHTML = '<div class="empty-state">No orders in localStorage. Go back to the order entry screen and add some orders first.</div>';
+        return;
+      }
+
+      normalizeMealIds(orders);
+      const labels = buildLabels(orders, prepDateStr);
+      const totalMeals = labels.length;
+      summary.textContent = `${orders.length} customer${orders.length !== 1 ? "s" : ""} · ${totalMeals} label${totalMeals !== 1 ? "s" : ""} to print`;
+
+      labels.forEach((label, idx) => {
+        const el = renderLabel(label, idx);
+        grid.appendChild(el);
+
+        // Generate the barcode after the element is in the DOM
+        JsBarcode(`#barcode-${idx}`, label.mealId, {
+          format: "CODE128",
+          width: 1.4,
+          height: 40,
+          displayValue: false,
+          margin: 0
+        });
+      });
+    }
+
+    // Set date picker default to upcoming Sunday, then render
+    const dateInput = document.getElementById("prep-date");
+    dateInput.value = upcomingSunday();
+    dateInput.addEventListener("change", renderAll);
+
+    renderAll();
+  </script>
+</body>
+</html>

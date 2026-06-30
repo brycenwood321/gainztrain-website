@@ -1,0 +1,3921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>GainzTrain — Assembly Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCTaz_qcbpsDY-_oZZ03FMMTJCRTJS55Vc&libraries=geometry&callback=onMapsLoaded" async defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #fafaf8;
+      color: #1a1614;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── TAB BAR ── */
+    .tab-bar {
+      display: flex;
+      background: #1a1614;
+      border-bottom: 3px solid #ff6b35;
+      padding: 0 24px;
+      gap: 2px;
+      align-items: center;
+    }
+
+    .tab-bar-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.35rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-right: 28px;
+      padding: 14px 0;
+      line-height: 1;
+    }
+
+    .tab-bar-title .logo-gainz { color: #ffffff; }
+    .tab-bar-title .logo-train { color: #ff6b35; }
+
+    .tab {
+      padding: 16px 18px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.55);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -3px;
+      transition: color 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+
+    .tab:hover { color: rgba(255,255,255,0.85); }
+
+    .tab.active {
+      color: #ffffff;
+      border-bottom-color: #ff6b35;
+    }
+
+    .tab-spacer { flex: 1; }
+
+    .back-link {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.4);
+      text-decoration: none;
+      padding: 8px 12px;
+    }
+
+    .back-link:hover { color: rgba(255,255,255,0.7); }
+
+    /* ── TAB PANELS ── */
+    .tab-panel { display: none; flex: 1; flex-direction: column; }
+    .tab-panel.active { display: flex; }
+
+    /* ── PROGRESS BAR SECTION ── */
+    .progress-section {
+      background: #ffffff;
+      border-bottom: 1px solid #e8e4df;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .progress-counts {
+      display: flex;
+      gap: 32px;
+      flex-shrink: 0;
+    }
+
+    .progress-stat {
+      text-align: center;
+    }
+
+    .progress-stat .stat-value {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 2.6rem;
+      font-weight: 900;
+      line-height: 1;
+      color: #1a1614;
+    }
+
+    .progress-stat .stat-value.green { color: #ff6b35; }
+
+    .progress-stat .stat-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #7a7270;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .progress-bar-wrap {
+      flex: 1;
+    }
+
+    .progress-bar-track {
+      background: #f5f2ee;
+      border-radius: 99px;
+      height: 14px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      background: #ff6b35;
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.4s ease;
+      width: 0%;
+    }
+
+    .progress-pct {
+      font-size: 0.8rem;
+      color: #7a7270;
+      margin-top: 6px;
+      text-align: right;
+    }
+
+    /* ── MAIN CONTENT AREA ── */
+    .assembly-body {
+      flex: 1;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      overflow-y: auto;
+    }
+
+    /* ── WAITING STATE ── */
+    .waiting-state {
+      text-align: center;
+      padding: 60px 0;
+      color: #7a7270;
+    }
+
+    .waiting-state .pulse-dot {
+      width: 16px;
+      height: 16px;
+      background: #ff6b35;
+      border-radius: 50%;
+      margin: 0 auto 16px;
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    .waiting-state p {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #7a7270;
+    }
+
+    /* ── ACTIVE SCAN CARD ── */
+    .scan-card {
+      background: linear-gradient(135deg, #cc5520, #ff6b35);
+      border: 1.5px solid #ff6b35;
+      border-radius: 16px;
+      padding: 28px 32px;
+      display: none;
+      position: relative;
+      box-shadow: 0 0 40px rgba(255,107,53,0.2);
+    }
+
+    .scan-card.visible { display: block; }
+
+    .scan-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+
+    .scan-customer-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 3.5rem;
+      font-weight: 900;
+      color: #ffffff;
+      line-height: 1;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .scan-meal-name {
+      font-size: 1.15rem;
+      color: #ffffff;
+      margin-top: 8px;
+      font-weight: 500;
+    }
+
+    .fulfillment-badge {
+      padding: 6px 16px;
+      border-radius: 99px;
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      flex-shrink: 0;
+    }
+
+    .badge-delivery { background: #1d4ed8; color: #fff; }
+    .badge-pickup   { background: #d97706; color: #fff; }
+
+    .scan-macros {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .scan-macro-chip {
+      flex: 1;
+      background: rgba(0,0,0,0.25);
+      border-radius: 10px;
+      padding: 12px 8px;
+      text-align: center;
+    }
+
+    .scan-macro-chip .chip-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: rgba(255,255,255,0.75);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .scan-macro-chip .chip-value {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 2.4rem;
+      font-weight: 900;
+      color: #ffffff;
+      line-height: 1;
+    }
+
+    .scan-macro-chip .chip-unit {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.75);
+    }
+
+    .scan-counts {
+      display: flex;
+      gap: 20px;
+      font-size: 0.85rem;
+      color: #ffffff;
+      font-weight: 500;
+    }
+
+    .scan-counts span {
+      background: rgba(0,0,0,0.2);
+      padding: 5px 12px;
+      border-radius: 6px;
+    }
+
+    /* ── COMPLETION STATE ── */
+    .completion-state {
+      text-align: center;
+      padding: 60px 0;
+      display: none;
+    }
+
+    .completion-state.visible { display: block; }
+
+    .completion-state .check {
+      font-size: 4rem;
+      margin-bottom: 16px;
+    }
+
+    .completion-state h2 {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 3rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #ff6b35;
+      margin-bottom: 8px;
+    }
+
+    .completion-state p {
+      color: #7a7270;
+      font-size: 1rem;
+    }
+
+    /* ── SCAN CARD ANIMATION ── */
+    .scan-card {
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+
+    .scan-card.dismissing {
+      opacity: 0;
+      transform: scale(0.97) translateY(-6px);
+      pointer-events: none;
+    }
+
+    /* New log pills slide in from the top */
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .log-pill-new {
+      animation: slideIn 0.3s ease forwards;
+    }
+
+    /* ── COMPLETED LOG ── */
+    .completed-log {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .log-heading {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #7a7270;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .log-pill {
+      background: #ffffff;
+      border: 1px solid #e8e4df;
+      border-radius: 8px;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.88rem;
+      box-shadow: 0 1px 4px rgba(26,22,20,0.04);
+    }
+
+    .log-pill .log-name { font-weight: 600; color: #1a1614; }
+    .log-pill .log-meal { color: #7a7270; font-size: 0.82rem; }
+    .log-pill .log-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 99px;
+    }
+
+    .log-pill .undo-btn {
+      background: none;
+      border: 1px solid #e8e4df;
+      color: #7a7270;
+      font-size: 0.72rem;
+      padding: 3px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .log-pill .undo-btn:hover {
+      border-color: #f87171;
+      color: #f87171;
+      background: rgba(248,113,113,0.08);
+    }
+
+    /* ── PLACEHOLDER TABS ── */
+    .placeholder-tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      color: #7a7270;
+    }
+
+    .placeholder-tab h2 { font-size: 1.4rem; color: #7a7270; }
+    .placeholder-tab p  { font-size: 0.9rem; }
+
+    /* ── PICKUP TAB ── */
+    .pickup-body {
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .pickup-section-heading {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      color: #ff6b35;
+    }
+
+    .collected-heading { color: #7a7270; }
+    .waiting-heading   { color: #7a7270; }
+
+    .pickup-card {
+      background: linear-gradient(135deg, #cc5520, #ff6b35);
+      border: none;
+      border-radius: 12px;
+      padding: 18px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      margin-bottom: 10px;
+      transition: opacity 0.15s, transform 0.15s;
+      box-shadow: 0 4px 20px rgba(255,107,53,0.3);
+    }
+
+    .pickup-card:hover {
+      opacity: 0.93;
+      transform: scale(0.995);
+    }
+
+    .pickup-card .pickup-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 900;
+      color: #ffffff;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .pickup-card .pickup-meta {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.75);
+      margin-top: 3px;
+    }
+
+    .pickup-card .pickup-tap-hint {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.85);
+      font-weight: 600;
+    }
+
+    /* Collected state */
+    .pickup-card.collected {
+      background: #fafaf8;
+      border-color: #7a7270;
+      box-shadow: none;
+      cursor: default;
+      opacity: 0.6;
+    }
+
+    .pickup-card.collected .pickup-name { color: #7a7270; }
+    .pickup-card.collected .pickup-meta { color: #7a7270; }
+
+    .pickup-card .undo-pickup-btn {
+      background: none;
+      border: 1px solid #e8e4df;
+      color: #7a7270;
+      font-size: 0.75rem;
+      padding: 4px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .pickup-card .undo-pickup-btn:hover {
+      border-color: #f87171;
+      color: #f87171;
+    }
+
+    /* Not-ready card */
+    .pickup-card.not-ready {
+      background: #fafaf8;
+      border-color: #f5f2ee;
+      box-shadow: none;
+      cursor: default;
+      opacity: 0.45;
+    }
+
+    .pickup-card.not-ready .pickup-name { color: #7a7270; }
+    .pickup-card.not-ready .pickup-meta { color: #7a7270; }
+
+    @keyframes pickupSlideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .pickup-card-new { animation: pickupSlideIn 0.3s ease forwards; }
+
+    .pickup-empty {
+      text-align: center;
+      color: #7a7270;
+      padding: 60px 0;
+      font-size: 0.95rem;
+    }
+
+    /* ── DELIVERY TAB ── */
+    #tab-delivery {
+      flex-direction: column;
+    }
+
+    .delivery-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #fafaf8;
+      border-bottom: 1px solid #f5f2ee;
+      padding: 14px 24px;
+      flex-shrink: 0;
+    }
+
+    .delivery-controls-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .delivery-controls-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #7a7270;
+    }
+
+    .driver-btn-group {
+      display: flex;
+      gap: 6px;
+    }
+
+    .driver-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      border: 1.5px solid #e8e4df;
+      background: #ffffff;
+      color: #7a7270;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .driver-btn:hover { border-color: #7a7270; color: #1a1614; }
+
+    .driver-btn.active {
+      background: #3b82f6;
+      border-color: #3b82f6;
+      color: #fff;
+    }
+
+    .delivery-status {
+      font-size: 0.82rem;
+      color: #7a7270;
+    }
+
+    #delivery-map {
+      flex: 1;
+      min-height: 380px;
+    }
+
+    .route-list-wrap {
+      display: flex;
+      gap: 16px;
+      padding: 20px 24px;
+      background: #fafaf8;
+      border-top: 1px solid #f5f2ee;
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+
+    .route-column {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .route-column-heading {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid;
+    }
+
+    .route-stop {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .route-stop-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .route-stop-info { flex: 1; }
+
+    .route-stop-name {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #1a1614;
+    }
+
+    .route-stop-address {
+      font-size: 0.78rem;
+      color: #7a7270;
+      margin-top: 1px;
+      line-height: 1.3;
+    }
+
+    .route-stop-meals {
+      font-size: 0.75rem;
+      color: #7a7270;
+      margin-top: 2px;
+    }
+
+    .delivery-empty {
+      text-align: center;
+      color: #7a7270;
+      padding: 60px 0;
+      font-size: 0.95rem;
+    }
+
+    .delivery-loading {
+      text-align: center;
+      color: #7a7270;
+      padding: 20px;
+      font-size: 0.85rem;
+    }
+
+    /* ── SHARE ROUTES SECTION ── */
+    .share-routes-wrap {
+      display: flex;
+      gap: 16px;
+      padding: 20px 24px;
+      background: #fafaf8;
+      border-top: 1px solid #f5f2ee;
+      overflow-x: auto;
+      flex-shrink: 0;
+      align-items: flex-start;
+    }
+
+    .share-section-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #7a7270;
+      margin-bottom: 12px;
+    }
+
+    .share-card {
+      background: #ffffff;
+      border: 1px solid #f5f2ee;
+      border-radius: 12px;
+      padding: 16px;
+      min-width: 200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .share-card-heading {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      align-self: flex-start;
+    }
+
+    .share-btn-row {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      align-items: center;
+    }
+
+    .share-copy-btn {
+      flex: 1;
+      padding: 8px 10px;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .share-copy-btn.copied {
+      background: #ff6b35;
+    }
+
+    .share-open-link {
+      font-size: 0.78rem;
+      color: #7a7270;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .share-open-link:hover { color: #7a7270; }
+
+    /* ── ORDERS TAB ── */
+    .orders-body {
+      flex: 1;
+      padding: 24px;
+      display: flex;
+      gap: 24px;
+      overflow: auto;
+      align-items: flex-start;
+    }
+
+    .orders-form-wrap { flex: 0 0 460px; }
+    .orders-list-wrap { flex: 1; min-width: 0; }
+
+    .orders-section-heading {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #ff6b35;
+      margin-bottom: 12px;
+    }
+
+    .orders-form-card {
+      background: #ffffff;
+      border: 1px solid #e8e4df;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 12px rgba(26,22,20,0.06);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .form-group.full { grid-column: 1 / -1; }
+
+    .form-label {
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: #7a7270;
+    }
+
+    .form-input,
+    .form-select {
+      padding: 8px 11px;
+      background: #f5f2ee;
+      border: 1px solid #e8e4df;
+      border-radius: 8px;
+      color: #1a1614;
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+
+    .form-input:focus,
+    .form-select:focus {
+      outline: none;
+      border-color: #ff6b35;
+    }
+
+    .form-select option { background: #ffffff; }
+    #address-group { display: none; }
+
+    .meals-label {
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: #7a7270;
+      margin-bottom: 10px;
+    }
+
+    .meal-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .meal-row-name {
+      flex: 1;
+      font-size: 0.85rem;
+      color: #1a1614;
+    }
+
+    .meal-qty {
+      width: 60px;
+      padding: 7px 8px;
+      background: #f5f2ee;
+      border: 1px solid #e8e4df;
+      border-radius: 8px;
+      color: #1a1614;
+      font-size: 0.9rem;
+      text-align: center;
+      font-family: inherit;
+    }
+
+    .meal-qty:focus { outline: none; border-color: #ff6b35; }
+    .qty-label { font-size: 0.74rem; color: #7a7270; width: 22px; }
+
+    .orders-btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .orders-btn-row button {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.83rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .orders-btn-row .btn-pull { background: #3b82f6; color: #fff; }
+    .orders-btn-row .btn-add  { background: #ff6b35; color: #fff; }
+    .orders-btn-row .btn-sec  { background: #f5f2ee; color: #7a7270; border: 1px solid #e8e4df; }
+    .orders-btn-row .btn-sec:hover { background: #e8e4df; }
+
+    .pull-status {
+      font-size: 0.76rem;
+      color: #7a7270;
+      margin-top: 8px;
+      min-height: 1em;
+    }
+
+    .pull-status.error { color: #f87171; }
+
+    .order-count {
+      font-size: 0.8rem;
+      color: #7a7270;
+      margin-bottom: 12px;
+    }
+
+    .order-card {
+      background: #fafaf8;
+      border: 1px solid #f5f2ee;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .order-info { flex: 1; }
+
+    .order-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: #1a1614;
+      margin-bottom: 5px;
+    }
+
+    .order-meta {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+
+    .o-badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 99px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .o-badge-delivery { background: #dbeafe; color: #1d4ed8; }
+    .o-badge-pickup   { background: #fff7ed; color: #b45309; }
+    .o-badge-goal     { background: #f5f2ee; color: #4a4440; }
+
+    .order-meals {
+      font-size: 0.8rem;
+      color: #7a7270;
+      list-style: none;
+    }
+
+    .order-meals li { margin-bottom: 2px; }
+    .order-addr { font-size: 0.76rem; color: #7a7270; margin-top: 4px; }
+
+    .orders-empty {
+      text-align: center;
+      color: #7a7270;
+      padding: 48px 0;
+      font-size: 0.88rem;
+    }
+
+    .btn-order-delete {
+      padding: 5px 12px;
+      background: #fff1f2;
+      border: 1px solid #dc2626;
+      border-radius: 6px;
+      color: #f87171;
+      font-size: 0.76rem;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a1614;
+      border: none;
+      color: #ffffff;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+      z-index: 9999;
+      white-space: nowrap;
+      box-shadow: 0 4px 16px rgba(26,22,20,0.2);
+    }
+
+    #toast.show { opacity: 1; }
+
+    /* ── MENU TAB ── */
+    #tab-menu { flex-direction: column; overflow: hidden; }
+
+    .menu-topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 24px;
+      background: #fafaf8;
+      border-bottom: 1px solid #f5f2ee;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .menu-topbar-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .menu-confirmed-count {
+      font-size: 0.82rem;
+      color: #7a7270;
+    }
+
+    .menu-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+    }
+
+    .menu-section-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #ff6b35;
+      margin-bottom: 10px;
+      margin-top: 24px;
+    }
+
+    .menu-section-label:first-child { margin-top: 0; }
+
+    .menu-pill {
+      background: #fafaf8;
+      border: 1px solid #e8e4df;
+      border-left: 3px solid #e8e4df;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .menu-pill.confirmed { border-color: #ff6b35; border-left-color: #ff6b35; }
+    .menu-pill.swapped-out { opacity: 0.4; border-color: #f5f2ee; border-left-color: #f5f2ee; pointer-events: none; }
+
+    .pill-info { flex: 1; min-width: 0; }
+
+    .pill-name-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 7px;
+    }
+
+    .pill-edit-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #7a7270;
+      font-size: 0.78rem;
+      padding: 2px 4px;
+      line-height: 1;
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+
+    .pill-edit-btn:hover { color: #7a7270; }
+
+    .add-choice-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 20px;
+    }
+
+    .add-choice-btn {
+      width: 100%;
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      text-align: left;
+      transition: opacity 0.15s;
+    }
+
+    .add-choice-btn:hover { opacity: 0.88; }
+
+    .add-choice-btn.existing {
+      background: #f5f2ee;
+      border: 1px solid #e8e4df;
+      color: #1a1614;
+    }
+
+    .add-choice-btn.new-meal {
+      background: #ff6b35;
+      border: 1px solid #ff6b35;
+      color: #fff;
+    }
+
+    .add-choice-sub {
+      font-size: 0.78rem;
+      font-weight: 400;
+      color: #7a7270;
+      margin-top: 3px;
+    }
+
+    .add-choice-btn.new-meal .add-choice-sub { color: #ffede7; }
+
+    .add-existing-body { padding: 20px; }
+
+    .add-existing-select {
+      width: 100%;
+      padding: 10px 12px;
+      background: #ffffff;
+      border: 1px solid #e8e4df;
+      border-radius: 8px;
+      color: #1a1614;
+      font-size: 0.9rem;
+      font-family: inherit;
+      margin-bottom: 14px;
+    }
+
+    .add-existing-select:focus { outline: none; border-color: #ff6b35; }
+    .add-existing-select option { background: #fafaf8; }
+
+    .pill-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: #1a1614;
+      margin-bottom: 7px;
+    }
+
+    .pill-macros { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .pill-ing-list { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
+    .pill-ing-tag {
+      font-size: 0.62rem;
+      color: #7a7270;
+      background: #ffffff;
+      border: 1px solid #e8e4df;
+      border-radius: 3px;
+      padding: 1px 5px;
+    }
+
+    .pill-macro {
+      background: #ffffff;
+      border: 1px solid #f5f2ee;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 0.72rem;
+      color: #7a7270;
+    }
+
+    .pill-macro b { color: #1a1614; font-weight: 700; }
+
+    .pill-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 99px;
+      flex-shrink: 0;
+    }
+
+    .pill-badge.confirmed { background: #ff6b35; color: #ffffff; }
+    .pill-badge.pending   { background: #f5f2ee; color: #7a7270; }
+    .pill-badge.swapped   { background: #f5f2ee; color: #7a7270; }
+
+    .pill-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    .pill-btn {
+      padding: 6px 12px;
+      border: 1px solid #e8e4df;
+      border-radius: 7px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: #ffffff;
+      color: #7a7270;
+    }
+
+    .pill-btn-confirm { border-color: #ff6b35; color: #ff6b35; }
+    .pill-btn-confirm:hover { background: #fff3ee; }
+    .pill-btn-unconfirm:hover { background: #f5f2ee; }
+    .pill-btn-swap { border-color: #3b82f6; color: #2563eb; }
+    .pill-btn-swap:hover { background: #dbeafe; }
+    .pill-btn-delete { border-color: #dc2626; color: #f87171; }
+    .pill-btn-delete:hover { background: #fff1f2; }
+
+    .menu-topbar-btn {
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid #e8e4df;
+      background: #f5f2ee;
+      color: #7a7270;
+    }
+
+    .menu-topbar-btn:hover { background: #e8e4df; }
+
+    .menu-topbar-btn.pull-coming-soon {
+      color: #7a7270;
+      cursor: not-allowed;
+      border-color: #f5f2ee;
+      background: #ffffff;
+    }
+
+    .menu-topbar-btn.finalize {
+      background: #ff6b35;
+      border-color: #ff6b35;
+      color: #fff;
+    }
+
+    .menu-topbar-btn.finalize:hover { opacity: 0.88; }
+
+    .menu-empty {
+      text-align: center;
+      color: #7a7270;
+      padding: 60px 0;
+      font-size: 0.88rem;
+    }
+
+    /* ── MENU OVERLAYS ── */
+    .menu-overlay-bg {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.78);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+
+    .ing-overlay { z-index: 300; }
+
+    .menu-modal {
+      background: #fafaf8;
+      border: 1px solid #f5f2ee;
+      border-radius: 14px;
+      width: 92%;
+      max-width: 500px;
+      max-height: 82vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .mini-modal { max-width: 360px; }
+
+    .menu-modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid #f5f2ee;
+      flex-shrink: 0;
+    }
+
+    .menu-modal-title { font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #1a1614; }
+
+    .menu-modal-close {
+      background: none;
+      border: none;
+      color: #7a7270;
+      cursor: pointer;
+      font-size: 1.1rem;
+      line-height: 1;
+      padding: 2px 6px;
+    }
+
+    .menu-modal-close:hover { color: #1a1614; }
+
+    .menu-modal-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+
+    .menu-modal-footer {
+      padding: 14px 20px;
+      border-top: 1px solid #f5f2ee;
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .menu-field-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+
+    .menu-field-label { font-size: 0.74rem; font-weight: 600; color: #7a7270; }
+
+    .menu-field-input, .menu-field-select {
+      padding: 8px 11px;
+      background: #ffffff;
+      border: 1px solid #e8e4df;
+      border-radius: 8px;
+      color: #1a1614;
+      font-size: 0.88rem;
+      font-family: inherit;
+      width: 100%;
+    }
+
+    .menu-field-input:focus, .menu-field-select:focus { outline: none; border-color: #ff6b35; }
+    .menu-field-select option { background: #fafaf8; }
+
+    .menu-macros-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+
+    .ing-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .ing-row-select { flex: 1; }
+
+    .ing-row-cats { display: flex; gap: 3px; flex-shrink: 0; }
+    .ing-cat-btn {
+      width: 26px; height: 32px;
+      border: 1px solid #e8e4df;
+      border-radius: 5px;
+      background: #ffffff;
+      color: #7a7270;
+      font-size: 0.72rem;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    .ing-cat-btn.active-p    { background: #dcfce7; border-color: #16a34a; color: #16a34a; }
+    .ing-cat-btn.active-c    { background: #eff6ff; border-color: #3b82f6; color: #2563eb; }
+    .ing-cat-btn.active-v    { background: #faf5ff; border-color: #a855f7; color: #7c3aed; }
+    .ing-cat-btn.active-misc { background: #f5f2ee; border-color: #4a4440; color: #4a4440; }
+
+    .ing-row-remove {
+      background: none;
+      border: none;
+      color: #7a7270;
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 4px;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+
+    .ing-row-remove:hover { color: #f87171; }
+
+    .menu-add-ing-btn {
+      background: none;
+      border: 1px dashed #e8e4df;
+      border-radius: 8px;
+      color: #7a7270;
+      font-size: 0.8rem;
+      cursor: pointer;
+      padding: 8px;
+      width: 100%;
+      margin-top: 2px;
+      margin-bottom: 4px;
+      font-family: inherit;
+    }
+
+    .menu-add-ing-btn:hover { border-color: #7a7270; color: #7a7270; }
+
+    .menu-btn-save {
+      flex: 1;
+      padding: 9px;
+      background: #ff6b35;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .menu-btn-save:hover { opacity: 0.9; }
+
+    .menu-btn-cancel {
+      padding: 9px 16px;
+      background: #ffffff;
+      border: 1px solid #e8e4df;
+      border-radius: 8px;
+      color: #7a7270;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .swap-meal-list { overflow-y: auto; }
+
+    .swap-meal-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 20px;
+      border-bottom: 1px solid #ffffff;
+      cursor: pointer;
+    }
+
+    .swap-meal-item:hover { background: #ffffff; }
+    .swap-meal-item:last-child { border-bottom: none; }
+
+    .swap-meal-item.add-new { color: #3b82f6; font-weight: 600; font-size: 0.88rem; }
+
+    .swap-meal-name { font-size: 0.88rem; font-weight: 600; color: #1a1614; flex: 1; }
+    .swap-meal-macros { font-size: 0.74rem; color: #7a7270; white-space: nowrap; }
+
+    /* ── INGREDIENTS TAB ── */
+    #tab-ingredients { flex-direction: column; overflow: hidden; }
+
+    .ingredients-topbar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 24px;
+      background: #fafaf8;
+      border-bottom: 1px solid #f5f2ee;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .ing-topbar-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #1a1614;
+    }
+
+    .ing-topbar-sub {
+      font-size: 0.76rem;
+      color: #7a7270;
+      margin-top: 2px;
+    }
+
+    .ing-copy-btn {
+      margin-left: auto;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid #e8e4df;
+      background: #f5f2ee;
+      color: #7a7270;
+      font-family: inherit;
+    }
+
+    .ing-copy-btn:hover { background: #e8e4df; }
+
+    .ingredients-body {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .ingredients-sidebar {
+      width: 210px;
+      flex-shrink: 0;
+      padding: 20px 14px;
+      border-right: 1px solid #f5f2ee;
+      overflow-y: auto;
+    }
+
+    .ing-sidebar-heading {
+      font-size: 0.64rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #7a7270;
+      margin-bottom: 12px;
+    }
+
+    .checklist-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 9px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 5px;
+      border: 1px solid #f5f2ee;
+      background: #ffffff;
+      transition: background 0.15s;
+      user-select: none;
+    }
+
+    .checklist-item:hover { background: #f5f2ee; }
+
+    .checklist-item.checked {
+      background: #fafaf8;
+      border-color: #fafaf8;
+      opacity: 0.45;
+    }
+
+    .checklist-box {
+      width: 18px;
+      height: 18px;
+      border: 2px solid #e8e4df;
+      border-radius: 4px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 900;
+      color: #ff6b35;
+    }
+
+    .checklist-item.checked .checklist-box {
+      background: #cc5520;
+      border-color: #ff6b35;
+    }
+
+    .checklist-label {
+      font-size: 0.83rem;
+      color: #1a1614;
+      font-weight: 500;
+    }
+
+    .checklist-item.checked .checklist-label {
+      color: #7a7270;
+      text-decoration: line-through;
+    }
+
+    .ingredients-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+    }
+
+    .ing-section-heading {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #ff6b35;
+      margin-bottom: 10px;
+      margin-top: 24px;
+    }
+
+    .ing-section-heading:first-child { margin-top: 0; }
+    .ing-section-heading.done-heading { color: #7a7270; }
+
+    .ing-pill {
+      background: linear-gradient(135deg, #cc5520, #ff6b35);
+      border: none;
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.15s;
+      box-shadow: 0 4px 16px rgba(255,107,53,0.28);
+      user-select: none;
+    }
+
+    .ing-pill:hover { opacity: 0.9; transform: scale(0.997); }
+
+    .ing-pill.checked {
+      background: #fafaf8;
+      border-color: #7a7270;
+      box-shadow: none;
+      cursor: default;
+      opacity: 0.5;
+    }
+
+    .ing-pill.checked:hover { transform: none; opacity: 0.5; }
+
+    .ing-pill-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      flex: 1;
+    }
+
+    .ing-pill.checked .ing-pill-name { color: #7a7270; }
+
+    .ing-pill-qty {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      color: rgba(255,255,255,0.9);
+      white-space: nowrap;
+    }
+
+    .ing-pill.checked .ing-pill-qty { color: #7a7270; }
+    .ing-qty-cooked { font-size: 0.72rem; font-weight: 400; color: rgba(255,255,255,0.65); }
+    .ing-pill.checked .ing-qty-cooked { color: #7a7270; }
+
+    .ing-qty-tbd {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: rgba(255,255,255,0.85);
+      background: rgba(0,0,0,0.12);
+      border: none;
+      border-radius: 6px;
+      padding: 2px 8px;
+      white-space: nowrap;
+    }
+
+    .ing-pill.checked .ing-qty-tbd { background: #f5f2ee; color: #7a7270; }
+
+    .ing-pill-tap {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.75);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .ing-pill.checked .ing-pill-tap { display: none; }
+
+    .ing-undo-btn {
+      background: none;
+      border: 1px solid #e8e4df;
+      color: #7a7270;
+      font-size: 0.72rem;
+      padding: 3px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: none;
+      font-family: inherit;
+    }
+
+    .ing-pill.checked .ing-undo-btn { display: block; }
+    .ing-undo-btn:hover { border-color: #f87171; color: #f87171; }
+
+    .ing-empty {
+      text-align: center;
+      color: #7a7270;
+      padding: 60px 0;
+      font-size: 0.88rem;
+    }
+
+    /* ── HIDDEN SCAN INPUT ── */
+    #scan-input {
+      position: fixed;
+      left: -9999px;
+      opacity: 0;
+      width: 1px;
+      height: 1px;
+    }
+
+    /* ── MANUAL SCAN (for testing without physical scanner) ── */
+    .manual-scan-bar {
+      display: flex;
+      gap: 8px;
+      background: #fafaf8;
+      border-top: 1px solid #f5f2ee;
+      padding: 12px 32px;
+      align-items: center;
+    }
+
+    .manual-scan-bar label {
+      font-size: 0.78rem;
+      color: #7a7270;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .manual-scan-bar input {
+      flex: 1;
+      max-width: 360px;
+      padding: 8px 12px;
+      background: #f5f2ee;
+      border: 1px solid #e8e4df;
+      border-radius: 6px;
+      color: #1a1614;
+      font-size: 0.85rem;
+      font-family: monospace;
+    }
+
+    .manual-scan-bar input:focus {
+      outline: none;
+      border-color: #ff6b35;
+    }
+
+    .manual-scan-bar button {
+      padding: 8px 16px;
+      background: #f5f2ee;
+      border: 1px solid #e8e4df;
+      border-radius: 6px;
+      color: #7a7270;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .manual-scan-bar button:hover { background: #e8e4df; }
+
+    .scan-error {
+      font-size: 0.8rem;
+      color: #f87171;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hidden input that captures barcode scanner keystrokes -->
+  <input id="scan-input" type="text" autocomplete="off" />
+  <!-- Toast notification -->
+  <div id="toast"></div>
+
+  <!-- ── TAB BAR ── -->
+  <div class="tab-bar">
+    <div class="tab-bar-title"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></div>
+    <div class="tab active" data-tab="orders">Orders</div>
+    <div class="tab" data-tab="assembly">Assembly</div>
+    <div class="tab" data-tab="pickup">Pickup</div>
+    <div class="tab" data-tab="delivery">Delivery</div>
+    <div class="tab" data-tab="menu">Menu</div>
+    <div class="tab" data-tab="ingredients">Ingredients</div>
+    <div class="tab-spacer"></div>
+  </div>
+
+  <!-- ── ORDERS TAB ── -->
+  <div class="tab-panel active" id="tab-orders">
+    <div class="orders-body">
+
+      <!-- Left: add order form -->
+      <div class="orders-form-wrap">
+        <div class="orders-section-heading">Add Order Manually</div>
+        <div class="orders-form-card">
+          <form id="order-form">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">First Name</label>
+                <input type="text" id="first-name" class="form-input" placeholder="Jenny" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Last Name</label>
+                <input type="text" id="last-name" class="form-input" placeholder="Smith" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Gender</label>
+                <select id="gender" class="form-select" required>
+                  <option value="">— select —</option>
+                  <option value="F">Female</option>
+                  <option value="M">Male</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Goal</label>
+                <select id="goal" class="form-select" required>
+                  <option value="">— select —</option>
+                  <option value="Cut">Cut</option>
+                  <option value="Maintain">Maintain</option>
+                  <option value="Bulk">Bulk</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Fulfillment</label>
+                <select id="fulfillment" class="form-select" required>
+                  <option value="">— select —</option>
+                  <option value="delivery">Delivery</option>
+                  <option value="pickup">Pickup</option>
+                </select>
+              </div>
+              <div class="form-group" id="address-group">
+                <label class="form-label">Delivery Address</label>
+                <input type="text" id="address" class="form-input" placeholder="1234 Main St, Provo, UT 84601" />
+              </div>
+            </div>
+
+            <div style="margin-top:14px;">
+              <div class="meals-label">Meals &amp; Quantities</div>
+              <div id="meal-rows-container"></div>
+            </div>
+
+            <div class="orders-btn-row">
+              <button type="button" class="btn-pull" id="pull-btn" onclick="pullOrders()">⬇ Pull Orders</button>
+              <button type="submit" class="btn-add">+ Add Order</button>
+              <button type="button" class="btn-sec" onclick="window.open('labels.html','_blank')">🖨 Print Labels</button>
+            </div>
+            <div class="pull-status" id="pull-status"></div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Right: order list -->
+      <div class="orders-list-wrap">
+        <div class="orders-section-heading">Orders This Week</div>
+        <div class="order-count" id="order-count"></div>
+        <div id="order-list"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── MENU TAB ── -->
+  <div class="tab-panel" id="tab-menu">
+    <div class="menu-topbar">
+      <button class="menu-topbar-btn pull-coming-soon" title="Coming soon — waiting for Brycen's menu endpoint">⬇ Pull from Website</button>
+      <button class="menu-topbar-btn" onclick="openAddMealDirect()">+ Add Meal</button>
+      <div class="menu-topbar-right">
+        <span class="menu-confirmed-count" id="menu-confirmed-count"></span>
+        <button class="menu-topbar-btn finalize" onclick="finalizeMenu()">✓ Finalize Menu</button>
+      </div>
+    </div>
+    <div class="menu-scroll" id="menu-pills"></div>
+  </div>
+
+  <!-- ── INGREDIENTS TAB ── -->
+  <div class="tab-panel" id="tab-ingredients">
+    <div class="ingredients-topbar">
+      <div>
+        <div class="ing-topbar-title">Ingredients This Week</div>
+        <div class="ing-topbar-sub" id="ing-topbar-sub">From confirmed menu meals</div>
+      </div>
+      <button class="ing-copy-btn" onclick="copyIngredientList()">📋 Copy List</button>
+    </div>
+    <div class="ingredients-body">
+
+      <!-- Left sidebar: don't-forget checklist -->
+      <div class="ingredients-sidebar">
+        <div class="ing-sidebar-heading">Don't forget to check</div>
+        <div id="ing-checklist"></div>
+      </div>
+
+      <!-- Main: ingredient pills -->
+      <div class="ingredients-main" id="ing-main">
+        <div class="ing-empty">Switch to this tab to load ingredients.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── ASSEMBLY TAB ── -->
+  <div class="tab-panel" id="tab-assembly">
+
+    <!-- Progress bar -->
+    <div class="progress-section">
+      <div class="progress-counts">
+        <div class="progress-stat">
+          <div class="stat-value green" id="count-done">0</div>
+          <div class="stat-label">Done</div>
+        </div>
+        <div class="progress-stat">
+          <div class="stat-value" id="count-remaining">—</div>
+          <div class="stat-label">Remaining</div>
+        </div>
+        <div class="progress-stat">
+          <div class="stat-value" id="count-total">—</div>
+          <div class="stat-label">Total</div>
+        </div>
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-pct" id="progress-pct">0%</div>
+      </div>
+    </div>
+
+    <!-- Main body -->
+    <div class="assembly-body">
+
+      <!-- Waiting for scan -->
+      <div class="waiting-state" id="waiting-state">
+        <div class="pulse-dot"></div>
+        <p>Waiting for scan...</p>
+      </div>
+
+      <!-- Active scan card -->
+      <div class="scan-card" id="scan-card">
+        <div class="scan-card-header">
+          <div>
+            <div class="scan-customer-name" id="card-name"></div>
+            <div class="scan-meal-name" id="card-meal"></div>
+          </div>
+          <div class="fulfillment-badge" id="card-fulfillment-badge"></div>
+        </div>
+        <div class="scan-macros">
+          <div class="scan-macro-chip">
+            <span class="chip-label">PROTEIN</span>
+            <span class="chip-value" id="card-protein">—</span>
+            <span class="chip-unit">g</span>
+          </div>
+          <div class="scan-macro-chip">
+            <span class="chip-label">CARBS</span>
+            <span class="chip-value" id="card-carbs">—</span>
+            <span class="chip-unit">g</span>
+          </div>
+          <div class="scan-macro-chip">
+            <span class="chip-label">VEGGIES</span>
+            <span class="chip-value" id="card-veggies">—</span>
+            <span class="chip-unit">g</span>
+          </div>
+        </div>
+        <div class="scan-counts">
+          <span id="card-customer-count"></span>
+          <span id="card-total-count"></span>
+        </div>
+      </div>
+
+      <!-- All done! -->
+      <div class="completion-state" id="completion-state">
+        <div class="check">✅</div>
+        <h2>All meals portioned!</h2>
+        <p>Great work. Head to the Pickup or Delivery tab to wrap up.</p>
+      </div>
+
+      <!-- Completed log -->
+      <div class="completed-log" id="completed-log" style="display:none;">
+        <div class="log-heading">Completed</div>
+        <div id="log-items"></div>
+      </div>
+
+    </div>
+
+    <!-- Manual scan bar (for testing without a physical scanner) -->
+    <div class="manual-scan-bar">
+      <label>Test scan (no scanner yet):</label>
+      <input type="text" id="manual-input" placeholder="Paste a meal ID here and press Enter" autocomplete="off" />
+      <button id="manual-btn">Scan</button>
+      <span class="scan-error" id="scan-error"></span>
+    </div>
+
+  </div>
+
+  <!-- ── DELIVERY TAB ── -->
+  <div class="tab-panel" id="tab-delivery">
+
+    <!-- Controls bar -->
+    <div class="delivery-controls">
+      <div class="delivery-controls-left">
+        <span class="delivery-controls-label">Drivers:</span>
+        <div class="driver-btn-group">
+          <button class="driver-btn active" data-drivers="1">1</button>
+          <button class="driver-btn" data-drivers="2">2</button>
+          <button class="driver-btn" data-drivers="3">3</button>
+        </div>
+      </div>
+      <div class="delivery-status" id="delivery-status"></div>
+    </div>
+
+    <!-- Map -->
+    <div id="delivery-map"></div>
+
+    <!-- Route stop lists -->
+    <div class="route-list-wrap" id="route-list"></div>
+
+    <!-- Share routes (QR codes + copy links) -->
+    <div class="share-routes-wrap" id="share-routes" style="display:none;"></div>
+
+    <!-- Empty state -->
+    <div class="delivery-empty" id="delivery-empty" style="display:none;">
+      <p>No delivery orders this week.</p>
+    </div>
+
+  </div>
+
+  <!-- ── PICKUP TAB ── -->
+  <div class="tab-panel" id="tab-pickup">
+    <div class="pickup-body">
+
+      <!-- Ready for pickup -->
+      <div id="pickup-ready-section">
+        <div class="pickup-section-heading" id="pickup-ready-heading"></div>
+        <div id="pickup-ready-list"></div>
+      </div>
+
+      <!-- Collected -->
+      <div id="pickup-collected-section" style="display:none;">
+        <div class="pickup-section-heading collected-heading">Collected</div>
+        <div id="pickup-collected-list"></div>
+      </div>
+
+      <!-- Not ready yet -->
+      <div id="pickup-waiting-section" style="display:none;">
+        <div class="pickup-section-heading waiting-heading">Not ready yet</div>
+        <div id="pickup-waiting-list"></div>
+      </div>
+
+      <!-- Empty state -->
+      <div class="pickup-empty" id="pickup-empty" style="display:none;">
+        <p>No pickup orders this week.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ── WEEK STRING (shared with index.html via localStorage) ──
+    function getWeekStr() {
+      let w = localStorage.getItem("gainztrain_week");
+      if (!w) {
+        const today = new Date();
+        const daysUntilSunday = (7 - today.getDay()) % 7 || 7;
+        const sunday = new Date(today);
+        sunday.setDate(today.getDate() + daysUntilSunday);
+        w = `${sunday.getFullYear()}${String(sunday.getMonth()+1).padStart(2,"0")}${String(sunday.getDate()).padStart(2,"0")}`;
+        localStorage.setItem("gainztrain_week", w);
+      }
+      return w;
+    }
+
+    // ── NORMALIZE MEAL IDs ──
+    // Any meal missing meal_ids gets them generated and saved to localStorage.
+    // Safe to call multiple times — skips meals that already have correct IDs.
+    function normalizeMealIds(orders) {
+      const weekStr = getWeekStr();
+      let globalIndex = 1;
+      let changed = false;
+
+      orders.forEach(order => {
+        order.meals.forEach(meal => {
+          if (!meal.meal_ids || meal.meal_ids.length !== meal.quantity) {
+            meal.meal_ids = [];
+            for (let i = 0; i < meal.quantity; i++) {
+              meal.meal_ids.push(`GT-${weekStr}-${order.customer_id}-${String(globalIndex).padStart(3,"0")}`);
+              globalIndex++;
+            }
+            changed = true;
+          } else {
+            globalIndex += meal.quantity;
+          }
+        });
+      });
+
+      if (changed) localStorage.setItem("gainztrain_orders", JSON.stringify(orders));
+      return orders;
+    }
+
+    const MACROS = {
+      "F": {
+        "Cut":      { protein: 115, carbs: 100, veggies: 60 },
+        "Maintain": { protein: 115, carbs: 100, veggies: 60 },
+        "Bulk":     { protein: 115, carbs: 100, veggies: 60 }
+      },
+      "M": {
+        "Cut":      { protein: 170, carbs: 140, veggies: 100 },
+        "Maintain": { protein: 170, carbs: 140, veggies: 100 },
+        "Bulk":     { protein: 170, carbs: 140, veggies: 100 }
+      }
+    };
+
+    // ── LOAD DATA ──
+    function loadOrders() {
+      try { return JSON.parse(localStorage.getItem("gainztrain_orders") || "[]"); }
+      catch { return []; }
+    }
+
+    function loadScanned() {
+      try { return JSON.parse(localStorage.getItem("gainztrain_scanned") || "[]"); }
+      catch { return []; }
+    }
+
+    function saveScanned(scanned) {
+      localStorage.setItem("gainztrain_scanned", JSON.stringify(scanned));
+    }
+
+    // ── BUILD MEAL MAP ──
+    // Reads meal IDs that were stored when the order was saved — never regenerates them.
+    // Returns a lookup table: mealId → meal details
+    function buildMealMap(orders) {
+      const map = {};
+
+      orders.forEach(order => {
+        const macros = (MACROS[order.gender] || {})[order.goal] || { protein: "?", carbs: "?", veggies: "?" };
+        const firstName = order.first_name || "";
+        const lastInitial = order.last_name ? order.last_name[0] + "." : "";
+        const totalMeals = order.meals.reduce((sum, m) => sum + m.quantity, 0);
+
+        order.meals.forEach(meal => {
+          const ids = meal.meal_ids || [];
+          for (let i = 0; i < meal.quantity; i++) {
+            const mealId = ids[i] || `ID-MISSING-${Math.random()}`;
+            map[mealId] = {
+              mealId,
+              customerId: order.customer_id,
+              customerName: `${firstName} ${lastInitial}`,
+              mealName: meal.meal_name,
+              macros,
+              fulfillment: order.fulfillment,
+              customerTotalMeals: totalMeals
+            };
+          }
+        });
+      });
+
+      // Add static week-level totals per meal name
+      const mealNameCounts = {};
+      Object.values(map).forEach(m => {
+        mealNameCounts[m.mealName] = (mealNameCounts[m.mealName] || 0) + 1;
+      });
+      Object.values(map).forEach(m => {
+        m.weekMealTotal = mealNameCounts[m.mealName];
+      });
+
+      return map;
+    }
+
+    // ── STATE ──
+    let orders    = normalizeMealIds(loadOrders());
+    let mealMap   = buildMealMap(orders);
+    let allMealIds = Object.keys(mealMap);
+
+    // Drop any scanned IDs that no longer exist in the meal map
+    let scanned = loadScanned().filter(id => mealMap[id]);
+    saveScanned(scanned);
+
+    // ── UPDATE PROGRESS UI ──
+    function updateProgress() {
+      const total = allMealIds.length;
+      const done = scanned.length;
+      const remaining = total - done;
+      const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+
+      document.getElementById("count-done").textContent = done;
+      document.getElementById("count-remaining").textContent = remaining;
+      document.getElementById("count-total").textContent = total;
+      document.getElementById("progress-fill").style.width = pct + "%";
+      document.getElementById("progress-pct").textContent = pct + "%";
+
+      // Show/hide completion state
+      if (total > 0 && done === total) {
+        document.getElementById("completion-state").classList.add("visible");
+        document.getElementById("waiting-state").style.display = "none";
+        document.getElementById("scan-card").classList.remove("visible");
+      }
+    }
+
+    // ── RENDER COMPLETED LOG ──
+    // newestId: the meal just scanned — gets a slide-in animation
+    function renderLog(newestId) {
+      if (scanned.length === 0) {
+        document.getElementById("completed-log").style.display = "none";
+        return;
+      }
+
+      document.getElementById("completed-log").style.display = "block";
+
+      const items = document.getElementById("log-items");
+      const reversed = [...scanned].reverse();
+      items.innerHTML = reversed.map(id => {
+        const m = mealMap[id];
+        if (!m) return "";
+        const badgeClass = m.fulfillment === "delivery" ? "badge-delivery" : "badge-pickup";
+        const badgeText = m.fulfillment === "delivery" ? "DELIVERY" : "PICKUP";
+        const animClass = id === newestId ? " log-pill-new" : "";
+        return `
+          <div class="log-pill${animClass}">
+            <span class="log-name">${m.customerName}</span>
+            <span class="log-meal">${m.mealName}</span>
+            <span class="log-badge ${badgeClass}">${badgeText}</span>
+            <button class="undo-btn" onclick="undoScan('${id}')">Undo</button>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // ── UNDO A SCAN ──
+    function undoScan(mealId) {
+      if (!confirm("Remove this scan? The meal will go back to 'remaining'.")) return;
+      scanned = scanned.filter(id => id !== mealId);
+      saveScanned(scanned);
+
+      // If the undone scan was the active card, go back to waiting state
+      const cardName = document.getElementById("card-name").textContent;
+      const undone = mealMap[mealId];
+      if (undone && cardName === undone.customerName) {
+        document.getElementById("scan-card").classList.remove("visible");
+        document.getElementById("waiting-state").style.display = "";
+      }
+
+      // Hide completion state if we go back below total
+      document.getElementById("completion-state").classList.remove("visible");
+
+      updateProgress();
+      renderLog();
+    }
+
+    // ── SHOW ACTIVE CARD (updates DOM with meal details) ──
+    function showCard(meal) {
+      document.getElementById("waiting-state").style.display = "none";
+      const card = document.getElementById("scan-card");
+      card.classList.remove("dismissing");
+      card.classList.add("visible");
+
+      document.getElementById("card-name").textContent = meal.customerName;
+      document.getElementById("card-meal").textContent = meal.mealName;
+      document.getElementById("card-protein").textContent = meal.macros.protein;
+      document.getElementById("card-carbs").textContent = meal.macros.carbs;
+      document.getElementById("card-veggies").textContent = meal.macros.veggies;
+
+      const badge = document.getElementById("card-fulfillment-badge");
+      badge.textContent = meal.fulfillment === "delivery" ? "DELIVERY" : "PICKUP";
+      badge.className = "fulfillment-badge " + (meal.fulfillment === "delivery" ? "badge-delivery" : "badge-pickup");
+
+      const customerScannedSoFar = scanned.filter(id => mealMap[id] && mealMap[id].customerId === meal.customerId).length;
+      const weekMealScannedSoFar = scanned.filter(id => mealMap[id] && mealMap[id].mealName === meal.mealName).length;
+
+      document.getElementById("card-customer-count").textContent =
+        `Meal ${customerScannedSoFar} of ${meal.customerTotalMeals} for this customer`;
+      document.getElementById("card-total-count").textContent =
+        `${weekMealScannedSoFar} of ${meal.weekMealTotal} ${meal.mealName} this week`;
+    }
+
+    // ── HANDLE A SCAN ──
+    function handleScan(rawValue) {
+      const mealId = rawValue.trim();
+      const errorEl = document.getElementById("scan-error");
+
+      if (!mealId) return;
+
+      // Unknown barcode
+      if (!mealMap[mealId]) {
+        errorEl.textContent = `Unknown ID: "${mealId}"`;
+        setTimeout(() => errorEl.textContent = "", 3000);
+        return;
+      }
+
+      // Already scanned
+      if (scanned.includes(mealId)) {
+        errorEl.textContent = `Already scanned: ${mealId}`;
+        setTimeout(() => errorEl.textContent = "", 3000);
+        return;
+      }
+
+      errorEl.textContent = "";
+      const meal = mealMap[mealId];
+      const card = document.getElementById("scan-card");
+      const cardIsVisible = card.classList.contains("visible");
+
+      // Mark as scanned first so dynamic counts are correct
+      scanned.push(mealId);
+      saveScanned(scanned);
+
+      if (cardIsVisible) {
+        // Animate the current card out, then show the new one
+        card.classList.add("dismissing");
+        setTimeout(() => {
+          renderLog(mealId);
+          showCard(meal);
+          updateProgress();
+          renderPickup(meal.customerId);
+        }, 260);
+      } else {
+        // No card showing — just show immediately
+        renderLog(mealId);
+        showCard(meal);
+        updateProgress();
+        renderPickup(meal.customerId);
+      }
+    }
+
+    // ── BARCODE SCANNER LISTENER ──
+    // The USB cradle scanner types the barcode string then sends Enter.
+    // We keep a hidden input always focused to capture this.
+    const scanInput = document.getElementById("scan-input");
+
+    // Re-focus the hidden scan input on click — but only when on the Assembly tab,
+    // so we don't steal focus from the Orders form inputs.
+    document.addEventListener("click", (e) => {
+      const activeTab = document.querySelector(".tab.active");
+      if (activeTab?.dataset.tab === "assembly" && !e.target.closest(".manual-scan-bar")) {
+        scanInput.focus();
+      }
+    });
+
+    scanInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const val = scanInput.value;
+        scanInput.value = "";
+        handleScan(val);
+      }
+    });
+
+    // Scanner input is focused when switching to Assembly tab, not on page load
+
+    // ── MANUAL SCAN BAR (for testing) ──
+    const manualInput = document.getElementById("manual-input");
+    const manualBtn = document.getElementById("manual-btn");
+
+    function fireManualScan() {
+      handleScan(manualInput.value);
+      manualInput.value = "";
+      manualInput.focus();
+    }
+
+    manualBtn.addEventListener("click", fireManualScan);
+    manualInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") fireManualScan();
+    });
+
+    // ── ORDERS TAB SETUP ──
+    // Meal inputs are built dynamically from the meal library so they always
+    // match whatever is on the current menu.
+    function renderMealInputs() {
+      const container = document.getElementById("meal-rows-container");
+      if (!container) return;
+      const library = loadMealLibrary();
+      if (library.length === 0) {
+        container.innerHTML = '<div style="color:#71717a;font-size:0.85rem;padding:8px 0;">No meals in library yet — add meals on the Menu tab first.</div>';
+        return;
+      }
+      container.innerHTML = library.map(m =>
+        `<div class="meal-row">
+          <span class="meal-row-name">${m.name}</span>
+          <input type="number" class="meal-qty" data-meal-name="${m.name.replace(/"/g, '&quot;')}" min="0" max="20" value="0" />
+          <span class="qty-label">qty</span>
+        </div>`
+      ).join("");
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 2400);
+    }
+
+    // Rebuild all app state from localStorage — called when switching to any non-Orders tab
+    function refreshAppState() {
+      orders     = normalizeMealIds(loadOrders());
+      mealMap    = buildMealMap(orders);
+      allMealIds = Object.keys(mealMap);
+      scanned    = loadScanned().filter(id => mealMap[id]);
+      saveScanned(scanned);
+      collected  = loadCollected();
+      updateProgress();
+    }
+
+    // Assign meal IDs when a single order is added manually
+    function assignMealIds(meals, customerId) {
+      const weekStr = getWeekStr();
+      const existing = loadOrders();
+      let nextIdx = existing.reduce((sum, o) =>
+        sum + o.meals.reduce((s, m) => s + m.quantity, 0), 0) + 1;
+      meals.forEach(meal => {
+        meal.meal_ids = [];
+        for (let i = 0; i < meal.quantity; i++) {
+          meal.meal_ids.push(`GT-${weekStr}-${customerId}-${String(nextIdx).padStart(3,"0")}`);
+          nextIdx++;
+        }
+      });
+    }
+
+    // Assign meal IDs across a full batch of pulled orders
+    function assignAllMealIds(orders, weekStr) {
+      let nextIdx = 1;
+      orders.forEach(order => {
+        order.meals.forEach(meal => {
+          meal.meal_ids = [];
+          for (let i = 0; i < meal.quantity; i++) {
+            meal.meal_ids.push(`GT-${weekStr}-${order.customer_id}-${String(nextIdx).padStart(3,"0")}`);
+            nextIdx++;
+          }
+        });
+      });
+    }
+
+    // Pull this week's orders from the live site. Hosted on gainztrainprep.com itself, so this calls the
+    // staff-LOGIN-gated endpoint (authorized by your session cookie) instead of carrying a readable
+    // token in this file. credentials:'include' sends the staff session cookie. No secret lives here.
+    const API_URL = "/api/admin/prep-orders";
+
+    async function pullOrders() {
+      const btn    = document.getElementById("pull-btn");
+      const status = document.getElementById("pull-status");
+      btn.disabled = true;
+      btn.textContent = "Pulling...";
+      status.textContent = "";
+      status.className = "pull-status";
+
+      const today = new Date();
+      const daysUntilSunday = (7 - today.getDay()) % 7 || 7;
+      const sunday = new Date(today);
+      sunday.setDate(today.getDate() + daysUntilSunday);
+      const weekDate = `${sunday.getFullYear()}-${String(sunday.getMonth()+1).padStart(2,"0")}-${String(sunday.getDate()).padStart(2,"0")}`;
+
+      try {
+        const res = await fetch(`${API_URL}?week=${weekDate}`, { credentials: 'include' });
+        if (res.status === 401) throw new Error("Not logged in as staff. Open this from the Ops Dashboard (log in first), then try again.");
+        if (!res.ok)            throw new Error(`Server error (${res.status}). Try again in a moment.`);
+
+        const data    = await res.json();
+        const pulled  = data.orders || [];
+
+        if (pulled.length === 0) {
+          status.textContent = `No orders found for week of ${weekDate}.`;
+          btn.disabled = false; btn.textContent = "⬇ Pull Orders";
+          return;
+        }
+
+        const totalMeals = pulled.reduce((sum, o) => sum + o.meals.reduce((s, m) => s + m.quantity, 0), 0);
+        const confirmed  = confirm(
+          `Pull ${pulled.length} customer${pulled.length !== 1 ? "s" : ""} · ${totalMeals} meals for week of ${weekDate}?\n\n` +
+          `This will replace all existing orders and clear scan history.`
+        );
+        if (!confirmed) { btn.disabled = false; btn.textContent = "⬇ Pull Orders"; return; }
+
+        const weekStr = data.week_of.replace(/-/g, "");
+        localStorage.setItem("gainztrain_week", weekStr);
+        localStorage.removeItem("gainztrain_scanned");
+        localStorage.removeItem("gainztrain_collected");
+
+        assignAllMealIds(pulled, weekStr);
+        saveOrders(pulled);
+        renderOrders();
+
+        const t = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        status.textContent = `Last pulled at ${t} — ${pulled.length} customers, ${totalMeals} meals`;
+        showToast(`Pulled ${pulled.length} orders for ${weekDate}`);
+
+      } catch (err) {
+        status.className   = "pull-status error";
+        status.textContent = `Pull failed: ${err.message}`;
+      }
+
+      btn.disabled = false;
+      btn.textContent = "⬇ Pull Orders";
+    }
+
+    // Render the order list in the Orders tab
+    function renderOrders() {
+      renderMealInputs();
+      const list   = document.getElementById("order-list");
+      const count  = document.getElementById("order-count");
+      const all    = loadOrders();
+
+      const totalMeals = all.reduce((sum, o) => sum + o.meals.reduce((s, m) => s + m.quantity, 0), 0);
+      count.textContent = all.length === 0
+        ? "No orders yet."
+        : `${all.length} customer${all.length !== 1 ? "s" : ""} · ${totalMeals} total meal${totalMeals !== 1 ? "s" : ""}`;
+
+      if (all.length === 0) {
+        list.innerHTML = '<div class="orders-empty">No orders yet — pull from Brycen\'s site or add one manually.</div>';
+        return;
+      }
+
+      list.innerHTML = all.map((order, idx) => {
+        const fulfBadge = order.fulfillment === "delivery"
+          ? '<span class="o-badge o-badge-delivery">DELIVERY</span>'
+          : '<span class="o-badge o-badge-pickup">PICKUP</span>';
+        const goalBadge = `<span class="o-badge o-badge-goal">${order.gender === "F" ? "Female" : "Male"} · ${order.goal}</span>`;
+        const mealList  = order.meals.map(m => `<li>${m.meal_name} ×${m.quantity}</li>`).join("");
+        const addrLine  = order.fulfillment === "delivery" && order.address
+          ? `<div class="order-addr">📍 ${order.address}</div>` : "";
+
+        return `
+          <div class="order-card">
+            <div class="order-info">
+              <div class="order-name">${order.first_name} ${order.last_name}</div>
+              <div class="order-meta">${fulfBadge}${goalBadge}</div>
+              <ul class="order-meals">${mealList}</ul>
+              ${addrLine}
+            </div>
+            <button class="btn-order-delete" onclick="deleteOrder(${idx})">Delete</button>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function deleteOrder(idx) {
+      const all  = loadOrders();
+      const name = `${all[idx].first_name} ${all[idx].last_name}`;
+      all.splice(idx, 1);
+      saveOrders(all);
+      renderOrders();
+      showToast(`Deleted order for ${name}`);
+    }
+
+    // Order form: show/hide address field
+    document.getElementById("fulfillment").addEventListener("change", function () {
+      document.getElementById("address-group").style.display =
+        this.value === "delivery" ? "flex" : "none";
+      document.getElementById("address").required = this.value === "delivery";
+    });
+
+    // Order form: submit → add new order
+    document.getElementById("order-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const meals = Array.from(document.querySelectorAll("#meal-rows-container .meal-qty"))
+        .map(input => ({
+          meal_name: input.dataset.mealName,
+          quantity:  parseInt(input.value) || 0
+        })).filter(m => m.quantity > 0);
+
+      if (meals.length === 0) { showToast("Enter at least 1 meal quantity."); return; }
+
+      const fulfillment = document.getElementById("fulfillment").value;
+      const address     = document.getElementById("address").value.trim();
+      if (fulfillment === "delivery" && !address) { showToast("Enter a delivery address."); return; }
+
+      const customerId = "manual-" + Date.now();
+      assignMealIds(meals, customerId);
+
+      const order = {
+        customer_id: customerId,
+        first_name:  document.getElementById("first-name").value.trim(),
+        last_name:   document.getElementById("last-name").value.trim(),
+        gender:      document.getElementById("gender").value,
+        goal:        document.getElementById("goal").value,
+        fulfillment,
+        address: fulfillment === "delivery" ? address : null,
+        meals
+      };
+
+      const all = loadOrders();
+      all.push(order);
+      saveOrders(all);
+      renderOrders();
+
+      e.target.reset();
+      document.getElementById("address-group").style.display = "none";
+      document.querySelectorAll("#meal-rows-container .meal-qty").forEach(el => el.value = 0);
+      showToast(`Added order for ${order.first_name} ${order.last_name}`);
+    });
+
+    // ── MENU TAB ──
+
+    const DEFAULT_INGREDIENTS = [
+      "Chicken Breast","Ground Beef","Ground Turkey","Broccoli","Zucchini",
+      "Squash","Onions","Bell Peppers","Sweet Potatoes","Jasmine Rice",
+      "Potatoes","Green Beans","Carrots","Corn","Black Beans","Pinto Beans",
+      "Limes","Containers"
+    ];
+
+    // Raw-to-cooked multipliers: raw grams needed = cooked grams × multiplier
+    // Rice is < 1 because it absorbs water and expands during cooking
+    const SHRINKAGE = {
+      "Chicken Breast":  2.00,
+      "Ground Beef":     1.15,
+      "Ground Turkey":   1.27,
+      "Broccoli":        1.15,
+      "Zucchini":        1.50,
+      "Squash":          1.50,
+      "Bell Peppers":    1.35,
+      "Jasmine Rice":    0.33,
+      "Potatoes":        1.50,
+      "Sweet Potatoes":  1.50,
+      "Green Beans":     1.40,
+      "Carrots":         1.30,
+      "Onions":          1.80,
+    };
+
+    // Purchase units for default ingredients: how many grams are in 1 purchase unit
+    // e.g. 1 lb = 453.59 g, so "Chicken Breast" shows as lbs on the shopping list
+    const UNITS = {
+      "Chicken Breast":  { unit: "lbs", g: 453.59 },
+      "Ground Beef":     { unit: "lbs", g: 453.59 },
+      "Ground Turkey":   { unit: "lbs", g: 453.59 },
+      "Broccoli":        { unit: "lbs", g: 453.59 },
+      "Zucchini":        { unit: "lbs", g: 453.59 },
+      "Squash":          { unit: "lbs", g: 453.59 },
+      "Bell Peppers":    { unit: "lbs", g: 453.59 },
+      "Jasmine Rice":    { unit: "lbs", g: 453.59 },
+      "Potatoes":        { unit: "lbs", g: 453.59 },
+      "Sweet Potatoes":  { unit: "lbs", g: 453.59 },
+      "Green Beans":     { unit: "lbs", g: 453.59 },
+      "Carrots":         { unit: "lbs", g: 453.59 },
+      "Onions":          { unit: "lbs", g: 453.59 },
+    };
+
+    // Returns unit data for an ingredient: checks UNITS table first, then custom ingredients
+    function getIngUnit(name) {
+      if (UNITS[name]) return UNITS[name];
+      const custom = loadCustomIngs().find(i => i.name === name);
+      if (custom && custom.unit && parseFloat(custom.conversion) > 0) {
+        return { unit: custom.unit, g: parseFloat(custom.conversion) };
+      }
+      return null;
+    }
+
+    function loadCurrentMenu()   { try { return JSON.parse(localStorage.getItem("gainztrain_menu_current")  || "null"); } catch { return null; } }
+    function saveCurrentMenu(d)  { localStorage.setItem("gainztrain_menu_current",  JSON.stringify(d)); }
+    function loadPreviousMenu()  { try { return JSON.parse(localStorage.getItem("gainztrain_menu_previous") || "[]");  } catch { return []; } }
+    function savePreviousMenu(a) { localStorage.setItem("gainztrain_menu_previous", JSON.stringify(a)); }
+    function loadMealLibrary()   { try { return JSON.parse(localStorage.getItem("gainztrain_meal_library")  || "[]");  } catch { return []; } }
+    function saveMealLibrary(a)  { localStorage.setItem("gainztrain_meal_library",  JSON.stringify(a)); }
+    function loadCustomIngs()    { try { return JSON.parse(localStorage.getItem("gainztrain_ingredients")   || "[]");  } catch { return []; } }
+    function saveCustomIngs(a)   { localStorage.setItem("gainztrain_ingredients",   JSON.stringify(a)); }
+    function allIngredients()    { return [...DEFAULT_INGREDIENTS, ...loadCustomIngs().map(i => i.name)]; }
+    function menuUid()           { return "m" + Date.now() + Math.random().toString(36).slice(2,6); }
+
+    let menuSwappingId  = null;  // pill ID currently being swapped
+    let menuAddContext  = null;  // "swap" | "direct"
+    let menuEditingId   = null;  // pill ID currently being edited (null when adding new)
+    let menuIngSelectEl = null;  // which <select> triggered "add new ingredient"
+
+    function initMenuTab() {
+      const currentWeek = getWeekStr();
+      let stored = loadCurrentMenu();
+
+      if (!stored || stored.week !== currentWeek) {
+        // New week — seed from previous week's confirmed meals as pending
+        const prev = loadPreviousMenu();
+        const meals = prev.map(m => ({ ...m, id: menuUid(), status: "pending", swappedBy: null }));
+        stored = { week: currentWeek, meals };
+        saveCurrentMenu(stored);
+      }
+
+      renderMenuTab();
+    }
+
+    function renderMenuTab() {
+      const stored   = loadCurrentMenu() || { meals: [] };
+      const meals    = stored.meals || [];
+      const confirmed  = meals.filter(m => m.status === "confirmed");
+      const pending    = meals.filter(m => m.status === "pending");
+      const swappedOut = meals.filter(m => m.status === "swapped-out");
+
+      // Update count badge in top bar
+      const countEl = document.getElementById("menu-confirmed-count");
+      countEl.textContent = meals.length === 0 ? "" :
+        `${confirmed.length} of ${confirmed.length + pending.length} confirmed`;
+
+      const container = document.getElementById("menu-pills");
+      container.innerHTML = "";
+
+      if (meals.length === 0) {
+        container.innerHTML = '<div class="menu-empty">No meals yet — click "+ Add Meal" or pull from the website.</div>';
+        return;
+      }
+
+      function section(label, items) {
+        if (items.length === 0) return;
+        const heading = document.createElement("div");
+        heading.className = "menu-section-label";
+        heading.textContent = label;
+        container.appendChild(heading);
+        items.forEach(m => container.appendChild(buildPill(m)));
+      }
+
+      section("✓ This Week's Menu", confirmed);
+      section("Needs Confirmation", pending);
+      section("Removed This Week", swappedOut);
+    }
+
+    function buildPill(item) {
+      const el = document.createElement("div");
+      el.className = `menu-pill ${item.status}`;
+      el.dataset.id = item.id;
+
+      const badgeText  = item.status === "confirmed" ? "Confirmed"
+                       : item.status === "pending"   ? "Pending"
+                       : "Removed";
+      const badgeClass = item.status === "confirmed" ? "confirmed"
+                       : item.status === "pending"   ? "pending" : "swapped";
+
+      const m = item.macros || {};
+      const macroBits = [
+        m.protein != null ? `<div class="pill-macro"><b>${m.protein}g</b> protein</div>` : "",
+        m.carbs   != null ? `<div class="pill-macro"><b>${m.carbs}g</b> carbs</div>`     : "",
+        m.fat     != null ? `<div class="pill-macro"><b>${m.fat}g</b> fat</div>`         : "",
+        m.cal     != null ? `<div class="pill-macro"><b>${m.cal}</b> kcal</div>`         : ""
+      ].join("");
+
+      const actionBtns = item.status === "swapped-out" ? "" : `
+        <div class="pill-actions">
+          ${item.status === "pending"
+            ? `<button class="pill-btn pill-btn-confirm" onclick="confirmMenuMeal('${item.id}')">Confirm</button>`
+            : `<button class="pill-btn pill-btn-unconfirm" onclick="unconfirmMenuMeal('${item.id}')">Unconfirm</button>`
+          }
+          <button class="pill-btn pill-btn-swap" onclick="openSwapModal('${item.id}')">Swap</button>
+          <button class="pill-btn pill-btn-delete" onclick="deleteMenuMeal('${item.id}')">Delete</button>
+        </div>
+      `;
+
+      const editBtn = item.status !== "swapped-out"
+        ? `<button class="pill-edit-btn" onclick="openEditMeal('${item.id}')" title="Edit meal">✏</button>`
+        : "";
+
+      const catLabel = { protein: "P", carbs: "C", veggies: "V", misc: "–" };
+      const ingList = (item.ingredients || []).length > 0
+        ? `<div class="pill-ing-list">${item.ingredients.map(i => {
+            const badge = i.category ? ` · ${catLabel[i.category] || "?"}` : " · ?";
+            return `<span class="pill-ing-tag">${i.item}${badge}</span>`;
+          }).join("")}</div>`
+        : "";
+
+      el.innerHTML = `
+        <div class="pill-info">
+          <div class="pill-name-row">
+            <span class="pill-name">${item.name}</span>
+            ${editBtn}
+          </div>
+          <div class="pill-macros">${macroBits}</div>
+          ${ingList}
+        </div>
+        <span class="pill-badge ${badgeClass}">${badgeText}</span>
+        ${actionBtns}
+      `;
+      return el;
+    }
+
+    function menuMeals() { return (loadCurrentMenu() || { meals: [] }).meals; }
+
+    function saveMenuMeals(meals) {
+      const stored = loadCurrentMenu() || { week: getWeekStr() };
+      stored.meals = meals;
+      saveCurrentMenu(stored);
+    }
+
+    function confirmMenuMeal(id) {
+      const meals = menuMeals();
+      const m = meals.find(x => x.id === id);
+      if (m) { m.status = "confirmed"; saveMenuMeals(meals); renderMenuTab(); }
+    }
+
+    function unconfirmMenuMeal(id) {
+      const meals = menuMeals();
+      const m = meals.find(x => x.id === id);
+      if (m) { m.status = "pending"; saveMenuMeals(meals); renderMenuTab(); }
+    }
+
+    function deleteMenuMeal(id) {
+      if (!confirm("Remove this meal from this week's menu?")) return;
+      saveMenuMeals(menuMeals().filter(x => x.id !== id));
+      renderMenuTab();
+    }
+
+    // ── SWAP MODAL ──
+    function openSwapModal(id) {
+      menuSwappingId = id;
+      menuAddContext = "swap";
+      renderSwapModal();
+      document.getElementById("swap-modal").style.display = "";
+      document.getElementById("add-meal-modal").style.display = "none";
+      document.getElementById("menu-overlay").style.display = "flex";
+    }
+
+    function renderSwapModal() {
+      const library = loadMealLibrary();
+      const list    = document.getElementById("swap-meal-list");
+
+      if (library.length === 0) {
+        list.innerHTML = `
+          <div class="swap-meal-item add-new" onclick="openAddMealModal()">+ Add new meal</div>
+        `;
+        return;
+      }
+
+      list.innerHTML = library.map(m => `
+        <div class="swap-meal-item" onclick="selectLibraryMeal('${m.id}')">
+          <div class="swap-meal-name">${m.name}</div>
+          <div class="swap-meal-macros">${m.macros.protein}P · ${m.macros.carbs}C · ${m.macros.fat ?? '—'}F · ${m.macros.cal ?? '—'}kcal</div>
+        </div>
+      `).join("") + `
+        <div class="swap-meal-item add-new" onclick="openAddMealModal()">+ Add new meal</div>
+      `;
+    }
+
+    function selectLibraryMeal(libraryMealId) {
+      const library = loadMealLibrary();
+      const meal    = library.find(m => m.id === libraryMealId);
+      if (!meal) return;
+      applyMealToMenu({ ...meal, id: menuUid(), status: "confirmed", swappedBy: null });
+    }
+
+    // Shared by both "swap with library meal" and "swap with new meal"
+    function applyMealToMenu(newMeal) {
+      const meals = menuMeals();
+      if (menuAddContext === "swap" && menuSwappingId) {
+        const original = meals.find(m => m.id === menuSwappingId);
+        if (original) { original.status = "swapped-out"; }
+      }
+      meals.push(newMeal);
+      saveMenuMeals(meals);
+      closeMenuOverlay();
+      renderMenuTab();
+    }
+
+    // ── ADD MEAL FLOW ──
+
+    function hideAllModals() {
+      ["add-choice-modal","add-existing-modal","add-meal-modal","swap-modal"].forEach(id => {
+        document.getElementById(id).style.display = "none";
+      });
+    }
+
+    // "+ Add Meal" button → show choice screen (Existing / New)
+    function openAddMealDirect() {
+      menuAddContext = "direct";
+      menuSwappingId = null;
+      menuEditingId  = null;
+      hideAllModals();
+      document.getElementById("add-choice-modal").style.display = "";
+      document.getElementById("menu-overlay").style.display     = "flex";
+    }
+
+    // Choice screen → "Select Existing"
+    function openAddExistingModal() {
+      const library = loadMealLibrary();
+      if (library.length === 0) {
+        showToast("No saved meals yet — create a new one first.");
+        return;
+      }
+      const sel = document.getElementById("add-existing-select");
+      sel.innerHTML = '<option value="">— pick a meal —</option>' +
+        library.map(m => `<option value="${m.id}">${m.name}</option>`).join("");
+      hideAllModals();
+      document.getElementById("add-existing-modal").style.display = "";
+    }
+
+    // Existing meal picker → confirm selection
+    function confirmAddExisting() {
+      const sel  = document.getElementById("add-existing-select");
+      const id   = sel.value;
+      if (!id) { showToast("Please select a meal."); return; }
+      const meal = loadMealLibrary().find(m => m.id === id);
+      if (!meal) return;
+      applyMealToMenu({ ...meal, id: menuUid(), status: "confirmed", swappedBy: null });
+    }
+
+    // Choice screen → "Create New" (also called from swap flow)
+    function openAddMealModal() {
+      menuEditingId = null;
+      document.getElementById("new-meal-modal-title").textContent = "New Meal";
+      document.getElementById("save-meal-btn").textContent        = "Save Meal";
+      document.getElementById("new-meal-name").value    = "";
+      document.getElementById("new-meal-protein").value = "";
+      document.getElementById("new-meal-carbs").value   = "";
+      document.getElementById("new-meal-fat").value     = "";
+      document.getElementById("new-meal-cal").value     = "";
+      document.getElementById("ing-rows-container").innerHTML = "";
+      hideAllModals();
+      document.getElementById("add-meal-modal").style.display = "";
+      document.getElementById("menu-overlay").style.display   = "flex";
+    }
+
+    // Pencil icon on a pill → open edit modal pre-filled
+    function openEditMeal(id) {
+      const meal = menuMeals().find(m => m.id === id);
+      if (!meal) return;
+
+      menuEditingId  = id;
+      menuAddContext = null;
+
+      document.getElementById("new-meal-modal-title").textContent = "Edit Meal";
+      document.getElementById("save-meal-btn").textContent        = "Save Changes";
+      document.getElementById("new-meal-name").value    = meal.name    || "";
+      document.getElementById("new-meal-protein").value = meal.macros?.protein ?? "";
+      document.getElementById("new-meal-carbs").value   = meal.macros?.carbs   ?? "";
+      document.getElementById("new-meal-fat").value     = meal.macros?.fat     ?? "";
+      document.getElementById("new-meal-cal").value     = meal.macros?.cal     ?? "";
+
+      // Pre-populate ingredient rows
+      const container = document.getElementById("ing-rows-container");
+      container.innerHTML = "";
+      (meal.ingredients || []).forEach(ing => {
+        addIngredientRow();
+        const rows    = container.querySelectorAll(".ing-row");
+        const lastRow = rows[rows.length - 1];
+        const rowId   = lastRow.id;
+        const selEl   = lastRow.querySelector(".ing-row-select");
+        let found = Array.from(selEl.options).some(o => o.value === ing.item);
+        if (!found) {
+          const opt = document.createElement("option");
+          opt.value = ing.item;
+          opt.textContent = ing.item;
+          selEl.insertBefore(opt, selEl.lastElementChild);
+        }
+        selEl.value = ing.item;
+        if (ing.category) setIngCatByName(rowId, ing.category);
+      });
+
+      hideAllModals();
+      document.getElementById("add-meal-modal").style.display = "";
+      document.getElementById("menu-overlay").style.display   = "flex";
+    }
+
+    function backToSwapModal() {
+      if (menuAddContext === "swap") {
+        hideAllModals();
+        document.getElementById("swap-modal").style.display = "";
+      } else if (menuAddContext === "direct") {
+        hideAllModals();
+        document.getElementById("add-choice-modal").style.display = "";
+      } else {
+        closeMenuOverlay();
+      }
+    }
+
+    function closeMenuOverlay() {
+      document.getElementById("menu-overlay").style.display = "none";
+      menuSwappingId = null;
+      menuAddContext = null;
+      menuEditingId  = null;
+    }
+
+    function handleMenuOverlayClick(e) {
+      if (e.target === document.getElementById("menu-overlay")) closeMenuOverlay();
+    }
+
+    function addIngredientRow() {
+      const container = document.getElementById("ing-rows-container");
+      const rowId     = "ing-row-" + Date.now();
+      const ings      = allIngredients();
+
+      const row = document.createElement("div");
+      row.className = "ing-row";
+      row.id = rowId;
+
+      const selectHtml = `<select class="menu-field-select ing-row-select" onchange="handleIngSelectChange(this)">
+        <option value="">— ingredient —</option>
+        ${ings.map(i => `<option value="${i}">${i}</option>`).join("")}
+        <option value="__add_new__">+ Add new ingredient</option>
+      </select>`;
+
+      row.innerHTML = `
+        ${selectHtml}
+        <div class="ing-row-cats">
+          <button type="button" class="ing-cat-btn" data-cat="protein" onclick="setIngCat(this,'${rowId}')" title="Protein">P</button>
+          <button type="button" class="ing-cat-btn" data-cat="carbs"   onclick="setIngCat(this,'${rowId}')" title="Carbs">C</button>
+          <button type="button" class="ing-cat-btn" data-cat="veggies" onclick="setIngCat(this,'${rowId}')" title="Veggies">V</button>
+          <button type="button" class="ing-cat-btn" data-cat="misc"    onclick="setIngCat(this,'${rowId}')" title="No macro (garnish, extra, etc.)">–</button>
+        </div>
+        <button class="ing-row-remove" onclick="document.getElementById('${rowId}').remove()" title="Remove">✕</button>
+      `;
+      container.appendChild(row);
+    }
+
+    function setIngCat(btnEl, rowId) {
+      const row = document.getElementById(rowId);
+      if (!row) return;
+      row.querySelectorAll(".ing-cat-btn").forEach(b => {
+        b.classList.remove("active-p","active-c","active-v","active-misc");
+      });
+      const map = { protein: "active-p", carbs: "active-c", veggies: "active-v", misc: "active-misc" };
+      btnEl.classList.add(map[btnEl.dataset.cat]);
+    }
+
+    function setIngCatByName(rowId, cat) {
+      const row = document.getElementById(rowId);
+      if (!row) return;
+      const btn = row.querySelector(`.ing-cat-btn[data-cat="${cat}"]`);
+      if (btn) setIngCat(btn, rowId);
+    }
+
+    function getIngRowCategory(row) {
+      const active = row.querySelector(".ing-cat-btn.active-p,.ing-cat-btn.active-c,.ing-cat-btn.active-v,.ing-cat-btn.active-misc");
+      return active ? active.dataset.cat : null;
+    }
+
+    function handleIngSelectChange(selectEl) {
+      if (selectEl.value === "__add_new__") {
+        selectEl.value     = ""; // reset while modal is open
+        menuIngSelectEl    = selectEl;
+        openIngOverlay();
+      }
+    }
+
+    function saveNewMeal() {
+      const name    = document.getElementById("new-meal-name").value.trim();
+      const protein = parseInt(document.getElementById("new-meal-protein").value);
+      const carbs   = parseInt(document.getElementById("new-meal-carbs").value);
+      const fat     = parseInt(document.getElementById("new-meal-fat").value)   || 0;
+      const cal     = parseInt(document.getElementById("new-meal-cal").value)   || 0;
+
+      if (!name)                         { showToast("Please enter a meal name.");         return; }
+      if (isNaN(protein) || protein < 0) { showToast("Enter a valid protein amount (g)."); return; }
+      if (isNaN(carbs)   || carbs   < 0) { showToast("Enter a valid carbs amount (g).");   return; }
+
+      const rows = document.querySelectorAll("#ing-rows-container .ing-row");
+      const ingredients = [];
+      let missingCat = 0;
+      rows.forEach(row => {
+        const selEl = row.querySelector(".ing-row-select");
+        if (!selEl) return;
+        const sel      = selEl.value;
+        const category = getIngRowCategory(row);
+        if (sel && sel !== "" && sel !== "__add_new__") {
+          if (!category) missingCat++;
+          ingredients.push({ item: sel, category: category || null });
+        }
+      });
+
+      const macros = { protein, carbs, fat, cal };
+
+      if (menuEditingId) {
+        // Edit mode — load stored object directly, update in place, write back once
+        const stored = loadCurrentMenu();
+        if (!stored) { showToast("Save failed — menu data missing. Please refresh."); return; }
+        const idx = (stored.meals || []).findIndex(m => m.id === menuEditingId);
+        if (idx === -1) { showToast("Save failed — meal not found. Please refresh."); return; }
+        stored.meals[idx] = { ...stored.meals[idx], name, macros, ingredients };
+        saveCurrentMenu(stored);
+        closeMenuOverlay();
+        renderMenuTab();
+        const ingCount = ingredients.length;
+        const catWarn  = missingCat > 0 ? ` · ${missingCat} need P/C/V` : "";
+        showToast(`"${name}" updated · ${ingCount} ingredient${ingCount !== 1 ? "s" : ""} saved${catWarn}.`);
+        return;
+      } else {
+        // Add mode — single ID used for both library and menu entries
+        const newId  = menuUid();
+        const newMeal = { id: newId, name, macros, ingredients };
+        const library = loadMealLibrary();
+        library.unshift({ ...newMeal });
+        saveMealLibrary(library);
+        applyMealToMenu({ ...newMeal, status: "confirmed", swappedBy: null });
+      }
+    }
+
+    // ── ADD INGREDIENT MINI-OVERLAY ──
+    function openIngOverlay() {
+      document.getElementById("new-ing-name").value       = "";
+      document.getElementById("new-ing-unit").value       = "";
+      document.getElementById("new-ing-conversion").value = "";
+      document.getElementById("ing-overlay").style.display = "flex";
+    }
+
+    function closeIngOverlay() {
+      document.getElementById("ing-overlay").style.display = "none";
+      menuIngSelectEl = null;
+    }
+
+    function handleIngOverlayClick(e) {
+      if (e.target === document.getElementById("ing-overlay")) closeIngOverlay();
+    }
+
+    function saveNewIngredient() {
+      const name       = document.getElementById("new-ing-name").value.trim();
+      const unit       = document.getElementById("new-ing-unit").value.trim();
+      const conversion = document.getElementById("new-ing-conversion").value.trim();
+
+      if (!name) { showToast("Please enter an ingredient name."); return; }
+      if (!unit) { showToast("Please enter a unit (oz, g, cups…)"); return; }
+
+      const custom = loadCustomIngs();
+      custom.push({ name, unit, conversion });
+      saveCustomIngs(custom);
+
+      // Update the triggering select and choose the new ingredient
+      if (menuIngSelectEl) {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        // Insert before the "Add new" option (last child)
+        menuIngSelectEl.insertBefore(opt, menuIngSelectEl.lastElementChild);
+        menuIngSelectEl.value = name;
+      }
+
+      closeIngOverlay();
+      showToast(`"${name}" added to ingredients.`);
+    }
+
+    // ── FINALIZE MENU ──
+    function finalizeMenu() {
+      const confirmed = menuMeals().filter(m => m.status === "confirmed");
+      if (confirmed.length === 0) {
+        showToast("Confirm at least one meal before finalizing.");
+        return;
+      }
+      // Save confirmed meals as next week's starting point
+      savePreviousMenu(confirmed.map(m => ({
+        id: m.id, name: m.name, macros: m.macros, ingredients: m.ingredients
+      })));
+      // TODO: POST to Brycen's /api/gainztrain-menu once endpoint is ready
+      showToast(`✓ Menu finalized — ${confirmed.length} meal${confirmed.length !== 1 ? "s" : ""} confirmed.`);
+    }
+
+    // ── INGREDIENTS TAB ──
+
+    const ING_CHECKLIST_ITEMS = [
+      "Seasonings",
+      "Sauces",
+      "Foils & containers",
+      "Cooking tools",
+      "Gloves"
+    ];
+
+    function loadIngChecked() {
+      try { return JSON.parse(localStorage.getItem("gainztrain_ing_checklist") || "[]"); }
+      catch { return []; }
+    }
+
+    function saveIngChecked(arr) {
+      localStorage.setItem("gainztrain_ing_checklist", JSON.stringify(arr));
+    }
+
+    function loadIngDone() {
+      try { return JSON.parse(localStorage.getItem("gainztrain_ing_done") || "[]"); }
+      catch { return []; }
+    }
+
+    function saveIngDone(arr) {
+      localStorage.setItem("gainztrain_ing_done", JSON.stringify(arr));
+    }
+
+    // Aggregate ingredients from confirmed menu meals × gender-based order quantities
+    function buildIngredientPills() {
+      const menu = loadCurrentMenu();
+      if (!menu) return [];
+
+      const confirmedMeals = (menu.meals || []).filter(m => m.status === "confirmed");
+
+      // Build map: meal_name_lower → { female: N, male: N } servings ordered
+      const mealServings = {};
+      orders.forEach(order => {
+        const gKey = order.gender === "M" ? "male" : "female";
+        (order.meals || []).forEach(m => {
+          const key = m.meal_name.toLowerCase().trim();
+          if (!mealServings[key]) mealServings[key] = { male: 0, female: 0 };
+          mealServings[key][gKey] += m.quantity;
+        });
+      });
+
+      // Standard macro grams per gender (goal doesn't change values yet)
+      const F = MACROS["F"]["Maintain"]; // { protein:115, carbs:100, veggies:60 }
+      const M = MACROS["M"]["Maintain"]; // { protein:170, carbs:140, veggies:100 }
+
+      const ingMap = {};
+
+      confirmedMeals.forEach(meal => {
+        if (!meal.ingredients || meal.ingredients.length === 0) return;
+        const mealKey = meal.name.toLowerCase().trim();
+        const sv      = mealServings[mealKey]; // { male, female } or undefined
+
+        meal.ingredients.forEach(ing => {
+          if (!ing.item || !ing.category) return;
+          if (!ingMap[ing.item]) {
+            ingMap[ing.item] = { name: ing.item, category: ing.category, cookedG: 0, hasOrders: false, isMisc: ing.category === "misc" };
+          }
+          if (ing.category !== "misc" && sv) {
+            const femaleG = F[ing.category] || 0;
+            const maleG   = M[ing.category] || 0;
+            ingMap[ing.item].cookedG   += (sv.female * femaleG) + (sv.male * maleG);
+            ingMap[ing.item].hasOrders  = true;
+          }
+        });
+      });
+
+      return Object.values(ingMap).sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    function initIngredientsTab() {
+      renderIngChecklist();
+      renderIngPills();
+    }
+
+    function renderIngChecklist() {
+      const checked   = loadIngChecked();
+      const container = document.getElementById("ing-checklist");
+      container.innerHTML = ING_CHECKLIST_ITEMS.map(item => {
+        const isChecked = checked.includes(item);
+        return `
+          <div class="checklist-item${isChecked ? " checked" : ""}" onclick="toggleIngChecklist('${item}')">
+            <div class="checklist-box">${isChecked ? "✓" : ""}</div>
+            <div class="checklist-label">${item}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function toggleIngChecklist(item) {
+      let checked = loadIngChecked();
+      checked = checked.includes(item)
+        ? checked.filter(x => x !== item)
+        : [...checked, item];
+      saveIngChecked(checked);
+      renderIngChecklist();
+    }
+
+    function renderIngPills() {
+      const pills = buildIngredientPills();
+      const done  = loadIngDone();
+      const main  = document.getElementById("ing-main");
+      const sub   = document.getElementById("ing-topbar-sub");
+
+      if (pills.length === 0) {
+        const confirmed = (loadCurrentMenu()?.meals || []).filter(m => m.status === "confirmed");
+        if (confirmed.length === 0) {
+          main.innerHTML = '<div class="ing-empty">No confirmed meals yet — confirm meals on the Menu tab first.</div>';
+        } else {
+          main.innerHTML = '<div class="ing-empty">Confirmed meals have no ingredients listed yet.<br>Edit a meal on the Menu tab to add ingredients.</div>';
+        }
+        sub.textContent = "";
+        return;
+      }
+
+      const doneCount = pills.filter(p => done.includes(p.name)).length;
+      sub.textContent = `${doneCount} of ${pills.length} checked off`;
+
+      const pending  = pills.filter(p => !done.includes(p.name));
+      const finished = pills.filter(p => done.includes(p.name));
+
+      main.innerHTML = "";
+
+      function buildPillEl(pill) {
+        const isChecked = done.includes(pill.name);
+        const el = document.createElement("div");
+        el.className = "ing-pill" + (isChecked ? " checked" : "");
+
+        let qtyHtml;
+        if (pill.isMisc) {
+          qtyHtml = `<div class="ing-qty-tbd">shop manually</div>`;
+        } else if (pill.cookedG > 0) {
+          const shrink  = SHRINKAGE[pill.name];
+          const cookedG = Math.round(pill.cookedG);
+          if (shrink != null) {
+            const rawG    = Math.round(pill.cookedG * shrink);
+            const unitDef = getIngUnit(pill.name);
+            if (unitDef) {
+              const unitQty = (rawG / unitDef.g).toFixed(1);
+              qtyHtml = `<div class="ing-pill-qty">${unitQty} ${unitDef.unit}<span class="ing-qty-cooked"> (${rawG}g raw → ${cookedG}g cooked)</span></div>`;
+            } else {
+              qtyHtml = `<div class="ing-pill-qty">${rawG}g raw<span class="ing-qty-cooked"> → ${cookedG}g cooked</span></div>`;
+            }
+          } else {
+            qtyHtml = `<div class="ing-pill-qty">${cookedG}g cooked<span class="ing-qty-cooked"> (no shrinkage data)</span></div>`;
+          }
+        } else if (!pill.hasOrders) {
+          qtyHtml = `<div class="ing-qty-tbd">no orders match this meal</div>`;
+        } else {
+          qtyHtml = `<div class="ing-qty-tbd">0g</div>`;
+        }
+
+        el.innerHTML = `
+          <div class="ing-pill-name">${pill.name}</div>
+          ${qtyHtml}
+          <div class="ing-pill-tap">Tap when grabbed →</div>
+          <button class="ing-undo-btn" onclick="event.stopPropagation(); undoIngPill('${pill.name}')">Undo</button>
+        `;
+
+        if (!isChecked) {
+          el.addEventListener("click", () => checkIngPill(pill.name));
+        }
+        return el;
+      }
+
+      function appendSection(label, items, headingClass) {
+        if (items.length === 0) return;
+        const h = document.createElement("div");
+        h.className = "ing-section-heading" + (headingClass ? " " + headingClass : "");
+        h.textContent = label;
+        main.appendChild(h);
+        items.forEach(pill => main.appendChild(buildPillEl(pill)));
+      }
+
+      appendSection("Still need to grab", pending, "");
+      appendSection("Got it", finished, "done-heading");
+    }
+
+    function checkIngPill(name) {
+      const done = loadIngDone();
+      if (!done.includes(name)) saveIngDone([...done, name]);
+      renderIngPills();
+    }
+
+    function undoIngPill(name) {
+      saveIngDone(loadIngDone().filter(x => x !== name));
+      renderIngPills();
+    }
+
+    function copyIngredientList() {
+      const pills = buildIngredientPills();
+      if (pills.length === 0) { showToast("No ingredients to copy."); return; }
+
+      const lines = pills.map(p => {
+        let qty;
+        if (p.isMisc) {
+          qty = "shop manually";
+        } else if (p.cookedG > 0) {
+          const shrink = SHRINKAGE[p.name];
+          if (shrink != null) {
+            const rawG    = Math.round(p.cookedG * shrink);
+            const unitDef = getIngUnit(p.name);
+            qty = unitDef
+              ? `${(rawG / unitDef.g).toFixed(1)} ${unitDef.unit} (${rawG}g raw → ${Math.round(p.cookedG)}g cooked)`
+              : `${rawG}g raw (${Math.round(p.cookedG)}g cooked)`;
+          } else {
+            qty = `${Math.round(p.cookedG)}g cooked`;
+          }
+        } else {
+          qty = "qty TBD";
+        }
+        return `${p.name}: ${qty}`;
+      });
+
+      const weekStr = getWeekStr();
+      const header  = `GainzTrain Ingredients — Week of ${weekStr}\n`;
+      navigator.clipboard.writeText(header + lines.join("\n"))
+        .then(() => showToast("Ingredient list copied!"));
+    }
+
+    // ── TAB SWITCHING ──
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+        tab.classList.add("active");
+        document.getElementById("tab-" + tab.dataset.tab).classList.add("active");
+
+        if (tab.dataset.tab === "orders") {
+          renderOrders();
+        }
+        if (tab.dataset.tab === "menu") {
+          refreshAppState();
+          initMenuTab();
+        }
+        if (tab.dataset.tab === "ingredients") {
+          refreshAppState();
+          initIngredientsTab();
+        }
+        if (tab.dataset.tab === "assembly") {
+          refreshAppState();
+          renderLog();
+          scanInput.focus();
+        }
+        if (tab.dataset.tab === "pickup") {
+          refreshAppState();
+          renderPickup();
+        }
+        if (tab.dataset.tab === "delivery") {
+          refreshAppState();
+          initDeliveryTab();
+        }
+      });
+    });
+
+    // ── PICKUP STATE ──
+    function loadCollected() {
+      try { return JSON.parse(localStorage.getItem("gainztrain_collected") || "[]"); }
+      catch { return []; }
+    }
+
+    function saveCollected(list) {
+      localStorage.setItem("gainztrain_collected", JSON.stringify(list));
+    }
+
+    let collected = loadCollected();
+
+    // ── BUILD PICKUP CUSTOMER LIST ──
+    // Returns one entry per pickup customer with their scan status
+    function buildPickupCustomers() {
+      const customerMap = {};
+
+      orders.forEach(order => {
+        if (order.fulfillment !== "pickup") return;
+
+        const allIds = order.meals.flatMap(m => m.meal_ids || []);
+        const scannedCount = allIds.filter(id => scanned.includes(id)).length;
+        const totalCount = allIds.length;
+        const firstName = order.first_name || "";
+        const lastInitial = order.last_name ? order.last_name[0] + "." : "";
+
+        customerMap[order.customer_id] = {
+          customerId: order.customer_id,
+          name: `${firstName} ${lastInitial}`,
+          scannedCount,
+          totalCount,
+          hasAny: scannedCount > 0
+        };
+      });
+
+      return Object.values(customerMap);
+    }
+
+    // ── RENDER PICKUP TAB ──
+    function renderPickup(newCustomerId) {
+      const customers = buildPickupCustomers();
+
+      const ready    = customers.filter(c => c.hasAny && !collected.includes(c.customerId));
+      const done     = customers.filter(c => collected.includes(c.customerId));
+      const waiting  = customers.filter(c => !c.hasAny && !collected.includes(c.customerId));
+
+      // Empty state
+      document.getElementById("pickup-empty").style.display =
+        customers.length === 0 ? "block" : "none";
+
+      // ── READY SECTION ──
+      const readySection = document.getElementById("pickup-ready-section");
+      const readyHeading = document.getElementById("pickup-ready-heading");
+      const readyList    = document.getElementById("pickup-ready-list");
+
+      readySection.style.display = ready.length === 0 ? "none" : "block";
+      readyHeading.textContent = `Ready for pickup (${ready.length})`;
+      readyList.innerHTML = ready.map(c => {
+        const isNew = c.customerId === newCustomerId ? " pickup-card-new" : "";
+        const mealWord = c.scannedCount === 1 ? "meal" : "meals";
+        return `
+          <div class="pickup-card${isNew}" onclick="markCollected('${c.customerId}')">
+            <div>
+              <div class="pickup-name">${c.name}</div>
+              <div class="pickup-meta">${c.scannedCount} of ${c.totalCount} ${mealWord} ready</div>
+            </div>
+            <div class="pickup-tap-hint">Tap to collect →</div>
+          </div>
+        `;
+      }).join("");
+
+      // ── COLLECTED SECTION ──
+      const collectedSection = document.getElementById("pickup-collected-section");
+      const collectedList    = document.getElementById("pickup-collected-list");
+
+      collectedSection.style.display = done.length === 0 ? "none" : "block";
+      collectedList.innerHTML = done.map(c => {
+        const mealWord = c.totalCount === 1 ? "meal" : "meals";
+        return `
+          <div class="pickup-card collected">
+            <div>
+              <div class="pickup-name">${c.name}</div>
+              <div class="pickup-meta">${c.totalCount} ${mealWord}</div>
+            </div>
+            <button class="undo-pickup-btn" onclick="event.stopPropagation(); undoCollected('${c.customerId}')">Undo</button>
+          </div>
+        `;
+      }).join("");
+
+      // ── NOT READY SECTION ──
+      const waitingSection = document.getElementById("pickup-waiting-section");
+      const waitingList    = document.getElementById("pickup-waiting-list");
+
+      waitingSection.style.display = waiting.length === 0 ? "none" : "block";
+      waitingList.innerHTML = waiting.map(c => {
+        const mealWord = c.totalCount === 1 ? "meal" : "meals";
+        return `
+          <div class="pickup-card not-ready">
+            <div>
+              <div class="pickup-name">${c.name}</div>
+              <div class="pickup-meta">${c.totalCount} ${mealWord} — not scanned yet</div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // ── MARK AS COLLECTED ──
+    function markCollected(customerId) {
+      if (collected.includes(customerId)) return;
+      collected.push(customerId);
+      saveCollected(collected);
+      renderPickup();
+    }
+
+    // ── UNDO COLLECTED ──
+    function undoCollected(customerId) {
+      collected = collected.filter(id => id !== customerId);
+      saveCollected(collected);
+      renderPickup();
+    }
+
+    // ── DELIVERY TAB ──
+
+    const ROUTE_COLORS = ["#3b82f6", "#ef4444", "#22c55e"];
+
+    let deliveryMap = null;
+    let deliveryGeocoder = null;
+    let addressGeoCache = {}; // address → {lat, lng} — persists across re-renders
+    let activeMarkers = [];
+    let selectedDrivers = 1;
+    let deliveryTabPending = false; // retry flag if Maps loads after tab click
+
+    // Called by Google Maps script once it finishes loading
+    function onMapsLoaded() {
+      window.mapsReady = true;
+      if (deliveryTabPending) {
+        deliveryTabPending = false;
+        initDeliveryTab();
+      }
+    }
+
+    // Build one stop per unique address — only customers with at least one scanned meal
+    function buildDeliveryStops() {
+      const addressMap = {};
+
+      orders.forEach(order => {
+        if (order.fulfillment !== "delivery" || !order.address) return;
+        const allIds = order.meals.flatMap(m => m.meal_ids || []);
+        const scannedCount = allIds.filter(id => scanned.includes(id)).length;
+        if (scannedCount === 0) return; // hide until at least one meal scanned
+
+        const firstName = order.first_name || "";
+        const lastInitial = order.last_name ? order.last_name[0] + "." : "";
+        const key = order.address.trim().toLowerCase();
+
+        if (addressMap[key]) {
+          // Multiple customers at same address — combine onto one pin
+          addressMap[key].names.push(`${firstName} ${lastInitial}`);
+          addressMap[key].totalMeals += allIds.length;
+        } else {
+          addressMap[key] = {
+            address: order.address,
+            names: [`${firstName} ${lastInitial}`],
+            totalMeals: allIds.length
+          };
+        }
+      });
+
+      return Object.values(addressMap).map(s => ({ ...s, name: s.names.join(" & ") }));
+    }
+
+    // Geocode stops — uses cache so addresses aren't re-geocoded on driver count change
+    async function geocodeStops(stops) {
+      const results = [];
+      const failed = [];
+      for (const stop of stops) {
+        const key = stop.address.trim().toLowerCase();
+        if (addressGeoCache[key]) {
+          results.push({ ...stop, ...addressGeoCache[key] });
+          continue;
+        }
+        await new Promise(resolve => {
+          deliveryGeocoder.geocode({ address: stop.address }, (res, status) => {
+            if (status === "OK") {
+              const loc = { lat: res[0].geometry.location.lat(), lng: res[0].geometry.location.lng() };
+              addressGeoCache[key] = loc;
+              results.push({ ...stop, ...loc });
+            } else {
+              failed.push(`"${stop.address}" (${status})`);
+            }
+            resolve();
+          });
+        });
+      }
+      if (failed.length > 0) {
+        document.getElementById("delivery-status").textContent =
+          `⚠️ Could not locate: ${failed.join(", ")}. Check that the Geocoding API is enabled in Google Cloud Console (gainztrain project → Library → Geocoding API → Enable).`;
+      }
+      return results;
+    }
+
+    // Split geocoded stops into N groups using k-means
+    function kMeans(points, k) {
+      if (k >= points.length) return points.map(p => [p]);
+
+      // Spread initial centroids across longitude range
+      const sorted = [...points].sort((a, b) => a.lng - b.lng);
+      const step = Math.floor(sorted.length / k);
+      let centroids = Array.from({ length: k }, (_, i) => ({
+        lat: sorted[Math.min(i * step, sorted.length - 1)].lat,
+        lng: sorted[Math.min(i * step, sorted.length - 1)].lng
+      }));
+
+      let groups;
+      for (let iter = 0; iter < 12; iter++) {
+        groups = Array.from({ length: k }, () => []);
+        points.forEach(p => {
+          let best = 0, bestDist = Infinity;
+          centroids.forEach((c, i) => {
+            const d = Math.pow(p.lat - c.lat, 2) + Math.pow(p.lng - c.lng, 2);
+            if (d < bestDist) { bestDist = d; best = i; }
+          });
+          groups[best].push(p);
+        });
+        centroids = groups.map((g, i) =>
+          g.length === 0 ? centroids[i] : {
+            lat: g.reduce((s, p) => s + p.lat, 0) / g.length,
+            lng: g.reduce((s, p) => s + p.lng, 0) / g.length
+          }
+        );
+      }
+      return groups.filter(g => g.length > 0);
+    }
+
+    // Order stops within a group using nearest-neighbor
+    function nearestNeighborOrder(stops) {
+      if (stops.length <= 1) return stops;
+      const remaining = [...stops];
+      const ordered = [remaining.splice(0, 1)[0]];
+      while (remaining.length > 0) {
+        const last = ordered[ordered.length - 1];
+        let bestIdx = 0, bestDist = Infinity;
+        remaining.forEach((s, i) => {
+          const d = Math.pow(s.lat - last.lat, 2) + Math.pow(s.lng - last.lng, 2);
+          if (d < bestDist) { bestDist = d; bestIdx = i; }
+        });
+        ordered.push(remaining.splice(bestIdx, 1)[0]);
+      }
+      return ordered;
+    }
+
+    function clearMap() {
+      activeMarkers.forEach(m => m.setMap(null));
+      activeMarkers = [];
+    }
+
+    // Copy a route link to clipboard, briefly turns button green as confirmation
+    function copyRoute(url, btn) {
+      navigator.clipboard.writeText(url).then(() => {
+        btn.textContent = "✓ Copied!";
+        btn.classList.add("copied");
+        setTimeout(() => {
+          btn.textContent = "📋 Copy Link";
+          btn.classList.remove("copied");
+        }, 2500);
+      });
+    }
+
+    // Build the "Share Routes" section with one QR code + copy button per driver
+    function buildShareSection(orderedGroups) {
+      const wrap = document.getElementById("share-routes");
+      wrap.innerHTML = "";
+
+      const nonEmpty = orderedGroups.filter(g => g.stops.length > 0);
+      if (nonEmpty.length === 0) { wrap.style.display = "none"; return; }
+
+      wrap.style.display = "flex";
+
+      // Section label
+      const label = document.createElement("div");
+      label.style.cssText = "display:flex;flex-direction:column;justify-content:center;padding-right:8px;";
+      label.innerHTML = `<div class="share-section-label">Share<br>Routes</div>`;
+      wrap.appendChild(label);
+
+      nonEmpty.forEach(({ stops, color, driverNum }) => {
+        // Build Google Maps URL: one address per stop in drive order
+        const mapsUrl = "https://www.google.com/maps/dir/" +
+          stops.map(s => encodeURIComponent(s.address)).join("/") + "/";
+
+        const card = document.createElement("div");
+        card.className = "share-card";
+
+        const safeUrl = mapsUrl.replace(/'/g, "%27");
+        card.innerHTML = `
+          <div class="share-card-heading" style="color:${color}">Driver ${driverNum}</div>
+          <div id="share-qr-${driverNum}" style="line-height:0;border-radius:6px;overflow:hidden;"></div>
+          <div class="share-btn-row">
+            <button class="share-copy-btn" onclick="copyRoute('${safeUrl}', this)">📋 Copy Link</button>
+            <a class="share-open-link" href="${mapsUrl}" target="_blank">Open ↗</a>
+          </div>
+        `;
+        wrap.appendChild(card);
+
+        new QRCode(document.getElementById(`share-qr-${driverNum}`), {
+          text: mapsUrl,
+          width: 160,
+          height: 160,
+          colorDark: "#000000",
+          colorLight: "#ffffff"
+        });
+      });
+    }
+
+    function renderRoutes(groups) {
+      clearMap();
+      const routeList = document.getElementById("route-list");
+      routeList.innerHTML = "";
+      const bounds = new google.maps.LatLngBounds();
+      const orderedGroups = [];
+
+      groups.forEach((group, i) => {
+        if (group.length === 0) return;
+        const color = ROUTE_COLORS[i];
+        const orderedGroup = nearestNeighborOrder(group);
+        orderedGroups.push({ stops: orderedGroup, color, driverNum: i + 1 });
+
+        // Draw connecting line between stops
+        if (orderedGroup.length >= 2) {
+          const line = new google.maps.Polyline({
+            path: orderedGroup.map(s => ({ lat: s.lat, lng: s.lng })),
+            map: deliveryMap,
+            strokeColor: color,
+            strokeWeight: 3,
+            strokeOpacity: 0.7
+          });
+          activeMarkers.push(line);
+        }
+
+        // Add a numbered pin per stop
+        orderedGroup.forEach((stop, idx) => {
+          const pos = new google.maps.LatLng(stop.lat, stop.lng);
+          bounds.extend(pos);
+
+          const marker = new google.maps.Marker({
+            position: pos,
+            map: deliveryMap,
+            label: { text: String(idx + 1), color: "#fff", fontWeight: "bold", fontSize: "12px" },
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 16,
+              fillColor: color,
+              fillOpacity: 1,
+              strokeWeight: 2,
+              strokeColor: "#fff"
+            },
+            title: stop.name
+          });
+
+          const infoWindow = new google.maps.InfoWindow({
+            content: `<div style="font-family:sans-serif;padding:4px 2px;min-width:160px">
+              <strong>${stop.name}</strong><br>
+              <span style="color:#555;font-size:12px">${stop.address}</span><br>
+              <span style="color:#888;font-size:11px">${stop.totalMeals} meal${stop.totalMeals !== 1 ? "s" : ""}</span>
+            </div>`
+          });
+          marker.addListener("click", () => infoWindow.open(deliveryMap, marker));
+          activeMarkers.push(marker);
+        });
+
+        // Build route stop list column
+        const col = document.createElement("div");
+        col.className = "route-column";
+        col.innerHTML = `
+          <div class="route-column-heading" style="color:${color};border-color:${color}">
+            Driver ${i + 1} — ${orderedGroup.length} stop${orderedGroup.length !== 1 ? "s" : ""}
+          </div>
+          ${orderedGroup.map((stop, idx) => `
+            <div class="route-stop">
+              <div class="route-stop-num" style="background:${color}">${idx + 1}</div>
+              <div class="route-stop-info">
+                <div class="route-stop-name">${stop.name}</div>
+                <div class="route-stop-address">${stop.address}</div>
+                <div class="route-stop-meals">${stop.totalMeals} meal${stop.totalMeals !== 1 ? "s" : ""}</div>
+              </div>
+            </div>
+          `).join("")}
+        `;
+        routeList.appendChild(col);
+      });
+
+      if (!bounds.isEmpty()) deliveryMap.fitBounds(bounds);
+      buildShareSection(orderedGroups);
+    }
+
+    async function initDeliveryTab() {
+      if (!window.mapsReady) {
+        // Maps script hasn't finished loading yet — set flag so onMapsLoaded retries
+        deliveryTabPending = true;
+        document.getElementById("delivery-status").textContent = "Loading map...";
+        return;
+      }
+
+      const stops = buildDeliveryStops();
+
+      if (stops.length === 0) {
+        document.getElementById("delivery-map").style.display = "none";
+        document.getElementById("route-list").style.display = "none";
+        document.getElementById("delivery-empty").style.display = "block";
+        document.getElementById("delivery-status").textContent = "No scanned deliveries yet.";
+        return;
+      }
+
+      document.getElementById("delivery-map").style.display = "";
+      document.getElementById("route-list").style.display = "";
+      document.getElementById("delivery-empty").style.display = "none";
+
+      // Init map once
+      if (!deliveryMap) {
+        deliveryMap = new google.maps.Map(document.getElementById("delivery-map"), {
+          center: { lat: 40.2338, lng: -111.6585 },
+          zoom: 11,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+          styles: [{ elementType: "geometry", stylers: [{ color: "#1c1c1f" }] },
+                   { elementType: "labels.text.fill", stylers: [{ color: "#a1a1aa" }] },
+                   { elementType: "labels.text.stroke", stylers: [{ color: "#09090b" }] },
+                   { featureType: "road", elementType: "geometry", stylers: [{ color: "#3f3f46" }] },
+                   { featureType: "water", elementType: "geometry", stylers: [{ color: "#09090b" }] }]
+        });
+        deliveryGeocoder = new google.maps.Geocoder();
+      }
+
+      // Geocode any stops not yet in cache
+      const newStops = stops.filter(s => !addressGeoCache[s.address.trim().toLowerCase()]);
+      if (newStops.length > 0) {
+        document.getElementById("delivery-status").textContent = `Locating ${newStops.length} address${newStops.length !== 1 ? "es" : ""}...`;
+      }
+
+      const geocoded = await geocodeStops(stops);
+
+      document.getElementById("delivery-status").textContent =
+        `${geocoded.length} delivery stop${geocoded.length !== 1 ? "s" : ""}`;
+
+      const groups = kMeans(geocoded, selectedDrivers);
+      renderRoutes(groups);
+    }
+
+    // Driver selector buttons
+    document.querySelectorAll(".driver-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        document.querySelectorAll(".driver-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        selectedDrivers = parseInt(btn.dataset.drivers);
+        await initDeliveryTab();
+      });
+    });
+
+    // ── INITIAL RENDER ──
+    // Start on the Orders tab — render it immediately.
+    // Assembly/Pickup/Delivery will refresh state when switched to.
+    renderOrders();
+
+    // If there were already scanned items (page refresh), show the last one
+    if (scanned.length > 0 && scanned.length < allMealIds.length) {
+      const lastId = scanned[scanned.length - 1];
+      const last = mealMap[lastId];
+      if (last) {
+        document.getElementById("waiting-state").style.display = "none";
+        document.getElementById("scan-card").classList.add("visible");
+        document.getElementById("card-name").textContent = last.customerName;
+        document.getElementById("card-meal").textContent = last.mealName;
+        document.getElementById("card-protein").textContent = last.macros.protein;
+        document.getElementById("card-carbs").textContent = last.macros.carbs;
+        document.getElementById("card-veggies").textContent = last.macros.veggies;
+        const badge = document.getElementById("card-fulfillment-badge");
+        badge.textContent = last.fulfillment === "delivery" ? "DELIVERY" : "PICKUP";
+        badge.className = "fulfillment-badge " + (last.fulfillment === "delivery" ? "badge-delivery" : "badge-pickup");
+        const customerScannedSoFar = scanned.filter(id => mealMap[id] && mealMap[id].customerId === last.customerId).length;
+        const weekMealScannedSoFar = scanned.filter(id => mealMap[id] && mealMap[id].mealName === last.mealName).length;
+        document.getElementById("card-customer-count").textContent =
+          `Meal ${customerScannedSoFar} of ${last.customerTotalMeals} for this customer`;
+        document.getElementById("card-total-count").textContent =
+          `${weekMealScannedSoFar} of ${last.weekMealTotal} ${last.mealName} this week`;
+      }
+    }
+  </script>
+
+  <!-- ── MENU: SWAP / ADD MEAL OVERLAY ── -->
+  <div id="menu-overlay" class="menu-overlay-bg" style="display:none" onclick="handleMenuOverlayClick(event)">
+
+    <!-- Add meal: choose Existing or New -->
+    <div id="add-choice-modal" class="menu-modal" style="display:none">
+      <div class="menu-modal-head">
+        <div class="menu-modal-title">Add Meal to Menu</div>
+        <button class="menu-modal-close" onclick="closeMenuOverlay()">✕</button>
+      </div>
+      <div class="add-choice-body">
+        <button class="add-choice-btn existing" onclick="openAddExistingModal()">
+          Use an Existing Meal
+          <div class="add-choice-sub">Pick from meals you've created before</div>
+        </button>
+        <button class="add-choice-btn new-meal" onclick="openAddMealModal()">
+          Create a New Meal
+          <div class="add-choice-sub">Enter name, macros, and ingredients</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Add meal: pick from saved library -->
+    <div id="add-existing-modal" class="menu-modal" style="display:none">
+      <div class="menu-modal-head">
+        <div class="menu-modal-title">Select a Saved Meal</div>
+        <button class="menu-modal-close" onclick="closeMenuOverlay()">✕</button>
+      </div>
+      <div class="add-existing-body">
+        <select id="add-existing-select" class="add-existing-select">
+          <option value="">— pick a meal —</option>
+        </select>
+        <div class="menu-modal-footer" style="padding:0;border:none;">
+          <button class="menu-btn-save" onclick="confirmAddExisting()">Add to Menu</button>
+          <button class="menu-btn-cancel" onclick="document.getElementById('add-choice-modal').style.display='';document.getElementById('add-existing-modal').style.display='none'">Back</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Swap: pick from meal library -->
+    <div id="swap-modal" class="menu-modal">
+      <div class="menu-modal-head">
+        <div class="menu-modal-title">Select a replacement meal</div>
+        <button class="menu-modal-close" onclick="closeMenuOverlay()">✕</button>
+      </div>
+      <div class="swap-meal-list" id="swap-meal-list"></div>
+    </div>
+
+    <!-- Add new meal form (also used for editing) -->
+    <div id="add-meal-modal" class="menu-modal" style="display:none">
+      <div class="menu-modal-head">
+        <div class="menu-modal-title" id="new-meal-modal-title">New Meal</div>
+        <button class="menu-modal-close" onclick="closeMenuOverlay()">✕</button>
+      </div>
+      <div class="menu-modal-body">
+        <div class="menu-field-group">
+          <label class="menu-field-label">Meal Name *</label>
+          <input type="text" id="new-meal-name" class="menu-field-input" placeholder="e.g. Chicken Broccoli & Rice" />
+        </div>
+        <div class="menu-field-label" style="margin-bottom:6px;">Macros per serving *</div>
+        <div class="menu-macros-row">
+          <div class="menu-field-group">
+            <label class="menu-field-label">Protein (g)</label>
+            <input type="number" id="new-meal-protein" class="menu-field-input" min="0" placeholder="45" />
+          </div>
+          <div class="menu-field-group">
+            <label class="menu-field-label">Carbs (g)</label>
+            <input type="number" id="new-meal-carbs" class="menu-field-input" min="0" placeholder="62" />
+          </div>
+          <div class="menu-field-group">
+            <label class="menu-field-label">Fat (g)</label>
+            <input type="number" id="new-meal-fat" class="menu-field-input" min="0" placeholder="8" />
+          </div>
+          <div class="menu-field-group">
+            <label class="menu-field-label">Calories (kcal)</label>
+            <input type="number" id="new-meal-cal" class="menu-field-input" min="0" placeholder="500" />
+          </div>
+        </div>
+        <div class="menu-field-label" style="margin-bottom:8px;">Ingredients</div>
+        <div id="ing-rows-container"></div>
+        <button class="menu-add-ing-btn" onclick="addIngredientRow()">+ Add Ingredient</button>
+      </div>
+      <div class="menu-modal-footer">
+        <button class="menu-btn-save" id="save-meal-btn" onclick="saveNewMeal()">Save Meal</button>
+        <button class="menu-btn-cancel" onclick="backToSwapModal()">Back</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── MENU: ADD INGREDIENT MINI-OVERLAY ── -->
+  <div id="ing-overlay" class="menu-overlay-bg ing-overlay" style="display:none" onclick="handleIngOverlayClick(event)">
+    <div class="menu-modal mini-modal">
+      <div class="menu-modal-head">
+        <div class="menu-modal-title">Add New Ingredient</div>
+        <button class="menu-modal-close" onclick="closeIngOverlay()">✕</button>
+      </div>
+      <div class="menu-modal-body">
+        <div class="menu-field-group">
+          <label class="menu-field-label">Name *</label>
+          <input type="text" id="new-ing-name" class="menu-field-input" placeholder="e.g. Quinoa" />
+        </div>
+        <div class="menu-field-group">
+          <label class="menu-field-label">Unit *</label>
+          <input type="text" id="new-ing-unit" class="menu-field-input" placeholder="e.g. oz, g, cups" />
+        </div>
+        <div class="menu-field-group">
+          <label class="menu-field-label">Grams per 1 unit (optional)</label>
+          <input type="text" id="new-ing-conversion" class="menu-field-input" placeholder="e.g. 453.59 for lbs, 28.35 for oz" />
+        </div>
+      </div>
+      <div class="menu-modal-footer">
+        <button class="menu-btn-save" onclick="saveNewIngredient()">Save</button>
+        <button class="menu-btn-cancel" onclick="closeIngOverlay()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -13,7 +13,7 @@ import { run, nowIso } from './db.js';
 import { ghlEnsureContact, ghlSend } from './ghl.js';
 
 // Events important enough to also fire an instant SMS (money-moving / churn). Everything emails.
-const BIG = new Set(['owner_new_signup', 'owner_canceled', 'owner_payment_failed', 'owner_tier_changed', 'owner_refund']);
+const BIG = new Set(['owner_new_signup', 'owner_canceled', 'owner_payment_failed', 'owner_tier_changed', 'owner_refund', 'owner_menu_failsafe']);
 
 function list(env, key) {
   return String((env && env[key]) || '').split(',').map((s) => s.trim()).filter(Boolean);

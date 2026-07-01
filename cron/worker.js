@@ -45,10 +45,14 @@ export default {
       // Daily 13:00 UTC (~7am MDT / 6am MST) — owner morning digest + health probe. Emails the owners
       // only if OWNER_NOTIFY_ENABLED=true; escalates an SMS if a health signal trips.
       ctx.waitUntil(hit(env, '/api/admin/daily-digest'));
-      // Monday-only: also prune the in-app feed (>120d). Folded into this daily trigger to stay within
-      // the account's 5-cron-trigger limit (was its own '0 8 * * 1' before).
+      // Monday-only (folded into this daily trigger to stay within the 5-cron-trigger limit):
+      //   - prune the in-app feed (>120d)
+      //   - MENU FAILSAFE: if no owner confirmed this week's menu, auto-publish it (a staged menu is
+      //     confirmed; otherwise last week's menu is rolled forward) so customers aren't stuck. Runs
+      //     ~6–7am MT Monday, before the day's ordering. No-ops if the menu is already live.
       if (new Date(event.scheduledTime).getUTCDay() === 1) {
         ctx.waitUntil(hit(env, '/api/admin/prune-notifications'));
+        ctx.waitUntil(hit(env, '/api/admin/menu-failsafe'));
       }
     }
   },

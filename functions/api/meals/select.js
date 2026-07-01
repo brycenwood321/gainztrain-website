@@ -31,7 +31,7 @@ export async function onRequestPost(context) {
   if (sub.status === 'paused') return fail(409, 'plan_paused', 'Your plan is paused — resume it to order meals.');
   if (!(sub.meals_per_week > 0)) return fail(409, 'tier_unset', "Your plan's meal count isn't set yet — contact us.");
 
-  const menuRow = await one(env.DB, `SELECT meals_json FROM weekly_menus WHERE week_of = ?`, weekOf);
+  const menuRow = await one(env.DB, `SELECT meals_json FROM weekly_menus WHERE week_of = ? AND status = 'live'`, weekOf);
   if (!menuRow) return fail(404, 'no_menu', 'No menu is published for this week yet.');
   const menu = JSON.parse(menuRow.meals_json);
   if (!Array.isArray(menu) || menu.length === 0) return fail(404, 'no_menu', 'No menu is published for this week yet.');

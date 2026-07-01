@@ -16,7 +16,8 @@ export async function onRequestGet(context) {
   // (has_menu:false) — never fall back to a past week (that produced an unsaveable / falsely-locked
   // picker). The cutoff/locked state below always reflects the real orderable week.
   const week = orderableWeek();
-  const menuRow = await one(env.DB, `SELECT label, meals_json FROM weekly_menus WHERE week_of = ?`, week);
+  // status='live' only — a STAGED menu (finalized but not yet owner-confirmed) is invisible to customers.
+  const menuRow = await one(env.DB, `SELECT label, meals_json FROM weekly_menus WHERE week_of = ? AND status = 'live'`, week);
   const meals = menuRow ? JSON.parse(menuRow.meals_json) : [];
 
   const sub = await one(env.DB,

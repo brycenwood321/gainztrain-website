@@ -1041,6 +1041,9 @@
     .menu-week-status.published { color: #1f8a4c; }
     .menu-week-status.draft { color: #9a7b53; }
     .menu-week-status.locked { color: #c0392b; }
+    .menu-golive-btn { margin-left: auto; font: inherit; font-weight: 800; padding: 9px 16px; border: none; border-radius: 9px; background: #1f8a4c; color: #fff; cursor: pointer; }
+    .menu-golive-btn:hover { background: #1b7a43; }
+    .menu-golive-btn:disabled { opacity: .6; cursor: default; }
     .menu-pill.swapped-out { opacity: 0.4; border-color: #f5f2ee; border-left-color: #f5f2ee; pointer-events: none; }
 
     .pill-info { flex: 1; min-width: 0; }
@@ -1801,6 +1804,7 @@
       <label class="menu-week-label" for="menu-week-select">📅 Building menu for</label>
       <select id="menu-week-select" class="menu-week-select" onchange="onMenuWeekChange()"></select>
       <span class="menu-week-status" id="menu-week-status"></span>
+      <button class="menu-golive-btn" id="menu-golive-btn" style="display:none" onclick="confirmGoLive()">✅ Confirm &amp; Go Live</button>
     </div>
     <div class="menu-topbar">
       <button class="menu-topbar-btn pull-coming-soon" title="Coming soon — waiting for Brycen's menu endpoint">⬇ Pull from Website</button>
@@ -2705,13 +2709,41 @@
     }
 
     function updateWeekStatusBadge() {
-      const el = document.getElementById("menu-week-status");
+      const el  = document.getElementById("menu-week-status");
+      const btn = document.getElementById("menu-golive-btn");
       if (!el) return;
+      if (btn) btn.style.display = "none";
       const w = menuWeeksCache.find(x => ymdOf(x) === menuBuildWeek);
-      if (!w)              { el.textContent = ""; el.className = "menu-week-status"; return; }
-      if (w.locked)        { el.textContent = "🔒 Kitchen locked — this menu is frozen"; el.className = "menu-week-status locked"; }
-      else if (w.published){ el.textContent = `✓ Live for customers (${w.meal_count} meals) — finalizing again will update it`; el.className = "menu-week-status published"; }
-      else                 { el.textContent = "Draft — not published yet"; el.className = "menu-week-status draft"; }
+      if (!w)                          { el.textContent = ""; el.className = "menu-week-status"; return; }
+      if (w.locked)                    { el.textContent = "🔒 Kitchen locked — this menu is frozen"; el.className = "menu-week-status locked"; }
+      else if (w.status === "live")    { el.textContent = `✓ Live for customers (${w.meal_count} meals) — edits stay live`; el.className = "menu-week-status published"; }
+      else if (w.status === "staged")  { el.textContent = `⏳ Staged (${w.meal_count} meals) — NOT visible to customers yet`; el.className = "menu-week-status draft"; if (btn) btn.style.display = ""; }
+      else                             { el.textContent = "Draft — build it, then Finalize"; el.className = "menu-week-status draft"; }
+    }
+
+    async function confirmGoLive() {
+      const wk = menuBuildWeek;
+      const wkPretty = `${wk.slice(0,4)}-${wk.slice(4,6)}-${wk.slice(6,8)}`;
+      if (!confirm(`Make the week of ${wkPretty} LIVE for customers to order?\n\nThis publishes the staged menu so customers can see + order it.\n(Customers are not texted yet — that turns on once A2P + email are fixed.)`)) return;
+      const btn = document.getElementById("menu-golive-btn");
+      const orig = btn ? btn.textContent : "";
+      if (btn) { btn.disabled = true; btn.textContent = "Going live…"; }
+      try {
+        const res = await fetch("/api/admin/confirm-menu", {
+          method: "POST", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ week_of: wkPretty }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) { showToast("Not logged in as staff — log in on the Ops Dashboard first."); return; }
+        if (!res.ok) { showToast(`Go-live failed: ${data.detail || data.error || ("HTTP " + res.status)}`); return; }
+        showToast(`✅ LIVE for week of ${data.week_of || wkPretty} — customers can order now.`);
+        renderMenuWeekPicker();
+      } catch (err) {
+        showToast(`Go-live failed: ${err.message}`);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = orig || "✅ Confirm & Go Live"; }
+      }
     }
 
     function onMenuWeekChange() {
@@ -3264,9 +3296,9 @@
       const wk = menuBuildWeek;                                 // YYYYMMDD
       const wkPretty = `${wk.slice(0,4)}-${wk.slice(4,6)}-${wk.slice(6,8)}`;
       const proceed = confirm(
-        `Publish this menu LIVE for customers to order?\n\n` +
-        `${confirmed.length} meal${confirmed.length !== 1 ? "s" : ""} → week of ${wkPretty}\n\n` +
-        `Customers are NOT messaged yet — the "new menu" text turns on once A2P + email are fixed.`
+        `Save & STAGE this menu for the week of ${wkPretty}?\n\n` +
+        `${confirmed.length} meal${confirmed.length !== 1 ? "s" : ""}.\n\n` +
+        `It will NOT be visible to customers until an owner clicks "Confirm & Go Live".`
       );
       if (!proceed) return;
 
@@ -3292,8 +3324,9 @@
         const data = await res.json().catch(() => ({}));
         if (res.status === 401) { showToast("Not logged in as staff — open this from the Ops Dashboard and log in first."); return; }
         if (!res.ok) { showToast(`Publish failed: ${data.detail || data.error || ("HTTP " + res.status)}`); return; }
-        showToast(`✓ Published LIVE for week of ${data.week_of} — ${data.meals} meals. Customers can order now.`);
-        renderMenuWeekPicker();  // flip this week's badge to "published"
+        if (data.live) showToast(`✓ Updated the LIVE menu for week of ${data.week_of} (${data.meals} meals).`);
+        else showToast(`✓ Staged for week of ${data.week_of} (${data.meals} meals). Now hit "Confirm & Go Live" to publish.`);
+        renderMenuWeekPicker();  // refresh the badge + reveal the go-live button
       } catch (err) {
         showToast(`Publish failed: ${err.message}`);
       } finally {

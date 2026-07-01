@@ -16,11 +16,9 @@
 // client week_of is honored only if it's a future, unlocked Sunday.
 import { ok, fail } from '../../_lib/respond.js';
 import { requireStaffOrAdmin } from '../../_lib/admin.js';
-import { one, all, run, nowIso } from '../../_lib/db.js';
+import { one, run, nowIso } from '../../_lib/db.js';
 import { orderableWeek } from '../../_lib/menu.js';
-import { notify } from '../../_lib/notify.js';
 
-const ANNOUNCE_STATUSES = ['active', 'trialing', 'past_due'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function isSunday(iso) {
@@ -74,34 +72,29 @@ export async function onRequestPost(context) {
 
   const meals = rawMeals.map(normalizeMeal);
   const now = nowIso();
-  await run(env.DB,
-    `INSERT INTO weekly_menus (week_of, label, meals_json, published_at, created_at, updated_at, source)
-     VALUES (?, 'This Week', ?, ?, ?, ?, 'dashboard')
-     ON CONFLICT(week_of) DO UPDATE SET meals_json=excluded.meals_json, label=excluded.label,
-       published_at=excluded.published_at, updated_at=excluded.updated_at, source='dashboard'`,
-    week, JSON.stringify(meals), now, now, now);
 
-  // Customer "new menu dropped" blast — GATED. Stays off until env.MENU_BLAST_ENABLED==='true' (flip it
-  // once A2P SMS + email deliverability are fixed). Deduped per customer+week, so it's safe to re-run.
-  let announced = 0;
-  const blastReady = String(env.MENU_BLAST_ENABLED) === 'true';
-  if (blastReady && week === orderableWeek()) {
-    const subs = await all(env.DB,
-      `SELECT c.id AS customer_id, c.email, c.first_name, c.ghl_contact_id
-       FROM subscriptions s JOIN customers c ON c.id = s.customer_id
-       WHERE s.status IN (${ANNOUNCE_STATUSES.map(() => '?').join(',')}) AND s.meals_per_week > 0 AND s.origin = 'app'`,
-      ...ANNOUNCE_STATUSES);
-    for (const sub of subs) {
-      const cust = { id: sub.customer_id, email: sub.email, first_name: sub.first_name, ghl_contact_id: sub.ghl_contact_id };
-      const r = await notify(env, cust, 'menu_posted', { weekOf: week }, { dedupKey: `menu_posted:${week}:${cust.id}` });
-      if (r.ok && !r.deduped) announced++;
-    }
-  }
+  // OWNER-CONFIRMATION GATE: finalizing STAGES the menu — it does NOT go live to customers until an owner
+  // hits "Confirm & Go Live" (/api/admin/confirm-menu). Exception: editing a week that's ALREADY live keeps
+  // it live (quick fixes shouldn't yank the menu out from under customers mid-week). The customer "new menu
+  // dropped" blast fires at go-live (in confirm-menu.js), not here.
+  const existing = await one(env.DB, `SELECT status FROM weekly_menus WHERE week_of = ?`, week);
+  const status = existing && existing.status === 'live' ? 'live' : 'staged';
+
+  await run(env.DB,
+    `INSERT INTO weekly_menus (week_of, label, meals_json, published_at, created_at, updated_at, source, status)
+     VALUES (?, 'This Week', ?, ?, ?, ?, 'dashboard', ?)
+     ON CONFLICT(week_of) DO UPDATE SET meals_json=excluded.meals_json, label=excluded.label,
+       published_at=excluded.published_at, updated_at=excluded.updated_at, source='dashboard', status=excluded.status`,
+    week, JSON.stringify(meals), now, now, now, status);
 
   return ok({
     week_of: week,
     meals: meals.length,
     source: 'dashboard',
-    blast: blastReady ? `sent to ${announced} customer(s)` : 'held — customer blast off until MENU_BLAST_ENABLED is set',
+    status,
+    live: status === 'live',
+    note: status === 'live'
+      ? 'Updated the live menu (this week was already live).'
+      : 'Menu STAGED — it is not visible to customers until an owner hits "Confirm & Go Live".',
   });
 }

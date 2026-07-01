@@ -70,17 +70,29 @@ export async function onRequestPost(context) {
   }
 
   // Sunday morning (this digest runs 13:00 UTC ≈ 7am MT, so UTC-Sunday == Sunday morning in Denver):
-  // remind Brycen + Jayson to set + finalize this week's menu in the prep dashboard.
+  // nudge an owner to CONFIRM this week's menu live. Only fires when action is needed (menu not yet live) —
+  // if it's already live, stay quiet. See the owner-confirmation gate (confirm-menu.js).
   if (new Date().getUTCDay() === 0) {
     const orderWk = orderableWeek();
-    await ownerNotify(env, 'owner_set_menu', `Sunday: set this week's Gainz Train menu (week of ${orderWk})`, {
-      entity: 'system',
-      lines: [
-        "Open the prep dashboard → Menu tab, build this week's menu, then hit Finalize to publish it for customers.",
-        'Dashboard: https://gainztrainprep.com/app/ops/prep/ (log in first)',
-        `Customers can order the week of ${orderWk} until Friday 11:59am MT.`,
-      ],
-    });
+    const menuRow = await one(env.DB, `SELECT status FROM weekly_menus WHERE week_of = ?`, orderWk);
+    const st = menuRow ? (menuRow.status || 'live') : null;
+    if (st !== 'live') {
+      const staged = st === 'staged';
+      await ownerNotify(env, 'owner_set_menu',
+        staged
+          ? `Sunday: CONFIRM this week's Gainz Train menu to go live (week of ${orderWk})`
+          : `Sunday: set + confirm this week's Gainz Train menu (week of ${orderWk})`,
+        {
+          entity: 'system',
+          lines: [
+            staged
+              ? 'A menu is STAGED for this week but NOT live yet. Open the prep dashboard → Menu tab, review it, then hit "Confirm & Go Live" so customers can order.'
+              : "Open the prep dashboard → Menu tab, build this week's menu, hit Finalize, then \"Confirm & Go Live\" so customers can order.",
+            'Dashboard: https://gainztrainprep.com/app/ops/prep/ (log in first)',
+            `Nothing is visible to customers until you confirm. They can then order the week of ${orderWk} until Friday 11:59am MT.`,
+          ],
+        });
+    }
   }
 
   return ok({ summary, health: { failed_comms_24h: failed, stuck_webhooks: stuck, ok: healthOk }, activity });

@@ -12,8 +12,9 @@ const CACHE = { 'Cache-Control': 'public, max-age=60' }; // fresh within a minut
 export async function onRequestGet(context) {
   const { env } = context;
   const week = orderableWeek();
-  let row = await one(env.DB, `SELECT week_of, label, meals_json FROM weekly_menus WHERE week_of = ?`, week);
-  if (!row) row = await one(env.DB, `SELECT week_of, label, meals_json FROM weekly_menus ORDER BY week_of DESC LIMIT 1`);
+  // Only live (owner-confirmed) menus are public — staged menus stay hidden until go-live.
+  let row = await one(env.DB, `SELECT week_of, label, meals_json FROM weekly_menus WHERE week_of = ? AND status = 'live'`, week);
+  if (!row) row = await one(env.DB, `SELECT week_of, label, meals_json FROM weekly_menus WHERE status = 'live' ORDER BY week_of DESC LIMIT 1`);
 
   if (!row) return json({ has_menu: false, week_of: null, label: null, meals: [] }, 200, CACHE);
   let meals = [];

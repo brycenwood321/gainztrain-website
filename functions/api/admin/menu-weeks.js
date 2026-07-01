@@ -25,7 +25,7 @@ export async function onRequestGet(context) {
   for (let i = 0; i < HORIZON; i++) weeks.push(addWeeks(start, i));
   const ph = weeks.map(() => '?').join(',');
 
-  const menus = await all(env.DB, `SELECT week_of, source, meals_json FROM weekly_menus WHERE week_of IN (${ph})`, ...weeks);
+  const menus = await all(env.DB, `SELECT week_of, source, status, meals_json FROM weekly_menus WHERE week_of IN (${ph})`, ...weeks);
   const locks = await all(env.DB, `SELECT DISTINCT week_of FROM orders WHERE status = 'locked' AND week_of IN (${ph})`, ...weeks);
   const mMap = new Map(menus.map((m) => [m.week_of, m]));
   const lSet = new Set(locks.map((l) => l.week_of));
@@ -34,7 +34,9 @@ export async function onRequestGet(context) {
     const m = mMap.get(w);
     let meal_count = 0;
     if (m) { try { meal_count = JSON.parse(m.meals_json).length; } catch { meal_count = 0; } }
-    return { week_of: w, index: i, published: !!m, source: m ? m.source : null, meal_count, locked: lSet.has(w) };
+    // status: 'live' (owner-confirmed, customers see it) | 'staged' (finalized, awaiting confirm) | null (no menu)
+    const status = m ? (m.status || 'live') : null;
+    return { week_of: w, index: i, published: !!m, status, live: status === 'live', source: m ? m.source : null, meal_count, locked: lSet.has(w) };
   });
 
   return ok({ orderable_week: start, weeks: out });

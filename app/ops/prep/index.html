@@ -1034,6 +1034,13 @@
 
     .menu-pill.confirmed { border-color: #ff6b35; border-left-color: #ff6b35; }
     .pill-thumb { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; flex-shrink: 0; margin-right: 8px; background: #f5f2ee; }
+    .menu-week-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; margin-bottom: 12px; background: #fff; border: 1px solid #eee5dd; border-radius: 12px; }
+    .menu-week-label { font-weight: 700; font-size: .9rem; color: #2a2a2a; }
+    .menu-week-select { font: inherit; font-weight: 600; padding: 8px 10px; border: 1px solid #d9cfc4; border-radius: 9px; background: #fff; color: #2a2a2a; cursor: pointer; }
+    .menu-week-status { font-size: .82rem; font-weight: 600; }
+    .menu-week-status.published { color: #1f8a4c; }
+    .menu-week-status.draft { color: #9a7b53; }
+    .menu-week-status.locked { color: #c0392b; }
     .menu-pill.swapped-out { opacity: 0.4; border-color: #f5f2ee; border-left-color: #f5f2ee; pointer-events: none; }
 
     .pill-info { flex: 1; min-width: 0; }
@@ -1790,6 +1797,11 @@
 
   <!-- ── MENU TAB ── -->
   <div class="tab-panel" id="tab-menu">
+    <div class="menu-week-bar" id="menu-week-bar" style="display:none">
+      <label class="menu-week-label" for="menu-week-select">📅 Building menu for</label>
+      <select id="menu-week-select" class="menu-week-select" onchange="onMenuWeekChange()"></select>
+      <span class="menu-week-status" id="menu-week-status"></span>
+    </div>
     <div class="menu-topbar">
       <button class="menu-topbar-btn pull-coming-soon" title="Coming soon — waiting for Brycen's menu endpoint">⬇ Pull from Website</button>
       <button class="menu-topbar-btn" onclick="openAddMealDirect()">+ Add Meal</button>
@@ -2572,8 +2584,23 @@
       return null;
     }
 
-    function loadCurrentMenu()   { try { return JSON.parse(localStorage.getItem("gainztrain_menu_current")  || "null"); } catch { return null; } }
-    function saveCurrentMenu(d)  { localStorage.setItem("gainztrain_menu_current",  JSON.stringify(d)); }
+    // The Menu tab can build/schedule a menu for ANY upcoming week, so the draft is stored PER WEEK
+    // (keyed by menuBuildWeek = YYYYMMDD). Defaults to the dashboard's ops week; renderMenuWeekPicker snaps
+    // it to the server's true orderable week on load.
+    let menuBuildWeek = getWeekStr();
+    function menuStorageKey() { return "gainztrain_menu_week_" + menuBuildWeek; }
+    function loadCurrentMenu() {
+      try {
+        let d = JSON.parse(localStorage.getItem(menuStorageKey()) || "null");
+        if (!d && menuBuildWeek === getWeekStr()) {
+          // one-time migration: the old single-key draft → this week's per-week key
+          const legacy = localStorage.getItem("gainztrain_menu_current");
+          if (legacy) { localStorage.setItem(menuStorageKey(), legacy); d = JSON.parse(legacy); }
+        }
+        return d;
+      } catch { return null; }
+    }
+    function saveCurrentMenu(d)  { localStorage.setItem(menuStorageKey(), JSON.stringify(d)); }
     function loadPreviousMenu()  { try { return JSON.parse(localStorage.getItem("gainztrain_menu_previous") || "[]");  } catch { return []; } }
     function savePreviousMenu(a) { localStorage.setItem("gainztrain_menu_previous", JSON.stringify(a)); }
     function loadMealLibrary()   { try { return JSON.parse(localStorage.getItem("gainztrain_meal_library")  || "[]");  } catch { return []; } }
@@ -2626,18 +2653,71 @@
     let menuIngSelectEl = null;  // which <select> triggered "add new ingredient"
     let menuPhotoUrl    = "";    // uploaded /meal-photos/... URL for the meal open in the add/edit modal
 
-    function initMenuTab() {
-      const currentWeek = getWeekStr();
+    function seedWeekIfNeeded() {
       let stored = loadCurrentMenu();
-
-      if (!stored || stored.week !== currentWeek) {
-        // New week — seed from previous week's confirmed meals as pending
+      if (!stored || stored.week !== menuBuildWeek) {
+        // New/unstarted week — seed from the last finalized menu as pending (a starting point she edits).
         const prev = loadPreviousMenu();
         const meals = prev.map(m => ({ ...m, id: menuUid(), status: "pending", swappedBy: null }));
-        stored = { week: currentWeek, meals };
+        stored = { week: menuBuildWeek, meals };
         saveCurrentMenu(stored);
       }
+    }
 
+    function initMenuTab() {
+      seedWeekIfNeeded();
+      renderMenuWeekPicker();   // async — sets the week dropdown + status badge
+      renderMenuTab();
+    }
+
+    // ── SCHEDULE MENUS IN ADVANCE ──
+    // The week dropdown lets Marissa build/publish a menu for any of the next several weeks, not just this
+    // one. menuWeeksCache holds the server's view (which weeks are published/locked) for the status badge.
+    let menuWeeksCache = [];
+    const ymdOf = w => String(w.week_of).replace(/-/g, "");
+
+    async function renderMenuWeekPicker() {
+      const sel = document.getElementById("menu-week-select");
+      if (!sel) return;
+      try {
+        const res = await fetch("/api/admin/menu-weeks", { credentials: "include" });
+        if (!res.ok) { document.getElementById("menu-week-bar").style.display = "none"; return; }
+        const data = await res.json();
+        menuWeeksCache = data.weeks || [];
+      } catch { return; }
+      if (!menuWeeksCache.length) return;
+      document.getElementById("menu-week-bar").style.display = "";
+      // If the build week is outside the orderable range (e.g. its cutoff passed), snap to the first week.
+      if (!menuWeeksCache.some(w => ymdOf(w) === menuBuildWeek)) {
+        menuBuildWeek = ymdOf(menuWeeksCache[0]);
+        seedWeekIfNeeded();
+      }
+      sel.innerHTML = menuWeeksCache.map((w, i) => {
+        const d = new Date(w.week_of + "T12:00:00");
+        const nice = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const label = (i === 0 ? "This week · " : "Week of ") + nice;
+        const tag = w.locked ? " · 🔒 locked" : w.published ? " · ✓ published" : " · draft";
+        return `<option value="${ymdOf(w)}">${label}${tag}</option>`;
+      }).join("");
+      sel.value = menuBuildWeek;
+      updateWeekStatusBadge();
+      renderMenuTab();   // ensure pills match the final (possibly snapped) build week
+    }
+
+    function updateWeekStatusBadge() {
+      const el = document.getElementById("menu-week-status");
+      if (!el) return;
+      const w = menuWeeksCache.find(x => ymdOf(x) === menuBuildWeek);
+      if (!w)              { el.textContent = ""; el.className = "menu-week-status"; return; }
+      if (w.locked)        { el.textContent = "🔒 Kitchen locked — this menu is frozen"; el.className = "menu-week-status locked"; }
+      else if (w.published){ el.textContent = `✓ Live for customers (${w.meal_count} meals) — finalizing again will update it`; el.className = "menu-week-status published"; }
+      else                 { el.textContent = "Draft — not published yet"; el.className = "menu-week-status draft"; }
+    }
+
+    function onMenuWeekChange() {
+      menuBuildWeek = document.getElementById("menu-week-select").value;
+      seedWeekIfNeeded();
+      updateWeekStatusBadge();
       renderMenuTab();
     }
 
@@ -3180,8 +3260,8 @@
         return;
       }
 
-      // Pretty target week for the confirm prompt (server re-derives the authoritative week on write).
-      const wk = getWeekStr();                                  // YYYYMMDD
+      // Publish to the SELECTED week (the scheduler). Server honors a future, unlocked Sunday.
+      const wk = menuBuildWeek;                                 // YYYYMMDD
       const wkPretty = `${wk.slice(0,4)}-${wk.slice(4,6)}-${wk.slice(6,8)}`;
       const proceed = confirm(
         `Publish this menu LIVE for customers to order?\n\n` +
@@ -3213,6 +3293,7 @@
         if (res.status === 401) { showToast("Not logged in as staff — open this from the Ops Dashboard and log in first."); return; }
         if (!res.ok) { showToast(`Publish failed: ${data.detail || data.error || ("HTTP " + res.status)}`); return; }
         showToast(`✓ Published LIVE for week of ${data.week_of} — ${data.meals} meals. Customers can order now.`);
+        renderMenuWeekPicker();  // flip this week's badge to "published"
       } catch (err) {
         showToast(`Publish failed: ${err.message}`);
       } finally {

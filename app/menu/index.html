@@ -23,6 +23,7 @@
     .head .wk{color:var(--muted);margin-bottom:1rem;}
     .meal{display:flex;gap:1rem;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:1rem;margin-bottom:.85rem;box-shadow:0 4px 18px rgba(0,0,0,.03);}
     .meal .emoji{font-size:2rem;line-height:1;flex-shrink:0;width:2.5rem;text-align:center;}
+    .meal .thumb{flex-shrink:0;width:4.5rem;height:4.5rem;border-radius:12px;object-fit:cover;background:var(--line);}
     .meal .info{flex:1;min-width:0;}
     .meal h3{font-size:1.15rem;}
     .meal .desc{color:var(--muted);font-size:.85rem;margin:.2rem 0 .5rem;}
@@ -93,10 +94,12 @@
         const minus=$('minus_'+m.position);if(minus)minus.disabled=locked||(qty[m.position]||0)<=0;});
     }
     function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+    // Swap a broken meal photo for the emoji tile so a bad URL never leaves an empty box.
+    function mealImgErr(img,emoji){const d=document.createElement('div');d.className='emoji';d.textContent=emoji||'🍽️';img.replaceWith(d);}
     function renderMeals(){
       $('meals').innerHTML=MENU.map(m=>`
         <div class="meal">
-          <div class="emoji">${esc(m.emoji||'🍽️')}</div>
+          ${m.image?`<img class="thumb" src="${esc(m.image)}" alt="${esc(m.name)}" loading="lazy" onerror="mealImgErr(this,'${esc(m.emoji||'🍽️')}')" />`:`<div class="emoji">${esc(m.emoji||'🍽️')}</div>`}
           <div class="info">
             <h3>${esc(m.name)}</h3>
             <div class="desc">${esc(m.description||'')}</div>

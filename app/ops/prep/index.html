@@ -2623,6 +2623,7 @@
     let menuAddContext  = null;  // "swap" | "direct"
     let menuEditingId   = null;  // pill ID currently being edited (null when adding new)
     let menuIngSelectEl = null;  // which <select> triggered "add new ingredient"
+    let menuPhotoUrl    = "";    // uploaded /meal-photos/... URL for the meal open in the add/edit modal
 
     function initMenuTab() {
       const currentWeek = getWeekStr();
@@ -2860,6 +2861,9 @@
       document.getElementById("new-meal-fat").value     = "";
       document.getElementById("new-meal-cal").value     = "";
       document.getElementById("new-meal-upcharge").value = "";
+      document.getElementById("new-meal-photo-input").value = "";
+      document.getElementById("new-meal-photo-status").textContent = "";
+      showMealPhoto("");
       document.getElementById("ing-rows-container").innerHTML = "";
       hideAllModals();
       document.getElementById("add-meal-modal").style.display = "";
@@ -2882,6 +2886,9 @@
       document.getElementById("new-meal-fat").value     = meal.macros?.fat     ?? "";
       document.getElementById("new-meal-cal").value     = meal.macros?.cal     ?? "";
       document.getElementById("new-meal-upcharge").value = meal.upcharge ?? "";
+      document.getElementById("new-meal-photo-input").value = "";
+      document.getElementById("new-meal-photo-status").textContent = "";
+      showMealPhoto(meal.image || "");
 
       // Pre-populate ingredient rows
       const container = document.getElementById("ing-rows-container");
@@ -2989,6 +2996,77 @@
       }
     }
 
+    // ── MEAL PHOTO UPLOAD ──
+    // Resize the picked photo to a small JPEG in the browser (phone photos are huge), preview it, and
+    // upload to the staff-gated /api/admin/meal-photo. On success we hold the returned /meal-photos/ URL
+    // in menuPhotoUrl; saveNewMeal stamps it onto the meal as `image`, and finalize publishes it.
+    function resizeToJpeg(file, maxW, quality) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("Could not read the image."));
+        reader.onload = () => {
+          const img = new Image();
+          img.onerror = () => reject(new Error("That file isn't a valid image."));
+          img.onload = () => {
+            const scale = Math.min(1, maxW / img.width);
+            const w = Math.round(img.width * scale);
+            const h = Math.round(img.height * scale);
+            const canvas = document.createElement("canvas");
+            canvas.width = w; canvas.height = h;
+            canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL("image/jpeg", quality);
+            canvas.toBlob(b => b ? resolve({ blob: b, dataUrl }) : reject(new Error("Image processing failed.")), "image/jpeg", quality);
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function showMealPhoto(url) {
+      menuPhotoUrl = url || "";
+      const wrap = document.getElementById("new-meal-photo-preview");
+      const imgEl = document.getElementById("new-meal-photo-img");
+      if (menuPhotoUrl) { imgEl.src = menuPhotoUrl; wrap.style.display = ""; }
+      else { imgEl.removeAttribute("src"); wrap.style.display = "none"; }
+    }
+
+    async function handleMealPhotoPick(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const status = document.getElementById("new-meal-photo-status");
+      const wrap   = document.getElementById("new-meal-photo-preview");
+      try {
+        const { blob, dataUrl } = await resizeToJpeg(file, 1200, 0.82);
+        // Instant local preview while the upload runs.
+        document.getElementById("new-meal-photo-img").src = dataUrl;
+        wrap.style.display = "";
+        status.textContent = "Uploading…";
+        const name = document.getElementById("new-meal-name").value.trim();
+        const res = await fetch("/api/admin/meal-photo?name=" + encodeURIComponent(name), {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "image/jpeg" },
+          body: blob,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) { status.textContent = "Not logged in as staff."; showToast("Log in on the Ops Dashboard first, then re-pick the photo."); return; }
+        if (!res.ok || !data.url) { status.textContent = "Upload failed."; showToast("Photo upload failed: " + (data.detail || data.error || ("HTTP " + res.status))); return; }
+        menuPhotoUrl = data.url;
+        status.textContent = "✓ Photo added";
+      } catch (err) {
+        status.textContent = "Upload failed.";
+        showToast(err.message || "Photo upload failed.");
+      }
+    }
+
+    function removeMealPhoto() {
+      menuPhotoUrl = "";
+      document.getElementById("new-meal-photo-input").value = "";
+      document.getElementById("new-meal-photo-status").textContent = "";
+      showMealPhoto("");
+    }
+
     function saveNewMeal() {
       const name    = document.getElementById("new-meal-name").value.trim();
       const protein = parseInt(document.getElementById("new-meal-protein").value);
@@ -3023,7 +3101,7 @@
         if (!stored) { showToast("Save failed — menu data missing. Please refresh."); return; }
         const idx = (stored.meals || []).findIndex(m => m.id === menuEditingId);
         if (idx === -1) { showToast("Save failed — meal not found. Please refresh."); return; }
-        stored.meals[idx] = { ...stored.meals[idx], name, macros, ingredients, upcharge };
+        stored.meals[idx] = { ...stored.meals[idx], name, macros, ingredients, upcharge, image: menuPhotoUrl };
         saveCurrentMenu(stored);
         closeMenuOverlay();
         renderMenuTab();
@@ -3034,7 +3112,7 @@
       } else {
         // Add mode — single ID used for both library and menu entries
         const newId  = menuUid();
-        const newMeal = { id: newId, name, macros, ingredients, upcharge };
+        const newMeal = { id: newId, name, macros, ingredients, upcharge, image: menuPhotoUrl };
         const library = loadMealLibrary();
         library.unshift({ ...newMeal });
         saveMealLibrary(library);
@@ -3105,7 +3183,7 @@
 
       // Save confirmed meals as next week's starting point (local convenience, unchanged).
       savePreviousMenu(confirmed.map(m => ({
-        id: m.id, name: m.name, macros: m.macros, ingredients: m.ingredients, upcharge: m.upcharge || 0
+        id: m.id, name: m.name, macros: m.macros, ingredients: m.ingredients, upcharge: m.upcharge || 0, image: m.image || ""
       })));
 
       const btn = document.querySelector(".menu-topbar-btn.finalize");
@@ -3119,7 +3197,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             week_of: wkPretty,
-            meals: confirmed.map(m => ({ name: m.name, macros: m.macros, upcharge_per_meal: m.upcharge || 0 })),
+            meals: confirmed.map(m => ({ name: m.name, macros: m.macros, upcharge_per_meal: m.upcharge || 0, image: m.image || "" })),
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -3941,6 +4019,17 @@
         <div class="menu-field-group">
           <label class="menu-field-label">Meal Name *</label>
           <input type="text" id="new-meal-name" class="menu-field-input" placeholder="e.g. Chicken Broccoli & Rice" />
+        </div>
+        <div class="menu-field-group">
+          <label class="menu-field-label">Photo — optional (shows on the customer menu)</label>
+          <input type="file" id="new-meal-photo-input" accept="image/*" class="menu-field-input" style="padding:8px" onchange="handleMealPhotoPick(event)" />
+          <div id="new-meal-photo-preview" style="display:none;margin-top:8px;">
+            <img id="new-meal-photo-img" alt="Meal photo preview" style="width:100%;max-width:220px;border-radius:12px;display:block" />
+            <div style="display:flex;align-items:center;gap:12px;margin-top:6px;">
+              <span id="new-meal-photo-status" style="font-size:13px;color:#666;"></span>
+              <button type="button" onclick="removeMealPhoto()" style="background:none;border:none;color:#ff6b35;font-size:13px;cursor:pointer;padding:0;text-decoration:underline;">Remove photo</button>
+            </div>
+          </div>
         </div>
         <div class="menu-field-label" style="margin-bottom:6px;">Macros per serving *</div>
         <div class="menu-macros-row">

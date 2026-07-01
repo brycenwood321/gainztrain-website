@@ -14,3 +14,10 @@ binding = "DB"
 database_name = "gainztrain"
 database_id = "7af83afe-7758-4981-aecc-61da132e2571"
 migrations_dir = "migrations"
+
+# Meal marketing photos uploaded from the prep dashboard's "New Meal" form.
+# Written by /api/admin/meal-photo (staff-gated), served same-origin by functions/meal-photos/[[path]].js.
+# Private bucket — no public access; the serving Function streams objects with long cache headers.
+[[r2_buckets]]
+binding = "MEAL_PHOTOS"
+bucket_name = "gainztrain-meal-photos"

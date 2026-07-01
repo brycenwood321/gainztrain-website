@@ -4,7 +4,7 @@
 import { ok, fail } from '../../_lib/respond.js';
 import { one, all } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
-import { orderableWeek, cutoffForWeek, isLocked } from '../../_lib/menu.js';
+import { orderableWeek, cutoffForWeek, isLocked, orderingBlackout } from '../../_lib/menu.js';
 
 export async function onRequestGet(context) {
   const auth = await getSessionCustomer(context);
@@ -31,6 +31,9 @@ export async function onRequestGet(context) {
         sub.id, week)
     : [];
 
+  // Weekend blackout (Fri 12pm MT -> Sun): ordering is closed regardless of menu state.
+  const blackout = orderingBlackout();
+
   return ok({
     week_of: week,
     label: menuRow?.label || null,
@@ -41,6 +44,7 @@ export async function onRequestGet(context) {
     paused: !!(sub && sub.status === 'paused'),
     selections,                                  // [{meal_position, qty}]
     cutoff: cutoffForWeek(week).toISOString(),
-    locked: isLocked(week),
+    locked: isLocked(week) || blackout,
+    ordering_closed: blackout,                   // true = weekend blackout, show "menu drops Sunday"
   });
 }

@@ -6,7 +6,7 @@
 import { ok, fail, readJson } from '../../_lib/respond.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
-import { orderableWeek, isLocked } from '../../_lib/menu.js';
+import { orderableWeek, isLocked, orderingBlackout } from '../../_lib/menu.js';
 import { notify } from '../../_lib/notify.js';
 
 export async function onRequestPost(context) {
@@ -22,6 +22,8 @@ export async function onRequestPost(context) {
   // Must be the current orderable week + still open.
   if (weekOf !== orderableWeek()) return fail(409, 'wrong_week', 'That ordering week has changed — refresh and try again.');
   if (isLocked(weekOf)) return fail(409, 'ordering_locked', "Ordering for this week has closed (Friday cutoff).");
+  // Weekend blackout: no ordering between Friday 12:00pm MT and the Sunday menu drop.
+  if (orderingBlackout()) return fail(409, 'ordering_closed', 'Ordering is closed for the weekend — the new menu drops Sunday.');
 
   const sub = await one(env.DB,
     `SELECT id, meals_per_week, status FROM subscriptions

@@ -37,6 +37,20 @@ export function isLocked(weekOfISO, now = new Date()) {
   return now >= cutoffForWeek(weekOfISO);
 }
 
+// Weekend ordering blackout: ordering is CLOSED from Friday 12:00pm MT through Saturday, reopening Sunday
+// 00:00 MT (when the new menu drops / is owner-confirmed). This enforces a clean weekly reset even if a
+// future week's menu was confirmed early — customers can't order the new week until Sunday. Denver-local,
+// DST-correct via denverOffsetHours.
+export function orderingBlackout(now = new Date()) {
+  const off = denverOffsetHours(now);                 // -6 (MDT) or -7 (MST)
+  const local = new Date(now.getTime() + off * 3600 * 1000);
+  const day = local.getUTCDay();                      // Denver-local 0 Sun .. 6 Sat
+  const hour = local.getUTCHours();
+  if (day === 5 && hour >= 12) return true;           // Friday 12:00pm MT onward
+  if (day === 6) return true;                         // all day Saturday
+  return false;
+}
+
 // Choose the week customers should be ordering for: the upcoming Sunday if it's still before
 // cutoff; otherwise it's locked, so move to the following Sunday.
 export function orderableWeek(now = new Date()) {

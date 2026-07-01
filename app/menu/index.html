@@ -142,6 +142,11 @@
         $('empty').innerHTML='Your plan is paused. <a href="/app/manage/">Resume it</a> to pick meals.';
         return;
       }
+      if(body.ordering_closed){
+        $('empty').classList.remove('hidden');
+        $('empty').innerHTML='Ordering is closed for the weekend. The new menu drops <b>Sunday</b> — check back then to pick your meals for the week.';
+        return;
+      }
       if(!body.has_menu||!body.meals||!body.meals.length){
         $('empty').classList.remove('hidden');
         $('empty').innerHTML='Next week\'s menu isn\'t posted yet — check back soon. We\'ll text and email you when it\'s ready to pick (check your spam folder so you don\'t miss the email).';

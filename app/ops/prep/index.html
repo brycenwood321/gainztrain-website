@@ -2,7 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>GainzTrain — Assembly Dashboard</title>
+  <!-- Install to home screen as a full-screen app (no browser bar): Share → Add to Home Screen -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#ff6b35" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GT Prep" />
+  <link rel="apple-touch-icon" href="app-icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -1745,6 +1754,23 @@
     .camera-status.hit { color: #22c55e; }
     .camera-status.warn { color: #fbbf24; }
 
+    /* ── MOBILE (phones) ── finger-friendly tap targets + tighter padding. The dashboard was built for
+       desktop; this makes the phone-used surfaces (tabs, Assembly, scan bar) usable on a small screen. */
+    @media (max-width: 640px) {
+      .tab-bar, .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .tab { padding: 12px 14px !important; font-size: 0.95rem !important; white-space: nowrap; }
+      .progress-section { padding: 14px !important; }
+      .assembly-body { padding: 12px !important; }
+      .manual-scan-bar { flex-wrap: wrap; padding: 12px 14px !important; gap: 10px; }
+      .manual-scan-bar input { max-width: none; flex: 1 1 100%; min-height: 44px; font-size: 16px; }
+      .cam-open-btn { flex: 1 1 100%; min-height: 52px; font-size: 1.05rem !important; }
+      .manual-scan-bar > button:not(.cam-open-btn) { min-height: 44px; }
+      /* Assembly scan-card action buttons — bump for thumbs */
+      .scan-card button, .pill-btn, .menu-topbar-btn { min-height: 44px; }
+      .menu-week-bar { gap: 8px; }
+      .menu-golive-btn { min-height: 46px; }
+    }
+
     .scan-error {
       font-size: 0.8rem;
       color: #f87171;
@@ -2075,28 +2101,29 @@
     }
 
     // ── NORMALIZE MEAL IDs ──
-    // Any meal missing meal_ids gets them generated and saved to localStorage.
-    // Safe to call multiple times — skips meals that already have correct IDs.
+    // DETERMINISTIC, device-independent meal IDs. An ID is a pure function of (week, customer, meal name,
+    // occurrence) — so the SAME order data produces the SAME IDs on any device. That means a label printed
+    // on the laptop scans correctly on a phone. (The old scheme used a per-device running counter, which
+    // drifted between devices and caused "Unknown label" when printing and scanning on different devices.)
+    // Recomputing is idempotent, so this also auto-upgrades any old counter-based IDs on next load.
+    function mealSlug(name) {
+      return String(name || "meal").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 12) || "meal";
+    }
+    function idsForMeal(weekStr, customerId, meal) {
+      const slug = mealSlug(meal.meal_name);
+      const ids = [];
+      for (let i = 0; i < meal.quantity; i++) ids.push(`GT-${weekStr}-${customerId}-${slug}-${i + 1}`);
+      return ids;
+    }
     function normalizeMealIds(orders) {
       const weekStr = getWeekStr();
-      let globalIndex = 1;
       let changed = false;
-
       orders.forEach(order => {
         order.meals.forEach(meal => {
-          if (!meal.meal_ids || meal.meal_ids.length !== meal.quantity) {
-            meal.meal_ids = [];
-            for (let i = 0; i < meal.quantity; i++) {
-              meal.meal_ids.push(`GT-${weekStr}-${order.customer_id}-${String(globalIndex).padStart(3,"0")}`);
-              globalIndex++;
-            }
-            changed = true;
-          } else {
-            globalIndex += meal.quantity;
-          }
+          const ids = idsForMeal(weekStr, order.customer_id, meal);
+          if (JSON.stringify(ids) !== JSON.stringify(meal.meal_ids || [])) { meal.meal_ids = ids; changed = true; }
         });
       });
-
       if (changed) localStorage.setItem("gainztrain_orders", JSON.stringify(orders));
       return orders;
     }
@@ -2476,34 +2503,24 @@
       saveScanned(scanned);
       collected  = loadCollected();
       updateProgress();
+      // If nothing is loaded, the Assembly "waiting" state should tell the user to pull orders on THIS
+      // device (labels + scanning must both be built from the same pulled orders to match).
+      const waitP = document.querySelector("#waiting-state p");
+      if (waitP) waitP.textContent = allMealIds.length
+        ? "Waiting for scan…"
+        : "No orders on this device yet — go to Orders → Pull Orders first.";
     }
 
-    // Assign meal IDs when a single order is added manually
+    // Assign meal IDs when a single order is added manually (same deterministic scheme).
     function assignMealIds(meals, customerId) {
       const weekStr = getWeekStr();
-      const existing = loadOrders();
-      let nextIdx = existing.reduce((sum, o) =>
-        sum + o.meals.reduce((s, m) => s + m.quantity, 0), 0) + 1;
-      meals.forEach(meal => {
-        meal.meal_ids = [];
-        for (let i = 0; i < meal.quantity; i++) {
-          meal.meal_ids.push(`GT-${weekStr}-${customerId}-${String(nextIdx).padStart(3,"0")}`);
-          nextIdx++;
-        }
-      });
+      meals.forEach(meal => { meal.meal_ids = idsForMeal(weekStr, customerId, meal); });
     }
 
-    // Assign meal IDs across a full batch of pulled orders
+    // Assign meal IDs across a full batch of pulled orders (same deterministic scheme).
     function assignAllMealIds(orders, weekStr) {
-      let nextIdx = 1;
       orders.forEach(order => {
-        order.meals.forEach(meal => {
-          meal.meal_ids = [];
-          for (let i = 0; i < meal.quantity; i++) {
-            meal.meal_ids.push(`GT-${weekStr}-${order.customer_id}-${String(nextIdx).padStart(3,"0")}`);
-            nextIdx++;
-          }
-        });
+        order.meals.forEach(meal => { meal.meal_ids = idsForMeal(weekStr, order.customer_id, meal); });
       });
     }
 

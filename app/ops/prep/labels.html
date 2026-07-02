@@ -258,26 +258,22 @@
     // ── NORMALIZE MEAL IDs ──
     // Any meal missing meal_ids gets them generated and saved to localStorage.
     // Safe to call multiple times — skips meals that already have correct IDs.
+    // DETERMINISTIC meal IDs — MUST match app/ops/prep/index.html idsForMeal() exactly so a label printed
+    // here scans in the Assembly tab (even on a different device). Pure function of week+customer+meal+i.
+    function mealSlug(name) {
+      return String(name || "meal").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 12) || "meal";
+    }
     function normalizeMealIds(orders) {
       const weekStr = getWeekStr();
-      let globalIndex = 1;
       let changed = false;
-
       orders.forEach(order => {
         order.meals.forEach(meal => {
-          if (!meal.meal_ids || meal.meal_ids.length !== meal.quantity) {
-            meal.meal_ids = [];
-            for (let i = 0; i < meal.quantity; i++) {
-              meal.meal_ids.push(`GT-${weekStr}-${order.customer_id}-${String(globalIndex).padStart(3,"0")}`);
-              globalIndex++;
-            }
-            changed = true;
-          } else {
-            globalIndex += meal.quantity;
-          }
+          const slug = mealSlug(meal.meal_name);
+          const ids = [];
+          for (let i = 0; i < meal.quantity; i++) ids.push(`GT-${weekStr}-${order.customer_id}-${slug}-${i + 1}`);
+          if (JSON.stringify(ids) !== JSON.stringify(meal.meal_ids || [])) { meal.meal_ids = ids; changed = true; }
         });
       });
-
       if (changed) localStorage.setItem("gainztrain_orders", JSON.stringify(orders));
       return orders;
     }

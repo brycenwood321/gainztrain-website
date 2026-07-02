@@ -1,0 +1,15 @@
+{
+  "name": "Gainz Train Prep",
+  "short_name": "GT Prep",
+  "description": "Gainz Train kitchen prep, assembly, labels and delivery dashboard.",
+  "start_url": "/app/ops/prep/",
+  "scope": "/app/ops/prep/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0b0d",
+  "theme_color": "#ff6b35",
+  "icons": [
+    { "src": "app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "app-icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

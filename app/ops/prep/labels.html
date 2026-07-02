@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <title>GainzTrain — Print Labels</title>
 
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <!-- qrcode.js: generates QR codes in the browser (no internet). QR so an iPhone camera can scan the
        label in the Assembly tab — 1D barcodes need a scanner gun; QR works with any phone camera. -->
   <script src="lib/qrcode.min.js"></script>
@@ -13,24 +17,35 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f4f4f5;
-      padding: 24px;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #fafaf8;
+      padding: 0 0 40px;
+      color: #1a1614;
     }
 
+    /* Dashboard-style dark header bar with the GAINZTRAIN wordmark + orange accent. */
+    .labels-topbar {
+      background: #1a1614; border-bottom: 3px solid #ff6b35;
+      padding: 14px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    .labels-logo { font-family: "Barlow Condensed", sans-serif; font-weight: 900; font-size: 1.35rem; letter-spacing: .08em; text-transform: uppercase; line-height: 1; }
+    .labels-logo .g { color: #fff; } .labels-logo .t { color: #ff6b35; }
+    .labels-topbar .sub { color: #9a908c; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; font-size: .72rem; }
+
     .screen-header {
-      max-width: 800px;
-      margin: 0 auto 24px;
+      max-width: 900px;
+      margin: 22px auto 20px;
+      padding: 0 24px;
     }
 
     .screen-header h1 {
-      font-size: 1.4rem;
-      font-weight: 700;
+      font-family: "Barlow Condensed", sans-serif;
+      font-size: 1.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: .03em;
       margin-bottom: 4px;
     }
 
     .screen-header p {
-      color: #71717a;
+      color: #7a7270;
       font-size: 0.9rem;
       margin-bottom: 16px;
     }
@@ -50,8 +65,8 @@
       cursor: pointer;
     }
 
-    .btn-primary { background: #22c55e; color: #fff; }
-    .btn-secondary { background: #e4e4e7; color: #3f3f46; }
+    .btn-primary { background: #ff6b35; color: #fff; }
+    .btn-secondary { background: #f0ebe5; color: #3f3f46; border: 1px solid #e2dad0; }
 
     .label-grid {
       display: flex;
@@ -224,12 +239,17 @@
 </head>
 <body>
 
+  <div class="labels-topbar">
+    <span class="labels-logo"><span class="g">GAINZ</span><span class="t">TRAIN</span></span>
+    <span class="sub">Print Labels</span>
+  </div>
+
   <div class="screen-header">
     <h1>Label Preview</h1>
     <p id="label-summary">Loading orders...</p>
     <div class="btn-row" style="align-items:center;">
       <button class="btn-primary" onclick="window.print()">🖨 Print All Labels</button>
-      <button class="btn-secondary" onclick="window.location.href='dashboard.html'">← Back to Orders</button>
+      <button class="btn-secondary" onclick="window.location.href='./'">← Back to Orders</button>
       <label style="font-size:0.85rem;font-weight:600;color:#3f3f46;display:flex;align-items:center;gap:8px;">
         Prepped on:
         <input type="date" id="prep-date"

@@ -77,6 +77,28 @@
       border-bottom-color: #ff6b35;
     }
 
+    /* ── MOBILE NAV (hamburger + stacked menu, mirrors gainztrainprep.com) ── hidden on desktop ── */
+    .tab-hamburger { display: none; flex-direction: column; gap: 5px; background: none; border: none; padding: 10px; cursor: pointer; }
+    .tab-hamburger span { width: 26px; height: 3px; background: #fff; border-radius: 2px; }
+    .tab-current {
+      display: none; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .08em; color: #fff; font-size: 1.1rem;
+    }
+    .tab-mobile-menu {
+      position: fixed; inset: 0; z-index: 9998; background: #1a1614;
+      flex-direction: column; align-items: stretch; padding: 22px;
+      opacity: 0; pointer-events: none; transition: opacity .2s ease; display: flex;
+    }
+    .tab-mobile-menu.open { opacity: 1; pointer-events: all; }
+    .tab-mobile-close { align-self: flex-end; background: none; border: none; color: #fff; font-size: 1.8rem; cursor: pointer; padding: 4px 10px; }
+    .tab-mobile-menu a {
+      display: block; padding: 18px 8px; color: rgba(255,255,255,.85); text-decoration: none;
+      font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 1.5rem;
+      text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid #2c2622;
+    }
+    .tab-mobile-menu a.active { color: #ff6b35; }
+    .tab-mobile-menu a.tab-mobile-account { color: #9a908c; font-size: 1.1rem; border-bottom: none; margin-top: 12px; }
+
     .tab-spacer { flex: 1; }
 
     .back-link {
@@ -1799,10 +1821,20 @@
     /* ── MOBILE (phones) ── finger-friendly tap targets + tighter padding. The dashboard was built for
        desktop; this makes the phone-used surfaces (tabs, Assembly, scan bar) usable on a small screen. */
     @media (max-width: 640px) {
-      .tab-bar, .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      .tab { padding: 12px 14px !important; font-size: 0.95rem !important; white-space: nowrap; }
+      /* Collapse the horizontal tab row into a hamburger + current-tab label. */
+      .tab-bar { padding: 0 14px; gap: 0; justify-content: space-between; }
+      .tab-bar-title { font-size: 1.15rem; margin-right: 0; }
+      .tab-bar .tab, .tab-bar .tab-spacer, .tab-bar .back-link { display: none !important; }
+      .tab-hamburger { display: flex !important; }
+      .tab-current { display: inline-block; }
       .progress-section { padding: 14px !important; }
       .assembly-body { padding: 12px !important; }
+      /* Orders: stack the form + list, drop the fixed 460px width, single-column fields. */
+      .orders-body { flex-direction: column; padding: 14px !important; gap: 16px; }
+      .orders-form-wrap { flex: 1 1 auto !important; width: 100%; }
+      .orders-list-wrap { width: 100%; }
+      .form-grid { grid-template-columns: 1fr; }
+      .orders-form-card input, .orders-form-card select { font-size: 16px; }
       .manual-scan-bar { flex-wrap: wrap; padding: 12px 14px !important; gap: 10px; }
       .manual-scan-bar input { max-width: none; flex: 1 1 100%; min-height: 44px; font-size: 16px; }
       .cam-open-btn { flex: 1 1 100%; min-height: 52px; font-size: 1.05rem !important; }
@@ -1900,6 +1932,21 @@
     <div class="tab" data-tab="ingredients">Ingredients</div>
     <div class="tab-spacer"></div>
     <a href="/app/" class="back-link">← My Account</a>
+    <!-- Mobile-only: current tab name + hamburger -->
+    <span class="tab-current" id="tab-current">Orders</span>
+    <button class="tab-hamburger" id="tab-hamburger" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
+
+  <!-- Mobile stacked menu (mirrors gainztrainprep.com nav) -->
+  <div class="tab-mobile-menu" id="tab-mobile-menu">
+    <button class="tab-mobile-close" id="tab-mobile-close" aria-label="Close">✕</button>
+    <a data-goto="orders" class="active">Orders</a>
+    <a data-goto="assembly">Assembly</a>
+    <a data-goto="pickup">Pickup</a>
+    <a data-goto="delivery">Delivery</a>
+    <a data-goto="menu">Menu</a>
+    <a data-goto="ingredients">Ingredients</a>
+    <a href="/app/" class="tab-mobile-account">← My Account</a>
   </div>
 
   <!-- ── ORDERS TAB ── -->
@@ -3856,12 +3903,36 @@
     }
 
     // ── TAB SWITCHING ──
+    // Mobile hamburger → stacked menu. A menu item just clicks the matching real .tab (which runs all the
+    // existing tab-switch + init logic), then closes the menu.
+    (function mobileNav() {
+      const menu = document.getElementById("tab-mobile-menu");
+      const burger = document.getElementById("tab-hamburger");
+      const closeBtn = document.getElementById("tab-mobile-close");
+      if (!menu || !burger) return;
+      burger.addEventListener("click", () => menu.classList.add("open"));
+      closeBtn.addEventListener("click", () => menu.classList.remove("open"));
+      menu.querySelectorAll("a[data-goto]").forEach(a => {
+        a.addEventListener("click", () => {
+          const t = document.querySelector('.tab[data-tab="' + a.dataset.goto + '"]');
+          menu.classList.remove("open");
+          if (t) t.click();
+        });
+      });
+    })();
+
     document.querySelectorAll(".tab").forEach(tab => {
       tab.addEventListener("click", () => {
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
         document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
         tab.classList.add("active");
         document.getElementById("tab-" + tab.dataset.tab).classList.add("active");
+
+        // Keep the mobile UI in sync: the current-tab label + the highlighted item in the stacked menu.
+        const label = tab.textContent.trim();
+        const cur = document.getElementById("tab-current"); if (cur) cur.textContent = label;
+        document.querySelectorAll("#tab-mobile-menu a[data-goto]").forEach(a =>
+          a.classList.toggle("active", a.dataset.goto === tab.dataset.tab));
 
         if (tab.dataset.tab !== "assembly") stopCameraScan();  // release the camera when leaving Assembly
 

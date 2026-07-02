@@ -2,7 +2,7 @@
   X-Frame-Options: SAMEORIGIN
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Permissions-Policy: camera=(self), microphone=(), geolocation=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://region1.google-analytics.com https://widgets.leadconnectorhq.com https://link.msgsndr.com https://stcdn.leadconnectorhq.com https://storage.googleapis.com https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com https://stcdn.leadconnectorhq.com; img-src 'self' data: https:; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://widgets.leadconnectorhq.com https://api.leadconnectorhq.com https://backend.leadconnectorhq.com https://maps.googleapis.com https://maps.gstatic.com; frame-src https://link.msgsndr.com https://api.leadconnectorhq.com https://www.youtube.com https://maps.google.com https://www.google.com
 

@@ -4,8 +4,9 @@
   <meta charset="UTF-8" />
   <title>GainzTrain — Print Labels</title>
 
-  <!-- JsBarcode: generates Code 128 barcodes in the browser, no internet needed after first load -->
-  <script src="lib/JsBarcode.all.min.js"></script>
+  <!-- qrcode.js: generates QR codes in the browser (no internet). QR so an iPhone camera can scan the
+       label in the Assembly tab — 1D barcodes need a scanner gun; QR works with any phone camera. -->
+  <script src="lib/qrcode.min.js"></script>
 
   <style>
     /* ── SCREEN STYLES (what you see before printing) ── */
@@ -151,13 +152,22 @@
 
     .label-barcode {
       margin-top: 6px;
-      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
 
-    .label-barcode svg {
-      width: 100%;
-      height: auto;
-      max-height: 56px;
+    /* White quiet-zone around the QR so a phone camera locks on reliably. */
+    .label-qr {
+      background: #fff;
+      padding: 4px;
+      line-height: 0;
+    }
+    .label-qr canvas,
+    .label-qr img {
+      display: block;
+      width: 96px !important;
+      height: 96px !important;
     }
 
     .label-barcode .meal-id-text {
@@ -371,7 +381,7 @@
         </div>
 
         <div class="label-barcode">
-          <svg id="barcode-${idx}"></svg>
+          <div id="qr-${idx}" class="label-qr"></div>
           <div class="meal-id-text">${label.mealId}</div>
         </div>
       `;
@@ -407,15 +417,15 @@
         const el = renderLabel(label, idx);
         grid.appendChild(el);
 
-        // Generate the barcode after the element is in the DOM. Wrapped so one bad/failed barcode
-        // can't throw out of the forEach and halt the whole sheet (that bug printed only 1 label).
+        // Generate the QR after the element is in the DOM. Wrapped so one bad QR can't throw out of the
+        // forEach and halt the whole sheet. Encodes just the mealId — the Assembly tab decodes it and
+        // looks the meal up locally (a customer scanning it gets a meaningless string, nothing actionable).
         try {
-          JsBarcode(`#barcode-${idx}`, label.mealId, {
-            format: "CODE128",
-            width: 1.4,
-            height: 40,
-            displayValue: false,
-            margin: 0
+          new QRCode(document.getElementById(`qr-${idx}`), {
+            text: label.mealId,
+            width: 96,
+            height: 96,
+            correctLevel: QRCode.CorrectLevel.M
           });
         } catch (e) { /* keep rendering the rest of the labels */ }
       });

@@ -8,6 +8,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCTaz_qcbpsDY-_oZZ03FMMTJCRTJS55Vc&libraries=geometry&callback=onMapsLoaded" async defer></script>
   <script src="lib/qrcode.min.js"></script>
+  <!-- jsQR: decodes QR from the phone camera stream (iOS Safari has no BarcodeDetector). Self-hosted for CSP. -->
+  <script src="lib/jsQR.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1697,6 +1699,52 @@
 
     .manual-scan-bar button:hover { background: #e8e4df; }
 
+    /* Primary "Scan with camera" button — stands out from the fallback controls. */
+    .cam-open-btn {
+      padding: 9px 16px !important;
+      background: #ff6b35 !important;
+      border: none !important;
+      border-radius: 8px !important;
+      color: #fff !important;
+      font-size: 0.9rem !important;
+      font-weight: 800 !important;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .cam-open-btn:hover { background: #e8571f !important; }
+
+    /* ── CAMERA QR SCANNER OVERLAY (phones) ── */
+    .camera-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: #0b0b0d;
+      display: flex; flex-direction: column;
+    }
+    .camera-topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; color: #fff;
+    }
+    .camera-title { font-weight: 800; font-size: 1rem; }
+    .camera-close-btn {
+      background: rgba(255,255,255,.14); color: #fff; border: none;
+      border-radius: 8px; padding: 9px 16px; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+    }
+    .camera-stage {
+      position: relative; flex: 1; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #camera-video { width: 100%; height: 100%; object-fit: cover; }
+    .camera-reticle {
+      position: absolute; width: 62vw; max-width: 300px; aspect-ratio: 1;
+      border: 3px solid rgba(255,255,255,.9); border-radius: 20px;
+      box-shadow: 0 0 0 100vmax rgba(0,0,0,.35);
+    }
+    .camera-status {
+      padding: 18px; text-align: center; color: #fff; font-weight: 700; font-size: 1.05rem;
+      background: #0b0b0d; min-height: 60px;
+    }
+    .camera-status.hit { color: #22c55e; }
+    .camera-status.warn { color: #fbbf24; }
+
     .scan-error {
       font-size: 0.8rem;
       color: #f87171;
@@ -1925,14 +1973,28 @@
 
     </div>
 
-    <!-- Manual scan bar (for testing without a physical scanner) -->
+    <!-- Scan bar: phone camera (primary), or type a meal ID (fallback). A USB scanner gun also still works. -->
     <div class="manual-scan-bar">
-      <label>Test scan (no scanner yet):</label>
-      <input type="text" id="manual-input" placeholder="Paste a meal ID here and press Enter" autocomplete="off" />
+      <button id="camera-btn" class="cam-open-btn">📷 Scan with camera</button>
+      <label>or type:</label>
+      <input type="text" id="manual-input" placeholder="Paste a meal ID + Enter" autocomplete="off" />
       <button id="manual-btn">Scan</button>
       <span class="scan-error" id="scan-error"></span>
     </div>
 
+  </div>
+
+  <!-- Full-screen camera QR scanner (phones) -->
+  <div id="camera-overlay" class="camera-overlay" style="display:none">
+    <div class="camera-topbar">
+      <span class="camera-title">📷 Scan meal QR labels</span>
+      <button id="camera-close" class="camera-close-btn">✕ Stop</button>
+    </div>
+    <div class="camera-stage">
+      <video id="camera-video" playsinline muted autoplay></video>
+      <div class="camera-reticle"></div>
+    </div>
+    <div class="camera-status" id="camera-status">Point at a meal label…</div>
   </div>
 
   <!-- ── DELIVERY TAB ── -->
@@ -2278,7 +2340,8 @@
     // so we don't steal focus from the Orders form inputs.
     document.addEventListener("click", (e) => {
       const activeTab = document.querySelector(".tab.active");
-      if (activeTab?.dataset.tab === "assembly" && !e.target.closest(".manual-scan-bar")) {
+      const camOpen = document.getElementById("camera-overlay").style.display !== "none";
+      if (activeTab?.dataset.tab === "assembly" && !camOpen && !e.target.closest(".manual-scan-bar")) {
         scanInput.focus();
       }
     });
@@ -2307,6 +2370,75 @@
     manualInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") fireManualScan();
     });
+
+    // ── CAMERA QR SCANNING (phones — no scanner gun needed) ──
+    // Reads QR meal labels through the back camera and drives the same handleScan() as the gun/manual bar.
+    // iOS Safari has no BarcodeDetector, so we decode frames with jsQR. Needs HTTPS + camera permission
+    // (allowed for this path in _headers). The QR encodes the mealId; decoding calls handleScan(mealId).
+    let camStream = null, camRAF = null, camLastCode = "", camLastTime = 0;
+    const camVideo = document.getElementById("camera-video");
+    const camOverlay = document.getElementById("camera-overlay");
+    const camStatusEl = document.getElementById("camera-status");
+    const camCanvas = document.createElement("canvas");
+    const camCtx = camCanvas.getContext("2d", { willReadFrequently: true });
+
+    function setCamStatus(text, cls) { camStatusEl.textContent = text; camStatusEl.className = "camera-status" + (cls ? " " + cls : ""); }
+
+    async function startCameraScan() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof jsQR !== "function") {
+        showToast("This device/browser can't camera-scan. Use the type box or a scanner gun.");
+        return;
+      }
+      try {
+        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+      } catch (err) {
+        showToast(err && err.name === "NotAllowedError"
+          ? "Camera blocked. Allow camera for gainztrainprep.com in your browser settings."
+          : "Couldn't start the camera.");
+        return;
+      }
+      camVideo.srcObject = camStream;
+      try { await camVideo.play(); } catch { /* autoplay attr covers iOS */ }
+      camOverlay.style.display = "flex";
+      setCamStatus("Point at a meal label…");
+      camLastCode = ""; camLastTime = 0;
+      camRAF = requestAnimationFrame(scanTick);
+    }
+
+    function scanTick() {
+      if (!camStream) return;
+      if (camVideo.readyState >= 2 && camVideo.videoWidth) {
+        camCanvas.width = camVideo.videoWidth;
+        camCanvas.height = camVideo.videoHeight;
+        camCtx.drawImage(camVideo, 0, 0, camCanvas.width, camCanvas.height);
+        const img = camCtx.getImageData(0, 0, camCanvas.width, camCanvas.height);
+        const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+        if (code && code.data) {
+          const id = code.data.trim();
+          const now = Date.now();
+          if (id !== camLastCode || now - camLastTime > 1500) {   // debounce the same label in-frame
+            camLastCode = id; camLastTime = now;
+            const before = scanned.length;
+            handleScan(id);
+            const added = scanned.length > before;
+            if (added) { setCamStatus("✓ Scanned", "hit"); if (navigator.vibrate) navigator.vibrate(60); }
+            else if (!mealMap[id]) setCamStatus("Unknown label — not on this week's list", "warn");
+            else setCamStatus("Already scanned", "warn");
+          }
+        }
+      }
+      camRAF = requestAnimationFrame(scanTick);
+    }
+
+    function stopCameraScan() {
+      if (camRAF) { cancelAnimationFrame(camRAF); camRAF = null; }
+      if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+      camVideo.srcObject = null;
+      camOverlay.style.display = "none";
+    }
+
+    document.getElementById("camera-btn").addEventListener("click", startCameraScan);
+    document.getElementById("camera-close").addEventListener("click", stopCameraScan);
 
     // ── ORDERS TAB SETUP ──
     // Meal inputs are built dynamically from the meal library so they always
@@ -3565,6 +3697,8 @@
         document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
         tab.classList.add("active");
         document.getElementById("tab-" + tab.dataset.tab).classList.add("active");
+
+        if (tab.dataset.tab !== "assembly") stopCameraScan();  // release the camera when leaving Assembly
 
         if (tab.dataset.tab === "orders") {
           renderOrders();

@@ -1721,6 +1721,11 @@
       white-space: nowrap;
     }
     .cam-open-btn:hover { background: #e8571f !important; }
+    /* Big primary scan button at the top of the Assembly body (above the scanned-meal card). */
+    .cam-open-btn-top {
+      display: block; width: 100%; margin: 0 0 14px; min-height: 56px;
+      font-size: 1.15rem !important; border-radius: 12px !important;
+    }
 
     /* ── CAMERA QR SCANNER OVERLAY (phones) ── */
     .camera-overlay {
@@ -1753,6 +1758,43 @@
     }
     .camera-status.hit { color: #22c55e; }
     .camera-status.warn { color: #fbbf24; }
+    /* Big confirming flash on scan — "grabs" the code, freezes, then fades. */
+    .camera-flash {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity .18s ease;
+    }
+    .camera-flash.show { opacity: 1; transition: opacity 0s; }       /* snap on */
+    .camera-flash.fade { opacity: 0; transition: opacity .5s ease; } /* then fade */
+    .camera-flash-icon {
+      width: 42vw; max-width: 220px; aspect-ratio: 1; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24vw; line-height: 1; color: #fff; font-weight: 900;
+      background: rgba(34,197,94,.92); box-shadow: 0 0 0 100vmax rgba(34,197,94,.18);
+    }
+    .camera-flash.warn .camera-flash-icon { background: rgba(245,158,11,.94); box-shadow: 0 0 0 100vmax rgba(245,158,11,.16); font-size: 20vw; }
+
+    /* ── STAFF LOGIN GATE ── */
+    .auth-gate {
+      position: fixed; inset: 0; z-index: 10000; background: #1a1614;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .auth-card { width: 100%; max-width: 340px; text-align: center; }
+    .auth-logo { font-family: "Barlow Condensed", sans-serif; font-weight: 900; font-size: 2.6rem; letter-spacing: .02em; line-height: 1; }
+    .auth-logo .logo-gainz { color: #fff; }
+    .auth-logo .logo-train { color: #ff6b35; }
+    .auth-sub { color: #9a908c; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; font-size: .8rem; margin: 8px 0 26px; }
+    .auth-checking { color: #9a908c; font-size: .95rem; }
+    #auth-form input {
+      width: 100%; padding: 14px 16px; margin-bottom: 12px; border-radius: 10px;
+      border: 1px solid #3a332f; background: #241f1c; color: #fff; font-size: 16px;
+    }
+    #auth-form input:focus { outline: none; border-color: #ff6b35; }
+    #auth-btn {
+      width: 100%; padding: 14px; border: none; border-radius: 10px; background: #ff6b35;
+      color: #fff; font-weight: 800; font-size: 1.05rem; cursor: pointer;
+    }
+    #auth-btn:disabled { opacity: .6; }
+    .auth-err { color: #f87171; font-size: .88rem; margin-top: 12px; min-height: 18px; }
 
     /* ── MOBILE (phones) ── finger-friendly tap targets + tighter padding. The dashboard was built for
        desktop; this makes the phone-used surfaces (tabs, Assembly, scan bar) usable on a small screen. */
@@ -1779,6 +1821,68 @@
   </style>
 </head>
 <body>
+
+  <!-- ── STAFF LOGIN GATE ── covers the dashboard until a staff/admin session is confirmed -->
+  <div id="auth-gate" class="auth-gate">
+    <div class="auth-card">
+      <div class="auth-logo"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></div>
+      <div class="auth-sub">Prep Dashboard</div>
+      <div id="auth-checking" class="auth-checking">Checking sign-in…</div>
+      <div id="auth-form" style="display:none">
+        <input id="auth-email" type="email" placeholder="Email" autocomplete="username" inputmode="email" />
+        <input id="auth-pass" type="password" placeholder="Password" autocomplete="current-password" />
+        <button id="auth-btn" type="button">Sign in</button>
+        <div id="auth-err" class="auth-err"></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Gate the dashboard behind a staff/admin session. The overlay shows by default; we hide it only after
+    // /api/me confirms a staff role. Not authed -> show the login form. On successful login we reload so the
+    // whole dashboard (and every data pull, incl. Menu/Ingredients) initializes with the session cookie.
+    (function authGate() {
+      const gate = document.getElementById("auth-gate");
+      const checking = document.getElementById("auth-checking");
+      const form = document.getElementById("auth-form");
+      const err = document.getElementById("auth-err");
+      const btn = document.getElementById("auth-btn");
+      const isStaff = (d) => d && d.customer && (d.customer.role === "staff" || d.customer.role === "admin");
+
+      async function check() {
+        try {
+          const r = await fetch("/api/me", { credentials: "include" });
+          if (r.ok && isStaff(await r.json())) { gate.style.display = "none"; return; }
+        } catch { /* fall through to login */ }
+        checking.style.display = "none";
+        form.style.display = "";
+        document.getElementById("auth-email").focus();
+      }
+
+      async function login() {
+        const email = document.getElementById("auth-email").value.trim();
+        const password = document.getElementById("auth-pass").value;
+        if (!email || !password) { err.textContent = "Enter your email and password."; return; }
+        btn.disabled = true; btn.textContent = "Signing in…"; err.textContent = "";
+        try {
+          const r = await fetch("/api/auth/login", {
+            method: "POST", credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok) { err.textContent = d.detail || "Sign in failed."; btn.disabled = false; btn.textContent = "Sign in"; return; }
+          const me = await fetch("/api/me", { credentials: "include" });
+          if (me.ok && isStaff(await me.json())) { location.reload(); return; }
+          err.textContent = "That account isn't a staff account.";
+          btn.disabled = false; btn.textContent = "Sign in";
+        } catch { err.textContent = "Network error — try again."; btn.disabled = false; btn.textContent = "Sign in"; }
+      }
+
+      btn.addEventListener("click", login);
+      document.getElementById("auth-pass").addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
+      check();
+    })();
+  </script>
 
   <!-- Hidden input that captures barcode scanner keystrokes -->
   <input id="scan-input" type="text" autocomplete="off" />
@@ -1946,6 +2050,9 @@
     <!-- Main body -->
     <div class="assembly-body">
 
+      <!-- Primary scan action, above the scanned-meal card -->
+      <button id="camera-btn" class="cam-open-btn cam-open-btn-top">📷 Scan with camera</button>
+
       <!-- Waiting for scan -->
       <div class="waiting-state" id="waiting-state">
         <div class="pulse-dot"></div>
@@ -2001,8 +2108,7 @@
 
     <!-- Scan bar: phone camera (primary), or type a meal ID (fallback). A USB scanner gun also still works. -->
     <div class="manual-scan-bar">
-      <button id="camera-btn" class="cam-open-btn">📷 Scan with camera</button>
-      <label>or type:</label>
+      <label>Type a meal ID:</label>
       <input type="text" id="manual-input" placeholder="Paste a meal ID + Enter" autocomplete="off" />
       <button id="manual-btn">Scan</button>
       <span class="scan-error" id="scan-error"></span>
@@ -2019,6 +2125,7 @@
     <div class="camera-stage">
       <video id="camera-video" playsinline muted autoplay></video>
       <div class="camera-reticle"></div>
+      <div class="camera-flash" id="camera-flash"><div class="camera-flash-icon" id="camera-flash-icon">✓</div></div>
     </div>
     <div class="camera-status" id="camera-status">Point at a meal label…</div>
   </div>
@@ -2402,20 +2509,38 @@
     // Reads QR meal labels through the back camera and drives the same handleScan() as the gun/manual bar.
     // iOS Safari has no BarcodeDetector, so we decode frames with jsQR. Needs HTTPS + camera permission
     // (allowed for this path in _headers). The QR encodes the mealId; decoding calls handleScan(mealId).
-    let camStream = null, camRAF = null, camLastCode = "", camLastTime = 0;
+    let camStream = null, camRAF = null, camPaused = false, camAudioCtx = null;
     const camVideo = document.getElementById("camera-video");
     const camOverlay = document.getElementById("camera-overlay");
     const camStatusEl = document.getElementById("camera-status");
+    const camFlash = document.getElementById("camera-flash");
+    const camFlashIcon = document.getElementById("camera-flash-icon");
     const camCanvas = document.createElement("canvas");
     const camCtx = camCanvas.getContext("2d", { willReadFrequently: true });
 
     function setCamStatus(text, cls) { camStatusEl.textContent = text; camStatusEl.className = "camera-status" + (cls ? " " + cls : ""); }
+
+    // Short confirmation beep (iOS can't vibrate; audio + the big flash carry the signal). The AudioContext
+    // is created/resumed inside the button tap (a user gesture) so iOS lets later beeps play.
+    function beep(freq) {
+      try {
+        if (!camAudioCtx) return;
+        const o = camAudioCtx.createOscillator(), g = camAudioCtx.createGain();
+        o.type = "sine"; o.frequency.value = freq || 880;
+        g.gain.setValueAtTime(0.0001, camAudioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.35, camAudioCtx.currentTime + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, camAudioCtx.currentTime + 0.16);
+        o.connect(g); g.connect(camAudioCtx.destination);
+        o.start(); o.stop(camAudioCtx.currentTime + 0.17);
+      } catch { /* audio not available */ }
+    }
 
     async function startCameraScan() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof jsQR !== "function") {
         showToast("This device/browser can't camera-scan. Use the type box or a scanner gun.");
         return;
       }
+      try { camAudioCtx = camAudioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (camAudioCtx.state === "suspended") camAudioCtx.resume(); } catch { /* no audio */ }
       try {
         camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
       } catch (err) {
@@ -2428,39 +2553,62 @@
       try { await camVideo.play(); } catch { /* autoplay attr covers iOS */ }
       camOverlay.style.display = "flex";
       setCamStatus("Point at a meal label…");
-      camLastCode = ""; camLastTime = 0;
-      camRAF = requestAnimationFrame(scanTick);
+      camPaused = false;
+      if (!camRAF) camRAF = requestAnimationFrame(scanTick);
     }
 
+    // The loop schedules its NEXT frame FIRST, so nothing downstream (even a thrown error) can stop it —
+    // this was the "camera stops after 3–4 scans" bug.
     function scanTick() {
-      if (!camStream) return;
-      if (camVideo.readyState >= 2 && camVideo.videoWidth) {
+      camRAF = requestAnimationFrame(scanTick);
+      if (!camStream || camPaused) return;
+      if (camVideo.readyState < 2 || !camVideo.videoWidth) return;
+      let code = null;
+      try {
         camCanvas.width = camVideo.videoWidth;
         camCanvas.height = camVideo.videoHeight;
         camCtx.drawImage(camVideo, 0, 0, camCanvas.width, camCanvas.height);
         const img = camCtx.getImageData(0, 0, camCanvas.width, camCanvas.height);
-        const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
-        if (code && code.data) {
-          const id = code.data.trim();
-          const now = Date.now();
-          if (id !== camLastCode || now - camLastTime > 1500) {   // debounce the same label in-frame
-            camLastCode = id; camLastTime = now;
-            const before = scanned.length;
-            handleScan(id);
-            const added = scanned.length > before;
-            if (added) { setCamStatus("✓ Scanned", "hit"); if (navigator.vibrate) navigator.vibrate(60); }
-            else if (!mealMap[id]) setCamStatus("Unknown label — not on this week's list", "warn");
-            else setCamStatus("Already scanned", "warn");
-          }
-        }
+        code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+      } catch { return; }
+      if (code && code.data) onDetected(code.data.trim());
+    }
+
+    // On a detection: freeze (pause the loop), give a big visual + beep/vibrate, then fade + resume after a
+    // beat. Freezing prevents re-reading the same code and makes each scan unmistakable.
+    function onDetected(id) {
+      camPaused = true;
+      let added = false;
+      const known = !!mealMap[id];
+      try {
+        if (known && !scanned.includes(id)) { const before = scanned.length; handleScan(id); added = scanned.length > before; }
+      } catch { /* never let a render error kill scanning */ }
+
+      if (added) {
+        camFlashIcon.textContent = "✓"; camFlash.className = "camera-flash show";
+        setCamStatus("Scanned ✓", "hit"); beep(880); if (navigator.vibrate) navigator.vibrate(90);
+      } else if (!known) {
+        camFlashIcon.textContent = "✕"; camFlash.className = "camera-flash warn show";
+        setCamStatus("Unknown label — not on this week's list", "warn"); beep(300); if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
+      } else {
+        camFlashIcon.textContent = "↺"; camFlash.className = "camera-flash warn show";
+        setCamStatus("Already scanned", "warn"); beep(520); if (navigator.vibrate) navigator.vibrate(40);
       }
-      camRAF = requestAnimationFrame(scanTick);
+
+      // Hold the freeze ~600ms, fade the flash, then resume scanning for the next label.
+      setTimeout(() => { camFlash.className = "camera-flash fade"; }, 550);
+      setTimeout(() => {
+        camFlash.className = "camera-flash";
+        if (camStream) { camPaused = false; setCamStatus("Point at the next label…"); }
+      }, 900);
     }
 
     function stopCameraScan() {
+      camPaused = true;
       if (camRAF) { cancelAnimationFrame(camRAF); camRAF = null; }
       if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
       camVideo.srcObject = null;
+      camFlash.className = "camera-flash";
       camOverlay.style.display = "none";
     }
 

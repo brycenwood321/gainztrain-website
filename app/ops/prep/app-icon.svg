@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#1a1614"/>
-  <g font-family="'Arial Narrow', 'Barlow Condensed', Arial, sans-serif" font-weight="900"
-     text-anchor="middle" letter-spacing="2">
-    <text x="256" y="248" font-size="150" fill="#ffffff">GAINZ</text>
-    <text x="256" y="392" font-size="150" fill="#ff6b35">TRAIN</text>
-  </g>
-</svg>

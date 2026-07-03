@@ -119,7 +119,8 @@
     .lbl-meal { font-size: 10px; font-weight: 600; color: #333; line-height: 1.15; margin-top: 1mm; }
     .lbl-macros { display: flex; gap: 3.5mm; font-size: 11px; font-weight: 700; color: #000; margin-top: 1.5mm; }
     .lbl-macros b { font-weight: 900; }
-    .lbl-id { font-size: 7px; color: #b3b3b3; font-family: monospace; margin-top: 1mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Let the full GT code + date wrap onto the lines beneath instead of getting cut off. */
+    .lbl-id { font-size: 7px; color: #b3b3b3; font-family: monospace; margin-top: 1mm; line-height: 1.25; word-break: break-all; }
 
     /* ── PRINT STYLES ── */
     @media print {

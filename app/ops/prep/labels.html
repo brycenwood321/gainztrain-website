@@ -86,111 +86,82 @@
 
     /* ── LABEL STYLES (both screen preview and print) ── */
     /*
-      Target size: 2" × 3" portrait
-      At 96dpi screen: 192px × 288px
-      At 203dpi thermal printer: will be set via @page in print CSS
+      Target: Brother DK-1201 die-cut address label, PORTRAIT = 29mm wide × 90mm tall (1.1" × 3.5").
+      Screen preview at 96dpi ≈ 110px × 340px. Print size set in @page below (mm) for the QL-820NWB.
     */
     .label {
-      width: 192px;
-      height: 288px;
+      width: 110px;
+      height: 340px;
       background: #fff;
       border: 1.5px solid #d4d4d8;
-      border-radius: 6px;
-      padding: 10px 10px 8px;
+      border-radius: 4px;
+      padding: 7px 6px;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      align-items: center;
       font-family: Arial, Helvetica, sans-serif; /* Arial prints cleanly on thermal */
       overflow: hidden;
     }
 
     .label-name {
-      font-size: 18px;
+      font-size: 15px;
       font-weight: 900;
-      line-height: 1.15;
+      line-height: 1.1;
       color: #000;
-      letter-spacing: -0.01em;
+      text-align: center;
+      width: 100%;
     }
 
     .label-meal {
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 600;
       color: #333;
-      line-height: 1.3;
-      margin-top: 4px;
+      line-height: 1.2;
+      margin-top: 3px;
+      text-align: center;
+      width: 100%;
     }
 
-    .label-prepped {
-      font-size: 8px;
-      color: #a1a1aa;
-      margin-top: 5px;
-      margin-bottom: 2px;
-      letter-spacing: 0.02em;
-      flex: 1;
-    }
-
+    /* Compact macro row — single-letter labels fit the narrow 1.1" width. */
     .label-macros {
       display: flex;
-      justify-content: space-between;
+      justify-content: center;
+      gap: 3px;
       margin-top: 6px;
-      gap: 4px;
+      width: 100%;
     }
 
     .macro-chip {
       flex: 1;
       background: #f4f4f5;
-      border-radius: 4px;
-      padding: 4px 2px;
+      border-radius: 3px;
+      padding: 3px 1px;
       text-align: center;
     }
 
-    .macro-chip .macro-label {
-      font-size: 7px;
-      font-weight: 700;
-      color: #71717a;
-      letter-spacing: 0.05em;
-      display: block;
-    }
-
-    .macro-chip .macro-value {
-      font-size: 12px;
-      font-weight: 900;
-      color: #000;
-      display: block;
-      line-height: 1.1;
-    }
-
-    .macro-chip .macro-unit {
-      font-size: 7px;
-      color: #71717a;
-    }
+    .macro-chip .macro-label { font-size: 7px; font-weight: 700; color: #71717a; display: block; }
+    .macro-chip .macro-value { font-size: 12px; font-weight: 900; color: #000; display: block; line-height: 1.05; }
+    .macro-chip .macro-unit { font-size: 6px; color: #71717a; }
 
     .label-barcode {
-      margin-top: 6px;
+      margin-top: auto;
       display: flex;
       flex-direction: column;
       align-items: center;
     }
 
     /* White quiet-zone around the QR so a phone camera locks on reliably. */
-    .label-qr {
-      background: #fff;
-      padding: 4px;
-      line-height: 0;
-    }
+    .label-qr { background: #fff; padding: 3px; line-height: 0; }
     .label-qr canvas,
-    .label-qr img {
-      display: block;
-      width: 96px !important;
-      height: 96px !important;
-    }
+    .label-qr img { display: block; width: 90px !important; height: 90px !important; }
 
     .label-barcode .meal-id-text {
-      font-size: 7px;
+      font-size: 6px;
       color: #a1a1aa;
       margin-top: 2px;
       font-family: monospace;
     }
+    .label-prepped { font-size: 7px; color: #71717a; margin-top: 2px; text-align: center; }
 
     /* ── PRINT STYLES ── */
     @media print {
@@ -210,16 +181,16 @@
       }
 
       /*
-        Each label gets its own "page" — Chrome will size it to whatever
-        paper size you select in the print dialog. Select "2 x 3" custom
-        size or your thermal printer's label size.
+        One physical Brother DK-1201 label per page. In the print dialog pick the DK-1201
+        (29mm x 90mm / 1.1" x 3.5") label size, margins None, scale 100%, and turn OFF
+        headers/footers so nothing shifts the layout.
       */
       .label {
-        width: 2in;
-        height: 3in;
+        width: 29mm;
+        height: 90mm;
         border: none;
         border-radius: 0;
-        padding: 0.1in 0.1in 0.08in;
+        padding: 2mm 1.5mm;
         page-break-after: always;
         break-after: page;
         margin: 0;
@@ -231,7 +202,7 @@
       }
 
       @page {
-        size: 2in 3in;
+        size: 29mm 90mm;
         margin: 0;
       }
     }
@@ -372,33 +343,21 @@
       div.className = "label";
 
       div.innerHTML = `
-        <div>
+        <div style="width:100%">
           <div class="label-name">${label.name}</div>
           <div class="label-meal">${label.mealName}</div>
-          <div class="label-prepped">Prepped: ${label.preppedOn}</div>
         </div>
 
         <div class="label-macros">
-          <div class="macro-chip">
-            <span class="macro-label">PROTEIN</span>
-            <span class="macro-value">${label.macros.protein}</span>
-            <span class="macro-unit">g</span>
-          </div>
-          <div class="macro-chip">
-            <span class="macro-label">CARBS</span>
-            <span class="macro-value">${label.macros.carbs}</span>
-            <span class="macro-unit">g</span>
-          </div>
-          <div class="macro-chip">
-            <span class="macro-label">VEGGIES</span>
-            <span class="macro-value">${label.macros.veggies}</span>
-            <span class="macro-unit">g</span>
-          </div>
+          <div class="macro-chip"><span class="macro-label">P</span><span class="macro-value">${label.macros.protein}</span><span class="macro-unit">g</span></div>
+          <div class="macro-chip"><span class="macro-label">C</span><span class="macro-value">${label.macros.carbs}</span><span class="macro-unit">g</span></div>
+          <div class="macro-chip"><span class="macro-label">V</span><span class="macro-value">${label.macros.veggies}</span><span class="macro-unit">g</span></div>
         </div>
 
         <div class="label-barcode">
           <div id="qr-${idx}" class="label-qr"></div>
           <div class="meal-id-text">${label.mealId}</div>
+          <div class="label-prepped">Prepped ${label.preppedOn}</div>
         </div>
       `;
 

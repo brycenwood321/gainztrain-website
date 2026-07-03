@@ -2016,7 +2016,7 @@
             <div class="orders-btn-row">
               <button type="button" class="btn-pull" id="pull-btn" onclick="pullOrders()">⬇ Pull Orders</button>
               <button type="submit" class="btn-add">+ Add Order</button>
-              <button type="button" class="btn-sec" onclick="window.open('labels.html','_blank')">🖨 Print Labels</button>
+              <button type="button" class="btn-sec" onclick="window.open('labels.html?t=' + Date.now(), '_blank')">🖨 Print Labels</button>
             </div>
             <div class="pull-status" id="pull-status"></div>
           </form>

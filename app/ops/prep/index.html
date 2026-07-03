@@ -9,16 +9,19 @@
   <meta name="theme-color" content="#ff6b35" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <!-- "default" (not black-translucent) so the app content sits BELOW the iOS status bar in standalone mode,
+       otherwise the top row (hamburger) hides under the clock/battery and can't be tapped. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="GT Prep" />
   <link rel="apple-touch-icon" href="app-icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;0,700;0,800;0,900;1,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCTaz_qcbpsDY-_oZZ03FMMTJCRTJS55Vc&libraries=geometry&callback=onMapsLoaded" async defer></script>
-  <script src="lib/qrcode.min.js"></script>
-  <!-- jsQR: decodes QR from the phone camera stream (iOS Safari has no BarcodeDetector). Self-hosted for CSP. -->
-  <script src="lib/jsQR.js"></script>
+  <!-- defer so these (jsQR is ~250KB) do NOT block first paint / the sign-in screen. Only needed later:
+       qrcode for the labels page, jsQR when the camera scanner opens. -->
+  <script src="lib/qrcode.min.js" defer></script>
+  <script src="lib/jsQR.js" defer></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -86,7 +89,8 @@
     }
     .tab-mobile-menu {
       position: fixed; inset: 0; z-index: 9998; background: #1a1614;
-      flex-direction: column; align-items: stretch; padding: 22px;
+      flex-direction: column; align-items: stretch;
+      padding: max(22px, env(safe-area-inset-top)) 22px max(22px, env(safe-area-inset-bottom));
       opacity: 0; pointer-events: none; transition: opacity .2s ease; display: flex;
     }
     .tab-mobile-menu.open { opacity: 1; pointer-events: all; }
@@ -1757,7 +1761,7 @@
     }
     .camera-topbar {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 18px; color: #fff;
+      padding: max(14px, env(safe-area-inset-top)) 18px 14px; color: #fff;
     }
     .camera-title { font-weight: 800; font-size: 1rem; }
     .camera-close-btn {
@@ -1775,8 +1779,8 @@
       box-shadow: 0 0 0 100vmax rgba(0,0,0,.35);
     }
     .camera-status {
-      padding: 18px; text-align: center; color: #fff; font-weight: 700; font-size: 1.05rem;
-      background: #0b0b0d; min-height: 60px;
+      padding: 18px 18px max(18px, env(safe-area-inset-bottom)); text-align: center; color: #fff;
+      font-weight: 700; font-size: 1.05rem; background: #0b0b0d; min-height: 60px;
     }
     .camera-status.hit { color: #22c55e; }
     .camera-status.warn { color: #fbbf24; }
@@ -1821,11 +1825,15 @@
     /* ── MOBILE (phones) ── finger-friendly tap targets + tighter padding. The dashboard was built for
        desktop; this makes the phone-used surfaces (tabs, Assembly, scan bar) usable on a small screen. */
     @media (max-width: 640px) {
-      /* Collapse the horizontal tab row into a hamburger + current-tab label. */
-      .tab-bar { padding: 0 14px; gap: 0; justify-content: space-between; }
-      .tab-bar-title { font-size: 1.15rem; margin-right: 0; }
+      /* Collapse the horizontal tab row into a hamburger + current-tab label. safe-area-inset-top keeps the
+         top row below the iOS status bar / notch so the hamburger is always tappable. */
+      .tab-bar {
+        gap: 0; justify-content: space-between; align-items: center;
+        padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left));
+      }
+      .tab-bar-title { font-size: 1.15rem; margin-right: 0; padding: 6px 0; }
       .tab-bar .tab, .tab-bar .tab-spacer, .tab-bar .back-link { display: none !important; }
-      .tab-hamburger { display: flex !important; }
+      .tab-hamburger { display: flex !important; padding: 12px; }
       .tab-current { display: inline-block; }
       .progress-section { padding: 14px !important; }
       .assembly-body { padding: 12px !important; }

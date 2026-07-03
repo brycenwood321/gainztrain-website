@@ -9,13 +9,17 @@ import { requireStaffOrAdmin } from '../../_lib/admin.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 
 const ALLOWED = new Set(['meal_library', 'custom_ingredients']);
+// Per-week menu drafts (menu_week_YYYYMMDD) also sync here so the Menu + Ingredients tabs populate on any
+// device (phone), not just the laptop the menu was built on.
+const MENU_DRAFT_RE = /^menu_week_\d{8}$/;
+const keyAllowed = (k) => ALLOWED.has(k) || MENU_DRAFT_RE.test(k);
 const MAX_BYTES = 800000; // generous ceiling; the meal catalog is small JSON
 
 export async function onRequestGet(context) {
   const denied = await requireStaffOrAdmin(context);
   if (denied) return denied;
   const key = new URL(context.request.url).searchParams.get('key') || '';
-  if (!ALLOWED.has(key)) return fail(400, 'bad_key', 'Unknown store key.');
+  if (!keyAllowed(key)) return fail(400, 'bad_key', 'Unknown store key.');
   const row = await one(context.env.DB, `SELECT value_json FROM ops_kv WHERE key = ?`, key);
   let value = [];
   if (row && row.value_json) { try { value = JSON.parse(row.value_json); } catch { value = []; } }
@@ -28,7 +32,7 @@ export async function onRequestPost(context) {
   let body;
   try { body = await context.request.json(); } catch { return fail(400, 'bad_json', 'Body must be JSON.'); }
   const key = String(body.key || '');
-  if (!ALLOWED.has(key)) return fail(400, 'bad_key', 'Unknown store key.');
+  if (!keyAllowed(key)) return fail(400, 'bad_key', 'Unknown store key.');
   if (!('value' in body)) return fail(400, 'no_value', 'Missing value.');
   const valueJson = JSON.stringify(body.value);
   if (valueJson.length > MAX_BYTES) return fail(413, 'too_large', 'Store value too large.');

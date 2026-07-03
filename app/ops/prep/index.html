@@ -2947,6 +2947,25 @@
     // it to the server's true orderable week on load.
     let menuBuildWeek = getWeekStr();
     function menuStorageKey() { return "gainztrain_menu_week_" + menuBuildWeek; }
+    function menuServerKey()  { return "menu_week_" + menuBuildWeek; }  // shared (server) key — synced across devices
+    // Pull this week's menu draft from the server so the Menu + Ingredients tabs populate on ANY device,
+    // not just the laptop it was built on. Server is the shared source of truth (every save pushes to it).
+    async function hydrateMenuDraft() {
+      try {
+        const res = await fetch(`/api/admin/ops-store?key=${menuServerKey()}`, { credentials: "include" });
+        if (!res.ok) return;
+        const v = (await res.json()).value;
+        const serverHasMeals = v && typeof v === "object" && !Array.isArray(v) && Array.isArray(v.meals) && v.meals.length;
+        const local = loadCurrentMenu();
+        const localT = (local && local._savedAt) || 0;
+        const serverT = (v && v._savedAt) || 0;
+        if (serverHasMeals && serverT >= localT) {
+          localStorage.setItem(menuStorageKey(), JSON.stringify(v));   // server copy is newer → use it
+        } else if (!serverHasMeals && local && Array.isArray(local.meals) && local.meals.length) {
+          pushSharedStore(menuServerKey(), local);                     // server empty → seed it from local
+        }
+      } catch { /* offline → keep local */ }
+    }
     function loadCurrentMenu() {
       try {
         let d = JSON.parse(localStorage.getItem(menuStorageKey()) || "null");
@@ -2958,7 +2977,7 @@
         return d;
       } catch { return null; }
     }
-    function saveCurrentMenu(d)  { localStorage.setItem(menuStorageKey(), JSON.stringify(d)); }
+    function saveCurrentMenu(d)  { d._savedAt = Date.now(); localStorage.setItem(menuStorageKey(), JSON.stringify(d)); pushSharedStore(menuServerKey(), d); }
     function loadPreviousMenu()  { try { return JSON.parse(localStorage.getItem("gainztrain_menu_previous") || "[]");  } catch { return []; } }
     function savePreviousMenu(a) { localStorage.setItem("gainztrain_menu_previous", JSON.stringify(a)); }
     function loadMealLibrary()   { try { return JSON.parse(localStorage.getItem("gainztrain_meal_library")  || "[]");  } catch { return []; } }
@@ -3022,7 +3041,8 @@
       }
     }
 
-    function initMenuTab() {
+    async function initMenuTab() {
+      await hydrateMenuDraft();  // pull the shared draft so the menu shows on any device
       seedWeekIfNeeded();
       renderMenuWeekPicker();   // async — sets the week dropdown + status badge
       renderMenuTab();
@@ -3762,7 +3782,8 @@
       return Object.values(ingMap).sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    function initIngredientsTab() {
+    async function initIngredientsTab() {
+      await hydrateMenuDraft();  // shopping list derives from the confirmed menu — pull the shared draft first
       renderIngChecklist();
       renderIngPills();
     }

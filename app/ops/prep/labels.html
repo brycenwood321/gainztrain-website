@@ -165,18 +165,25 @@
 
     /* ── PRINT STYLES ── */
     @media print {
-      body {
+      /* Lock the whole print surface to ONE label width. iOS Safari lays the page out at its content
+         width then scales it to the paper — any element wider than 29mm (e.g. the header bar) shrinks
+         every label to a tiny sliver. Constraining html/body/grid to 29mm makes it print 1:1. */
+      html, body {
+        width: 29mm;
         background: #fff;
         padding: 0;
         margin: 0;
       }
 
-      .screen-header { display: none; }
+      /* Hide EVERYTHING that isn't a label so nothing forces the page wide. */
+      .labels-topbar, .screen-header { display: none !important; }
 
       .label-grid {
         display: block;
-        max-width: none;
+        width: 29mm;
+        max-width: 29mm;
         margin: 0;
+        padding: 0;
         gap: 0;
       }
 

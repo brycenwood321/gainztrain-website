@@ -44,8 +44,8 @@
     .opt.sel{border-color:var(--orange);background:#fff;color:var(--black);}
     .opt small{display:block;font-weight:400;color:var(--muted);font-size:.8rem;margin-top:.15rem;}
     label{display:block;font-size:.82rem;font-weight:600;color:var(--gray);margin:.9rem 0 .35rem;}
-    input{width:100%;font-family:var(--body);font-size:1rem;padding:.8rem .9rem;border:1px solid var(--line);border-radius:10px;background:var(--bg);}
-    input:focus{outline:none;border-color:var(--orange);background:#fff;}
+    input,select{width:100%;font-family:var(--body);font-size:1rem;padding:.8rem .9rem;border:1px solid var(--line);border-radius:10px;background:var(--bg);}
+    input:focus,select:focus{outline:none;border-color:var(--orange);background:#fff;}
     .row2{display:grid;grid-template-columns:2fr 1fr;gap:.6rem;}
     .hidden{display:none!important;}
     .note{font-size:.82rem;color:var(--muted);margin-top:.5rem;}
@@ -65,6 +65,7 @@
     .btn:hover{background:var(--orange-dark);}.btn:disabled{opacity:.55;cursor:wait;}
     .loading{text-align:center;padding:4rem 1rem;color:var(--muted);}
   </style>
+<script src="/assets/js/attribution.js" defer></script>
 </head>
 <body>
   <div class="topbar"><div class="brand">GAINZ<span class="t">TRAIN</span></div></div>
@@ -129,6 +130,20 @@
           <label for="password" id="pwLabel">Password</label>
           <input id="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
           <div id="pwForgot" class="hidden" style="margin-top:.45rem;"><a id="forgotLink" style="cursor:pointer;text-decoration:underline;font-size:.85rem;color:var(--gray);">Forgot your password? Email me a login link</a></div>
+          <div id="heardRow">
+            <label for="heard" style="margin-top:1rem;">How did you hear about us?</label>
+            <select id="heard">
+              <option value="">Choose one…</option>
+              <option value="instagram">Instagram</option>
+              <option value="facebook">Facebook</option>
+              <option value="tiktok">TikTok</option>
+              <option value="google">Google search</option>
+              <option value="friend">Friend or family</option>
+              <option value="gym">My gym</option>
+              <option value="other">Other</option>
+            </select>
+            <input id="heardDetail" type="text" class="hidden" maxlength="200" placeholder="Tell us more (optional)" style="margin-top:.5rem;" />
+          </div>
         </div>
         <div id="loggedInBox" class="loggedin hidden"></div>
         <label for="code" style="margin-top:1rem;">Promo code (optional)</label>
@@ -164,6 +179,10 @@
       if(seedMeals&&Number.isInteger(c.meals))meals=Math.min(MAX,Math.max(MIN,c.meals));
     }catch(e){}}
     function clearCart(){try{localStorage.removeItem(CART_KEY);}catch(e){}}
+
+    // First-touch attribution captured by /assets/js/attribution.js (localStorage) — sent with register.
+    function readAttr(){try{return JSON.parse(localStorage.getItem('gt_attr'))||null;}catch(e){return null;}}
+    $('heard').addEventListener('change',()=>{const v=$('heard').value;$('heardDetail').classList.toggle('hidden',v!=='friend'&&v!=='other');});
 
     function tierFor(n){return PLANS.find(p=>n>=p.min&&n<=p.max);}
     function render(){
@@ -227,6 +246,7 @@
       returning=on;
       $('nameRow').classList.toggle('hidden',on);
       $('phoneRow').classList.toggle('hidden',on);
+      $('heardRow').classList.toggle('hidden',on);
       $('pwForgot').classList.toggle('hidden',!on);
       $('pwLabel').textContent=on?'Your account password':'Password';
       $('password').setAttribute('autocomplete',on?'current-password':'new-password');
@@ -284,7 +304,10 @@
             }
           }else{
             if(password.length<8){showMsg('Choose a password of at least 8 characters.');reset();return;}
-            const reg=await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password,first_name:firstName,last_name:lastName,phone})});
+            const heard=$('heard').value;
+            if(!heard){showMsg('One last thing — tell us how you heard about us.');reset();return;}
+            const reg=await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password,first_name:firstName,last_name:lastName,phone,
+              heard_about:heard,heard_detail:$('heardDetail').value.trim(),attribution:readAttr()})});
             if(reg.status===409){
               // Slipped past the blur pre-check (e.g. paste + immediate tap) — try the typed password and
               // flip into returning mode so the form matches reality.

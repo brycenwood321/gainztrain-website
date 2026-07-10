@@ -42,6 +42,28 @@ export async function onRequestPost(context) {
     return fail(409, 'email_exists', 'An account with that email already exists — try logging in.');
   }
 
+  // Marketing attribution (Phase 1): first-touch UTMs captured client-side + the self-reported
+  // "how did you hear about us?" answer. Best-effort — attribution must never fail a signup.
+  try {
+    const attr = (body.attribution && typeof body.attribution === 'object') ? body.attribution : {};
+    const clip = (v, n) => (typeof v === 'string' ? v.slice(0, n) : null) || null;
+    const selfReported = clip(str(body.heard_about).trim().toLowerCase(), 40);
+    const hasUtm = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid', 'referrer']
+      .some((k) => typeof attr[k] === 'string' && attr[k]);
+    if (selfReported || hasUtm) {
+      await run(
+        env.DB,
+        `INSERT INTO attribution (customer_id, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+           gclid, fbclid, landing_path, referrer, self_reported, self_reported_detail, first_touch_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, clip(attr.utm_source, 120), clip(attr.utm_medium, 120), clip(attr.utm_campaign, 120),
+        clip(attr.utm_content, 120), clip(attr.utm_term, 120), clip(attr.gclid, 120), clip(attr.fbclid, 120),
+        clip(attr.landing_path, 300), clip(attr.referrer, 300),
+        selfReported, clip(str(body.heard_detail).trim(), 200), clip(attr.first_touch_at, 40), now,
+      );
+    }
+  } catch { /* non-fatal */ }
+
   try {
     if (password) {
       const { hash, salt, iterations } = await hashPassword(password);

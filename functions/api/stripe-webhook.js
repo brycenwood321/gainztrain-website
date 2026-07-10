@@ -17,6 +17,7 @@ import { hmacSign, constantTimeEqual } from '../_lib/crypto.js';
 import { ensureCustomer, mirrorSubscription, mirrorInvoice, mirrorPayment, audit } from '../_lib/mirror.js';
 import { notify } from '../_lib/notify.js';
 import { ownerNotify } from '../_lib/owner_notify.js';
+import { capiEvent } from '../_lib/capi.js';
 
 const SIG_TOLERANCE_SECONDS = 300; // reject events whose timestamp is >5 min skewed
 
@@ -72,6 +73,17 @@ async function dispatch(env, event) {
       break;
     default:
       break; // unhandled type — recorded in stripe_events, no mirror action
+  }
+  // Meta CAPI Purchase: the FIRST paid invoice of a subscription only (billing_reason gate keeps
+  // weekly renewals out), keyed on the invoice id so Stripe retries dedup on Meta's side. Env-gated
+  // no-op until the pixel exists; ad optimization then learns from real money, not clicks.
+  if (event.type === 'invoice.paid' && obj.billing_reason === 'subscription_create' && (obj.amount_paid || 0) > 0) {
+    try {
+      const cust = await ensureCustomer(env, obj.customer);
+      if (cust) await capiEvent(env, 'Purchase', {
+        email: cust.email, phone: cust.phone, value_cents: obj.amount_paid, event_id: `purchase_${obj.id}`,
+      });
+    } catch { /* tracking never fails the webhook */ }
   }
   // Customer-facing billing notifications fire AFTER the mirror, off the webhook (the reliable,
   // idempotent truth). Fully self-contained + try/caught: a comms failure must NEVER fail the

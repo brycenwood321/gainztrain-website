@@ -49,5 +49,39 @@ export async function onRequestGet(context) {
        ON o.subscription_id = s.id
      GROUP BY 1 ORDER BY customers DESC`);
 
-  return ok({ by_self_reported: bySelf, by_utm: byUtm, cohort_by_coupon: cohortByCoupon });
+  // ── Full funnel: views (first-party beacon) + spend (manual log) merged with signups/revenue ──
+  // Sources normalize to channels so a facebook/instagram utm, a fbclid, and a "meta" spend row all
+  // land on one row: channel → views → signups → paying → revenue → spend → CPL → CAC.
+  const views = await all(db,
+    `SELECT COALESCE(utm_source, CASE WHEN referrer_host LIKE '%google%' THEN 'google-organic'
+                                      WHEN referrer_host LIKE '%facebook%' OR referrer_host LIKE '%instagram%' THEN 'meta-organic'
+                                      WHEN referrer_host IS NOT NULL THEN referrer_host
+                                      ELSE '(direct)' END) AS source,
+            COUNT(*) AS views,
+            SUM(CASE WHEN day >= date('now', '-30 day') THEN 1 ELSE 0 END) AS views_30d
+     FROM page_views GROUP BY 1`);
+  const spend = await all(db,
+    `SELECT channel, SUM(spend_cents) AS spend_cents FROM marketing_spend GROUP BY channel`);
+
+  const toChannel = (s) => {
+    const v = String(s || '').toLowerCase();
+    if (/facebook|instagram|^fb$|^ig$|meta/.test(v)) return 'meta';
+    if (/google|gbp|youtube/.test(v)) return 'google';
+    if (/tiktok/.test(v)) return 'tiktok';
+    if (/marketplace/.test(v)) return 'marketplace';
+    if (!v || v === '(direct)' || v === '(organic/direct)' || v === '(blank)') return 'organic/direct';
+    return v;
+  };
+  const funnel = {};
+  const row = (ch) => (funnel[ch] = funnel[ch] || { channel: ch, views: 0, views_30d: 0, signups: 0, paying: 0, revenue_cents: 0, spend_cents: 0 });
+  for (const v of views) { const r = row(toChannel(v.source)); r.views += v.views; r.views_30d += v.views_30d; }
+  for (const u of byUtm) { const r = row(toChannel(u.source)); r.signups += u.signups; r.paying += u.paying || 0; r.revenue_cents += u.revenue_cents || 0; }
+  for (const s of spend) { row(toChannel(s.channel)).spend_cents += s.spend_cents || 0; }
+  const funnelRows = Object.values(funnel).map((r) => ({
+    ...r,
+    cpl_cents: r.signups > 0 && r.spend_cents > 0 ? Math.round(r.spend_cents / r.signups) : null,
+    cac_cents: r.paying > 0 && r.spend_cents > 0 ? Math.round(r.spend_cents / r.paying) : null,
+  })).sort((a, b) => b.views - a.views);
+
+  return ok({ funnel: funnelRows, by_self_reported: bySelf, by_utm: byUtm, cohort_by_coupon: cohortByCoupon });
 }

@@ -66,6 +66,7 @@
       <div class="tab" data-tab="route">Route</div>
       <div class="tab" data-tab="customers">Customers</div>
       <div class="tab" data-tab="activity">Activity</div>
+      <div class="tab" data-tab="marketing">Marketing</div>
     </div>
     <a href="/app/" style="margin-left:auto;color:var(--gray);text-decoration:none;font-size:.9rem;font-weight:600;white-space:nowrap;">← My Account</a>
   </div>
@@ -107,8 +108,10 @@
       if (r.status === 401){ gate(TOKEN?'Token rejected. Try again.':null); throw new Error('unauthorized'); }
       return r.json().catch(()=>({}));
     }
-    async function adminPost(path){
-      const r = await fetch(path, { method:'POST', credentials:'same-origin', headers: TOKEN?{ 'X-Admin-Token': TOKEN }:{} });
+    async function adminPost(path, body){
+      const headers = TOKEN?{ 'X-Admin-Token': TOKEN }:{};
+      if (body) headers['Content-Type'] = 'application/json';
+      const r = await fetch(path, { method:'POST', credentials:'same-origin', headers, body: body?JSON.stringify(body):undefined });
       if (r.status === 401){ gate(TOKEN?'Token rejected.':null); throw new Error('unauthorized'); }
       return r.json().catch(()=>({}));
     }
@@ -138,6 +141,7 @@
         if (TAB==='route') return renderRoute();
         if (TAB==='customers') return renderCustomers();
         if (TAB==='activity') return renderActivity();
+        if (TAB==='marketing') return renderMarketing();
       } catch(e){ if(String(e.message)!=='unauthorized') $('view').innerHTML = '<div class="loading">Something went wrong loading this view.</div>'; }
     }
 
@@ -309,6 +313,44 @@
         return `<div class="stop"><div class="nm">${esc(desc)}</div><div class="ad">${fmtT(e.at)} · ${esc(e.actor||'')}</div></div>`;
       }).join('');
       $('view').innerHTML = `<div class="card"><h2>Customer & system activity</h2>${rows||'<div class="stat-sub" style="padding:1rem 0;">No activity recorded yet. Customer pause/cancel/upgrade and signups/payments will appear here.</div>'}</div>`;
+    }
+
+    async function renderMarketing(){
+      const [a, sp] = await Promise.all([adminGet('/api/admin/attribution'), adminGet('/api/admin/spend')]);
+      $('weekLabel').textContent = 'Marketing funnel';
+      const num = v => (v==null?'—':v.toLocaleString());
+      const cents = v => (v==null?'—':money(v));
+      const funnelRows = (a.funnel||[]).map(f=>`<tr><td><b>${esc(f.channel)}</b></td><td>${num(f.views)}</td><td>${num(f.views_30d)}</td><td>${num(f.signups)}</td><td>${num(f.paying)}</td><td>${cents(f.revenue_cents)}</td><td>${cents(f.spend_cents)}</td><td>${cents(f.cpl_cents)}</td><td>${cents(f.cac_cents)}</td></tr>`).join('');
+      const selfRows = (a.by_self_reported||[]).map(r=>`<tr><td>${esc(r.source)}</td><td>${num(r.signups)}</td><td>${num(r.paying)}</td><td>${cents(r.revenue_cents)}</td></tr>`).join('');
+      const cohortRows = (a.cohort_by_coupon||[]).map(c=>`<tr><td>${esc(c.coupon)}</td><td>${num(c.customers)}</td><td>${c.weeks_avg==null?'—':c.weeks_avg}</td><td>${num(c.retained_4wk)}</td><td>${num(c.canceled)}</td></tr>`).join('');
+      const spendRows = ((sp.entries)||[]).slice(0,30).map(e=>`<tr><td>${esc(e.day)}</td><td>${esc(e.channel)}</td><td>${esc(e.campaign||'')}</td><td>${money(e.spend_cents)}</td><td>${esc(e.notes||'')}</td></tr>`).join('');
+      const th='text-align:left;padding:.4rem .6rem;border-bottom:1px solid #eee;font-size:.78rem;color:#888;text-transform:uppercase;letter-spacing:.03em;';
+      const tbl=(head,rows,empty)=>`<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.9rem;"><thead><tr>${head.map(h=>`<th style="${th}">${h}</th>`).join('')}</tr></thead><tbody>${rows||`<tr><td colspan="${head.length}" class="stat-sub" style="padding:1rem .6rem;">${empty}</td></tr>`}</tbody></table></div>`;
+      $('view').innerHTML =
+        `<div class="card"><h2>Funnel — views → signups → customers → CAC</h2>
+          <p class="stat-sub" style="margin:.2rem 0 .8rem;">Views = our own beacon on public pages. Signups = accounts with attribution. CPL/CAC compute once spend is logged below. Gates: CAC ≤ $90 · pause ads at 400 locked meals/wk.</p>
+          ${tbl(['Channel','Views','Views 30d','Signups','Paying','Revenue','Spend','CPL','CAC'],funnelRows,'No data yet — appears as soon as pages get views and signups land.')}</div>
+        <div class="card"><h2>"How did you hear about us?" (self-reported)</h2>
+          ${tbl(['Source','Signups','Paying','Revenue'],selfRows,'Fills in as new customers answer at signup — catches Marketplace/word-of-mouth that UTMs miss.')}</div>
+        <div class="card"><h2>Retention by offer code <span class="stat-sub">(the HelloFresh guard)</span></h2>
+          <p class="stat-sub" style="margin:.2rem 0 .8rem;">weeks_avg = locked weeks per customer · 4wk+ = day-60 gate (target: 60% of new cohorts reach a 4th week).</p>
+          ${tbl(['Coupon','Customers','Avg weeks','4wk+','Canceled'],cohortRows,'No subscriptions yet.')}</div>
+        <div class="card"><h2>Log ad spend</h2>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem;">
+            <input id="spDay" type="date" />
+            <select id="spCh"><option value="meta">Meta</option><option value="google">Google</option><option value="gbp">GBP</option><option value="tiktok">TikTok</option><option value="marketplace">Marketplace</option><option value="other">Other</option></select>
+            <input id="spCamp" type="text" placeholder="campaign (optional)" style="width:11rem;" />
+            <input id="spAmt" type="number" min="0" step="0.01" placeholder="$ spend" style="width:7rem;" />
+            <button class="btn" id="spGo">Log</button>
+          </div>
+          ${tbl(['Day','Channel','Campaign','Spend','Notes'],spendRows,'No spend logged yet. Log daily ad spend here until the Phase 2 API sync automates it.')}</div>`;
+      $('spDay').value = new Date().toISOString().slice(0,10);
+      $('spGo').onclick = async ()=>{
+        const body={day:$('spDay').value,channel:$('spCh').value,campaign:$('spCamp').value.trim(),spend:parseFloat($('spAmt').value)};
+        if(!body.day||!(body.spend>=0)){msg('Enter a date and a spend amount.','err');return;}
+        const r=await adminPost('/api/admin/spend',body);
+        if(r.ok){msg('Spend logged.');renderMarketing();}else msg(r.detail||'Could not log spend.','err');
+      };
     }
 
     function boot(){

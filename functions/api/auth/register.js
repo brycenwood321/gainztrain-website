@@ -6,6 +6,7 @@ import { createSession } from '../../_lib/auth.js';
 import { notify } from '../../_lib/notify.js';
 import { str, normEmail, toE164 } from '../../_lib/validate.js';
 import { rateLimit, clientIp } from '../../_lib/ratelimit.js';
+import { capiEvent } from '../../_lib/capi.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -76,6 +77,10 @@ export async function onRequestPost(context) {
         id, hash, salt, iterations, now,
       );
     }
+    // Meta CAPI Lead event (env-gated no-op until the pixel exists). event_id = lead_<customer id>
+    // so a future browser pixel firing the same event dedups instead of double-counting.
+    await capiEvent(env, 'Lead', { email, phone, event_id: `lead_${id}` });
+
     const { cookie } = await createSession(env, id, request);
     // Welcome email through notify() (branded template, leak-proof path; lazily links a GHL contact so
     // future magic links can reach them). Non-blocking — a comms hiccup must never fail the signup.

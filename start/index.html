@@ -126,6 +126,10 @@
           <div id="phoneRow">
             <label for="phone">Phone</label>
             <input id="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(801) 555-1234" />
+            <div style="display:flex;gap:.55rem;align-items:flex-start;margin-top:.5rem;">
+              <input id="smsOptIn" type="checkbox" style="width:auto;margin-top:.2rem;flex-shrink:0;" />
+              <label for="smsOptIn" style="font-size:.78rem;color:var(--gray);font-weight:400;line-height:1.45;">I agree to receive order &amp; delivery updates and occasional promotional texts from <b>Gainz Train</b> at this number. Consent is not a condition of purchase. Msg frequency varies. Msg &amp; data rates may apply. Reply <b>STOP</b> to cancel, <b>HELP</b> for help. <a href="/privacy-policy/" target="_blank" style="text-decoration:underline;">Privacy Policy</a></label>
+            </div>
           </div>
           <label for="password" id="pwLabel">Password</label>
           <input id="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
@@ -307,6 +311,7 @@
             const heard=$('heard').value;
             if(!heard){showMsg('One last thing — tell us how you heard about us.');reset();return;}
             const reg=await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password,first_name:firstName,last_name:lastName,phone,
+              sms_opt_in:!!phone&&$('smsOptIn').checked,
               heard_about:heard,heard_detail:$('heardDetail').value.trim(),attribution:readAttr()})});
             if(reg.status===409){
               // Slipped past the blur pre-check (e.g. paste + immediate tap) — try the typed password and

@@ -30,12 +30,15 @@ export async function onRequestPost(context) {
 
   const id = randomToken(16);
   const now = nowIso();
+  // Express written consent for promotional SMS: the UNCHECKED checkbox on /start (A2P/TCPA proof).
+  // Only meaningful with a real phone; stored with a timestamp so every marketing send is defensible.
+  const smsOptIn = body.sms_opt_in === true && !!phone;
   try {
     await run(
       env.DB,
-      `INSERT INTO customers (id, email, first_name, last_name, phone, role, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'customer', ?, ?)`,
-      id, email, firstName, lastName, phone || null, now, now,
+      `INSERT INTO customers (id, email, first_name, last_name, phone, role, sms_marketing_consent, sms_consent_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'customer', ?, ?, ?, ?)`,
+      id, email, firstName, lastName, phone || null, smsOptIn ? 1 : 0, smsOptIn ? now : null, now, now,
     );
   } catch {
     // UNIQUE(email) race: another request registered the same email between our check + insert.

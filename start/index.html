@@ -366,6 +366,20 @@
         }else if(p){localStorage.removeItem('gt_meal_picks');}
       }catch(e){}
       const me=await api('/api/me');
+      // MEALS-FIRST FRONT DOOR (2026-07-11): /start without picks is no longer an entry point for new
+      // visitors — send them to pick meals first. Falls through to the count-first fallback when
+      // ordering is closed (Saturday blackout) or no menu is live, so a weekend signup is never
+      // blocked. Logged-in customers skip (plan-restart flows manage meals in the app).
+      if(me.status!==200||!me.body.ok){
+        let hasPicks=false;
+        try{const p=JSON.parse(localStorage.getItem('gt_meal_picks')||'null');hasPicks=!!(p&&Array.isArray(p.selections)&&p.selections.length);}catch(e){}
+        if(!hasPicks){
+          try{
+            const pub=await api('/api/menu/public');
+            if(pub.status===200&&pub.body.has_menu&&pub.body.is_orderable!==false&&!pub.body.ordering_closed){location.replace('/menu/');return;}
+          }catch(e){}
+        }
+      }
       if(me.status===200&&me.body.ok){
         loggedIn=true;
         $('acctFields').classList.add('hidden');

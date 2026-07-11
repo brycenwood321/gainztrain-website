@@ -4,8 +4,10 @@ main = "worker.js"
 compatibility_date = "2024-09-23"
 
 [triggers]
-# Wed 16:00 — publish menu. Wed 17:00 — reminders. Fri 15:00 — last call (cutoff is Fri 11:59pm MT).
+# Wed 17:00 — pick reminders. Fri 23:00 — last call (5pm MDT / 4pm MST; cutoff is Fri 11:59pm MT).
 # Sat 07:30 — lock (just after the Fri 11:59pm MT cutoff: Sat 05:59Z MDT / 06:59Z MST; kitchen shops
 # Saturday morning). Daily 13:00 — owner digest + health probe (also prunes feed + menu failsafe on
-# Mondays). Max 5 cron triggers/account.
-crons = ["0 16 * * 3", "0 17 * * 3", "0 15 * * 5", "30 7 * * 6", "0 13 * * *"]
+# Mondays). Max 5 cron triggers/account — ONE SLOT FREE (Wed menus.json auto-publish retired
+# 2026-07-11: the prep dashboard Finalize→Confirm flow owns menus now; reserved for the ad-spend
+# kill-switch when campaigns launch).
+crons = ["0 17 * * 3", "0 23 * * 5", "30 7 * * 6", "0 13 * * *"]

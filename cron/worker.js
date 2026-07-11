@@ -26,16 +26,15 @@ async function hit(env, path) {
 
 export default {
   async scheduled(event, env, ctx) {
-    if (event.cron === '0 16 * * 3') {
-      // Wednesday 16:00 UTC — sync data/menus.json into D1 (silent) so a missed manual publish can't
-      // leave /app/menu empty or 404 the Saturday lock. Idempotent; no customer emails (no ?notify).
-      ctx.waitUntil(hit(env, '/api/admin/publish-menu'));
-    } else if (event.cron === '0 17 * * 3') {
+    // (Wed 16:00 menus.json auto-publish RETIRED 2026-07-11 — the prep dashboard Finalize→Confirm
+    // flow owns menus; the Monday menu-failsafe covers a week with no live menu. Freed cron slot is
+    // reserved for the ad-spend kill-switch.)
+    if (event.cron === '0 17 * * 3') {
       // Wednesday 17:00 UTC (~10–11am Mountain) — remind subscribers who haven't picked.
       ctx.waitUntil(hit(env, '/api/admin/send-reminders'));
-    } else if (event.cron === '0 15 * * 5') {
-      // Friday 15:00 UTC (~8–9am Mountain) — LAST CALL: customers have the rest of Friday, cutoff is
-      // tonight at 11:59pm MT.
+    } else if (event.cron === '0 23 * * 5') {
+      // Friday 23:00 UTC (5pm MDT / 4pm MST) — LAST CALL, hours before tonight's 11:59pm MT cutoff.
+      // (Was Fri 15:00Z when the cutoff was Friday morning.)
       ctx.waitUntil(hit(env, '/api/admin/send-reminders?final=1'));
     } else if (event.cron === '30 7 * * 6') {
       // Saturday 07:30 UTC (1:30am MDT / 12:30am MST) — just after the Friday 11:59pm MT cutoff

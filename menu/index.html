@@ -224,7 +224,11 @@
         function tierFor(n) { for (var i = 0; i < plans.length; i++) if (n >= plans[i].min && n <= plans[i].max) return plans[i]; return null; }
         function refresh() {
           var t = total(), tier = tierFor(t);
+          // Specialty upcharges are billed with the weekly order — fold them into the shown price so
+          // the cart bar never understates what the customer will actually pay.
+          var upCents = 0;
           cur.meals.forEach(function (m) {
+            upCents += (qty[m.position] || 0) * Math.round((Number(m.upcharge_per_meal) || 0) * 100);
             var n = document.getElementById('pn_' + m.position); if (!n) return;
             n.textContent = qty[m.position] || 0;
             document.getElementById('pp_' + m.position).disabled = t >= MAXM;
@@ -234,7 +238,10 @@
           if (t > 0) { bar.classList.add('show'); document.body.classList.add('has-cartbar'); }
           else { bar.classList.remove('show'); document.body.classList.remove('has-cartbar'); }
           document.getElementById('cartCount').textContent = t;
-          document.getElementById('cartPrice').textContent = tier ? ('· $' + ((tier.per_meal_cents * t) / 100).toFixed(2) + '/wk (' + (tier.per_meal_cents / 100).toFixed(2) + '/meal)') : '';
+          document.getElementById('cartPrice').textContent = tier
+            ? ('· $' + (((tier.per_meal_cents * t) + upCents) / 100).toFixed(2) + '/wk' +
+               (upCents > 0 ? ' (incl. $' + (upCents / 100).toFixed(2) + ' specialty)' : ' (' + (tier.per_meal_cents / 100).toFixed(2) + '/meal)'))
+            : '';
           var go = document.getElementById('cartGo');
           go.disabled = t < MINM;
           document.getElementById('cartSub').textContent = t < MINM

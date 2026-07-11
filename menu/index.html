@@ -36,6 +36,25 @@
     }
     #menuLoading, #menuEmpty { text-align: center; color: #888; padding: 2rem 0; }
     #menuEmpty { display: none; }
+    /* Meals-first picker: steppers on each card + a sticky cart bar. */
+    .pick-row { display:flex; align-items:center; justify-content:space-between; gap:.6rem; margin-top:.7rem;
+      padding-top:.7rem; border-top:1px dashed var(--line,#e5e5e5); }
+    .pick-label { font-size:.82rem; color:#888; font-weight:600; }
+    .pick-qty { display:flex; align-items:center; gap:.65rem; }
+    .pick-btn { width:2.1rem; height:2.1rem; border-radius:50%; border:1.5px solid var(--orange); background:#fff;
+      color:var(--orange); font-size:1.25rem; font-weight:800; cursor:pointer; line-height:1; }
+    .pick-btn:disabled { opacity:.35; cursor:default; }
+    .pick-n { min-width:1.4rem; text-align:center; font-weight:800; font-size:1.05rem; }
+    .cartbar { position:fixed; left:0; right:0; bottom:0; z-index:60; background:#141414; color:#fff;
+      padding:.85rem 1.25rem; display:none; }
+    .cartbar.show { display:block; }
+    .cartbar-inner { max-width:1080px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+    .cartbar b { color:var(--orange); }
+    .cartbar-cta { background:var(--orange); color:#fff; font-weight:800; border:none; border-radius:10px;
+      padding:.8rem 1.6rem; font-size:1rem; cursor:pointer; white-space:nowrap; }
+    .cartbar-cta:disabled { opacity:.5; cursor:default; }
+    .cartbar-sub { font-size:.78rem; color:#bbb; margin-top:.15rem; }
+    body.has-cartbar { padding-bottom:5.5rem; }
   </style>
 <script src="/assets/js/attribution.js" defer></script>
 </head>
@@ -93,9 +112,9 @@
       <!-- specialty note -->
       <div class="menu-rotation-box fade-up" style="margin-top:2.5rem;">
         <div class="section-label" style="justify-content: center;">How It Works</div>
-        <h3>Pick Your Plan, Then Your Meals.</h3>
-        <p>Choose a weekly plan, and each week you'll pick your meals from the rotating menu before the <strong>Friday 11:59 am MT</strong> cutoff. Some specialty proteins carry a small upcharge, shown right on the meal.</p>
-        <a href="/subscribe/" class="btn btn-primary">Start Your Plan &rarr;</a>
+        <h3>Pick Your Meals, Then Check Out.</h3>
+        <p>Tap <strong>+</strong> on the meals you want (6–16 per week), then hit continue to create your account and check out. Every week after, you'll re-pick from the new menu before the <strong>Friday 11:59 pm MT</strong> cutoff. Some specialty proteins carry a small upcharge, shown right on the meal.</p>
+        <a href="/subscribe/" class="btn btn-primary">See Plan Pricing &rarr;</a>
       </div>
     </div>
   </section>
@@ -110,6 +129,17 @@
         <a href="/subscribe/" class="btn btn-primary btn-pulse">Choose Your Plan &rarr;</a>
         <a href="/how-it-works/" class="btn btn-outline">How It Works</a>
       </div>
+    </div>
+  </div>
+
+  <!-- MEALS-FIRST CART BAR -->
+  <div class="cartbar" id="cartbar">
+    <div class="cartbar-inner">
+      <div>
+        <div><b id="cartCount">0</b> meals picked <span id="cartPrice"></span></div>
+        <div class="cartbar-sub" id="cartSub">Pick at least 6 meals to continue</div>
+      </div>
+      <button class="cartbar-cta" id="cartGo" disabled>Continue →</button>
     </div>
   </div>
 
@@ -181,6 +211,49 @@
         var wkStr = wk.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
         document.getElementById('weekPill').textContent = 'Week of ' + wkStr;
 
+        // MEALS-FIRST FLOW: pick meals here → account + checkout on /start → picks auto-save in the app.
+        // Picking is enabled only for the actually-orderable week outside the Saturday blackout.
+        var pickable = cur.is_orderable !== false && !cur.ordering_closed;
+        var plans = [], MINM = 6, MAXM = 16;
+        try {
+          var pr = await fetch('/api/plans').then(function (r) { return r.json(); });
+          plans = pr.plans || []; MINM = pr.min_meals || 6; MAXM = pr.max_meals || 16;
+        } catch (e) {}
+        var qty = {};
+        function total() { return Object.keys(qty).reduce(function (a, k) { return a + qty[k]; }, 0); }
+        function tierFor(n) { for (var i = 0; i < plans.length; i++) if (n >= plans[i].min && n <= plans[i].max) return plans[i]; return null; }
+        function refresh() {
+          var t = total(), tier = tierFor(t);
+          cur.meals.forEach(function (m) {
+            var n = document.getElementById('pn_' + m.position); if (!n) return;
+            n.textContent = qty[m.position] || 0;
+            document.getElementById('pp_' + m.position).disabled = t >= MAXM;
+            document.getElementById('pm_' + m.position).disabled = !(qty[m.position] > 0);
+          });
+          var bar = document.getElementById('cartbar');
+          if (t > 0) { bar.classList.add('show'); document.body.classList.add('has-cartbar'); }
+          else { bar.classList.remove('show'); document.body.classList.remove('has-cartbar'); }
+          document.getElementById('cartCount').textContent = t;
+          document.getElementById('cartPrice').textContent = tier ? ('· $' + ((tier.per_meal_cents * t) / 100).toFixed(2) + '/wk (' + (tier.per_meal_cents / 100).toFixed(2) + '/meal)') : '';
+          var go = document.getElementById('cartGo');
+          go.disabled = t < MINM;
+          document.getElementById('cartSub').textContent = t < MINM
+            ? ('Pick at least ' + MINM + ' meals to continue (' + (MINM - t) + ' more)')
+            : 'Delivery fee (if any) shown at checkout · pause or cancel anytime';
+        }
+        document.getElementById('cartGo').onclick = function () {
+          var t = total(); if (t < MINM) return;
+          try {
+            localStorage.setItem('gt_meal_picks', JSON.stringify({
+              week_of: cur.week_of,
+              selections: cur.meals.map(function (m) { return { position: m.position, qty: qty[m.position] || 0 }; }).filter(function (s) { return s.qty > 0; }),
+              names: cur.meals.filter(function (m) { return (qty[m.position] || 0) > 0; }).map(function (m) { return (qty[m.position]) + '× ' + m.name; }),
+              ts: Date.now(),
+            }));
+          } catch (e) {}
+          location.href = '/start/?meals=' + t + '&picked=1';
+        };
+
         var grid = document.getElementById('menuGrid');
         grid.innerHTML = cur.meals.map(function (m) {
           var up = Number(m.upcharge_per_meal) > 0
@@ -189,6 +262,12 @@
           var img = m.image
             ? '<img src="' + esc(m.image) + '" alt="' + esc(m.name) + '" class="meal-card-img" loading="lazy" onerror="mealImgErr(this,\'' + emoji + '\')" />'
             : '<div class="meal-card-img meal-emoji-fallback">' + (emoji || '🍽️') + '</div>';
+          var picker = pickable
+            ? '<div class="pick-row"><span class="pick-label">Add to your week</span><span class="pick-qty">' +
+              '<button class="pick-btn" id="pm_' + m.position + '" aria-label="fewer">–</button>' +
+              '<span class="pick-n" id="pn_' + m.position + '">0</span>' +
+              '<button class="pick-btn" id="pp_' + m.position + '" aria-label="more">+</button></span></div>'
+            : (cur.ordering_closed ? '<div class="pick-row"><span class="pick-label">Ordering reopens Sunday with the new menu</span></div>' : '');
           return '<div class="meal-card fade-up">' + img +
             '<div class="meal-card-body">' +
             '<p class="meal-card-name">' + esc(m.name) + up + '</p>' +
@@ -203,6 +282,20 @@
             '<div class="macro-pill"><span class="macro-val">' + esc(m.calories) + '</span><span class="macro-key">Cal</span></div>' +
             '</div></div></div>';
         }).join('');
+        if (pickable) {
+          cur.meals.forEach(function (m) {
+            document.getElementById('pp_' + m.position).onclick = function () { if (total() < MAXM) { qty[m.position] = (qty[m.position] || 0) + 1; refresh(); } };
+            document.getElementById('pm_' + m.position).onclick = function () { if (qty[m.position] > 0) { qty[m.position]--; refresh(); } };
+          });
+          // Restore an in-progress pick (e.g. they bounced to /start and came back to edit).
+          try {
+            var saved = JSON.parse(localStorage.getItem('gt_meal_picks') || 'null');
+            if (saved && saved.week_of === cur.week_of && Array.isArray(saved.selections)) {
+              saved.selections.forEach(function (s) { qty[s.position] = s.qty; });
+            }
+          } catch (e) {}
+          refresh();
+        }
         // main.js's fade-up observer already ran on the initial DOM, so it never
         // sees these dynamically-injected cards. Reveal them directly (rAF lets the
         // opacity:0 paint first so the transition still animates).

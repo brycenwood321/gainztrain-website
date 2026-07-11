@@ -34,12 +34,14 @@ export default {
       // Wednesday 17:00 UTC (~10–11am Mountain) — remind subscribers who haven't picked.
       ctx.waitUntil(hit(env, '/api/admin/send-reminders'));
     } else if (event.cron === '0 15 * * 5') {
-      // Friday 15:00 UTC (~8–9am Mountain) — LAST CALL, a few hours before the Fri 11:59am MT cutoff.
+      // Friday 15:00 UTC (~8–9am Mountain) — LAST CALL: customers have the rest of Friday, cutoff is
+      // tonight at 11:59pm MT.
       ctx.waitUntil(hit(env, '/api/admin/send-reminders?final=1'));
-    } else if (event.cron === '0 19 * * 5') {
-      // Friday 19:00 UTC (noon MST / 1pm MDT) — just after the Friday 11:59am MT cutoff (Fri 17:59Z MDT /
-      // 18:59Z MST) — lock complete orders + auto-fill anyone who didn't pick, so the kitchen has the
-      // final list to shop Friday afternoon.
+    } else if (event.cron === '30 7 * * 6') {
+      // Saturday 07:30 UTC (1:30am MDT / 12:30am MST) — just after the Friday 11:59pm MT cutoff
+      // (Sat 05:59Z MDT / 06:59Z MST) — lock complete orders + auto-fill anyone who didn't pick, so
+      // the kitchen has the final list to shop Saturday morning. (Moved from Fri 19:00Z 2026-07-11
+      // when the cutoff moved from 11:59am to 11:59pm MT.)
       ctx.waitUntil(hit(env, '/api/admin/lock-week'));
     } else if (event.cron === '0 13 * * *') {
       // Daily 13:00 UTC (~7am MDT / 6am MST) — owner morning digest + health probe. Emails the owners

@@ -76,8 +76,9 @@
       <!-- Step 1: meals -->
       <div class="step">
         <div class="eyebrow">Step 1</div>
-        <h2>How many meals a week?</h2>
-        <p class="lead">The more you order, the lower your per-meal price.</p>
+        <h2 id="step1Title">How many meals a week?</h2>
+        <p class="lead" id="step1Lead">The more you order, the lower your per-meal price.</p>
+        <div id="picksSummary" class="hidden" style="background:#fff8ec;border:1px solid var(--orange);border-radius:12px;padding:.85rem 1rem;margin-bottom:1rem;font-size:.92rem;line-height:1.55;"></div>
         <div class="stepper">
           <button class="stepbtn" id="minus" aria-label="fewer">–</button>
           <div class="mealnum"><span id="mealCount">9</span><small>meals / week</small></div>
@@ -346,6 +347,24 @@
       if(!isNaN(qsMeals))meals=Math.min(MAX,Math.max(MIN,qsMeals));
       // Restore a saved cart (zip/address/method/code, and meals only when ?meals= wasn't supplied).
       restoreCart(isNaN(qsMeals));
+      // MEALS-FIRST: picks made on /menu drive the meal count here and auto-save in the app after
+      // checkout. While picks exist the stepper is locked (count must match the picks exactly).
+      try{
+        const hEsc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+        const p=JSON.parse(localStorage.getItem('gt_meal_picks')||'null');
+        if(p&&Array.isArray(p.selections)&&p.ts&&Date.now()-p.ts<6048e5&&p.selections.length){
+          const t=p.selections.reduce((a,s)=>a+(s.qty||0),0);
+          if(t>=MIN&&t<=MAX){
+            meals=t;
+            $('minus').classList.add('hidden');$('plus').classList.add('hidden');
+            $('step1Title').textContent='Your meals for the week';
+            $('step1Lead').textContent='Locked to what you picked — they save to your account automatically after checkout.';
+            $('picksSummary').innerHTML='<b>You picked:</b> '+(p.names||[]).map(hEsc).join(' · ')+
+              ' &nbsp;<a href="/menu/" style="text-decoration:underline;color:var(--orange);font-weight:700;">Change meals</a>';
+            $('picksSummary').classList.remove('hidden');
+          }else{localStorage.removeItem('gt_meal_picks');}
+        }else if(p){localStorage.removeItem('gt_meal_picks');}
+      }catch(e){}
       const me=await api('/api/me');
       if(me.status===200&&me.body.ok){
         loggedIn=true;

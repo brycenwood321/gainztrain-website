@@ -117,10 +117,13 @@
         $('minus_'+m.position).onclick=()=>{if((qty[m.position]||0)>0){qty[m.position]--;refresh();}};
       });
     }
+    async function saveSelections(){
+      const selections=MENU.map(m=>({position:m.position,qty:qty[m.position]||0})).filter(s=>s.qty>0);
+      return api('/api/meals/select',{method:'POST',body:JSON.stringify({week_of:MENU_WEEK,selections})});
+    }
     $('saveBtn').onclick=async()=>{
       $('saveBtn').disabled=true;
-      const selections=MENU.map(m=>({position:m.position,qty:qty[m.position]||0})).filter(s=>s.qty>0);
-      const r=await api('/api/meals/select',{method:'POST',body:JSON.stringify({week_of:MENU_WEEK,selections})});
+      const r=await saveSelections();
       if(r.status===200&&r.body.ok){msg(`Locked in — ${r.body.total_meals} meals for the week. You can change them until Friday.`,'ok');refresh();window.scrollTo(0,0);}
       else{msg(r.body.detail||'Could not save. Try again.','err');$('saveBtn').disabled=false;}
     };
@@ -129,7 +132,16 @@
     (async()=>{
       const me=await api('/api/me');
       if(me.status!==200||!me.body.ok){location.href='/app/';return;}
-      const {status,body}=await api('/api/menu/current');
+      // Fresh from Stripe checkout, the webhook that mirrors the new subscription can lag a few
+      // seconds — retry instead of telling a paying customer they have no plan.
+      const fromCheckout=new URLSearchParams(location.search).get('checkout')==='success';
+      let status,body;
+      for(let attempt=0;;attempt++){
+        ({status,body}=await api('/api/menu/current'));
+        if(!(fromCheckout&&status===200&&!body.has_active_sub&&attempt<5))break;
+        $('loading').textContent='Finalizing your subscription…';
+        await new Promise(r=>setTimeout(r,4000));
+      }
       $('loading').classList.add('hidden');
       if(status!==200){msg('Could not load the menu. Refresh to try again.','err');return;}
       if(!body.has_active_sub){
@@ -154,12 +166,40 @@
       }
       MENU=body.meals;MENU_WEEK=body.week_of;need=body.meals_per_week;locked=body.locked;
       (body.selections||[]).forEach(s=>{qty[s.meal_position]=s.qty;});
+      // MEALS-FIRST carryover: picks made on the public /menu before signup (gt_meal_picks) apply here
+      // automatically — same week, ordering open, and nothing saved server-side yet.
+      let autoPicks=false;
+      try{
+        const p=JSON.parse(localStorage.getItem('gt_meal_picks')||'null');
+        if(p&&p.week_of===MENU_WEEK&&!locked&&Array.isArray(p.selections)){
+          const already=Object.values(qty).some(q=>q>0);
+          if(!already){
+            const valid=new Set(MENU.map(m=>m.position));
+            p.selections.forEach(s=>{if(valid.has(s.position))qty[s.position]=s.qty;});
+            autoPicks=true;
+          }else{localStorage.removeItem('gt_meal_picks');}
+        }else if(p&&(p.week_of!==MENU_WEEK||locked)){localStorage.removeItem('gt_meal_picks');}
+      }catch(e){}
       const d=new Date(body.week_of+'T00:00:00Z');
       $('weekLine').textContent=`Week of ${d.toLocaleDateString('en-US',{month:'long',day:'numeric',timeZone:'UTC'})} · choose ${need} meals`;
-      if(locked){$('lockBanner').classList.remove('hidden');$('lockBanner').textContent='Ordering for this week has closed (Friday 11:59 am MT cutoff). These are your locked-in meals.';}
-      else{$('openBanner').classList.remove('hidden');$('openBanner').textContent='Pick by Friday 11:59 am MT — after that we lock your order and prep Saturday.';}
+      if(locked){$('lockBanner').classList.remove('hidden');$('lockBanner').textContent='Ordering for this week has closed (Friday 11:59 pm MT cutoff). These are your locked-in meals.';}
+      else{$('openBanner').classList.remove('hidden');$('openBanner').textContent='Pick by Friday 11:59 pm MT — after that we lock your order and prep Saturday.';}
       $('app').classList.remove('hidden');$('bar').classList.remove('hidden');
       renderMeals();refresh();
+      if(autoPicks){
+        const t=Object.values(qty).reduce((a,b)=>a+b,0);
+        if(t===need){
+          const r=await saveSelections();
+          if(r.status===200&&r.body.ok){
+            try{localStorage.removeItem('gt_meal_picks');}catch(e){}
+            msg(`Your ${r.body.total_meals} meals are locked in for the week 🎉 You can change them until Friday 11:59 pm MT.`,'ok');refresh();
+          }else{
+            msg('We loaded the meals you picked — hit Save to lock them in.','ok');
+          }
+        }else{
+          msg(`We loaded your picks — adjust to exactly ${need} meals and hit Save.`,'ok');
+        }
+      }
     })();
   </script>
 </body>

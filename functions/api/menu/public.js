@@ -5,7 +5,7 @@
 // back to the most recent published week so the page is never blank between publishes.
 import { json } from '../../_lib/respond.js';
 import { one } from '../../_lib/db.js';
-import { orderableWeek } from '../../_lib/menu.js';
+import { orderableWeek, orderingBlackout } from '../../_lib/menu.js';
 
 const CACHE = { 'Cache-Control': 'public, max-age=60' }; // fresh within a minute of a finalize
 
@@ -16,8 +16,13 @@ export async function onRequestGet(context) {
   let row = await one(env.DB, `SELECT week_of, label, meals_json FROM weekly_menus WHERE week_of = ? AND status = 'live'`, week);
   if (!row) row = await one(env.DB, `SELECT week_of, label, meals_json FROM weekly_menus WHERE status = 'live' ORDER BY week_of DESC LIMIT 1`);
 
-  if (!row) return json({ has_menu: false, week_of: null, label: null, meals: [] }, 200, CACHE);
+  if (!row) return json({ has_menu: false, week_of: null, label: null, meals: [], ordering_closed: orderingBlackout() }, 200, CACHE);
   let meals = [];
   try { meals = JSON.parse(row.meals_json); } catch { meals = []; }
-  return json({ has_menu: meals.length > 0, week_of: row.week_of, label: row.label, meals }, 200, CACHE);
+  // ordering_closed powers the public meals-first picker (Saturday blackout → steppers disabled).
+  // is_orderable distinguishes "this week's open menu" from the fallback display of a past week.
+  return json({
+    has_menu: meals.length > 0, week_of: row.week_of, label: row.label, meals,
+    ordering_closed: orderingBlackout(), is_orderable: row.week_of === week,
+  }, 200, CACHE);
 }

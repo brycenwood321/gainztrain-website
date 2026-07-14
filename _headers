@@ -18,8 +18,17 @@
 /data/*
   Cache-Control: public, max-age=300
 
-# Prep dashboard + labels page: NEVER cache. Staff (esp. the iOS Safari home-screen app) were getting a
+# Ops dashboard + labels page: NEVER cache. Staff (esp. the iOS Safari home-screen app) were getting a
 # stale copy that ignored fixes. no-store guarantees a fresh page every open. Libs under lib/ still cache.
+/app/ops/
+  Cache-Control: no-store, must-revalidate
+/app/ops/index.html
+  Cache-Control: no-store, must-revalidate
+/app/ops/meal-labels
+  Cache-Control: no-store, must-revalidate
+/app/ops/meal-labels.html
+  Cache-Control: no-store, must-revalidate
+# (kept during the transition until /app/ops/prep/ is deleted)
 /app/ops/prep/
   Cache-Control: no-store, must-revalidate
 /app/ops/prep/labels

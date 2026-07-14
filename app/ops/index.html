@@ -3587,9 +3587,10 @@
       if (e.target === document.getElementById("menu-overlay")) closeMenuOverlay();
     }
 
+    let ingRowSeq = 0;  // monotonic — Date.now() alone collides when rows are added in a tight loop (edit mode)
     function addIngredientRow() {
       const container = document.getElementById("ing-rows-container");
-      const rowId     = "ing-row-" + Date.now();
+      const rowId     = "ing-row-" + Date.now() + "-" + (++ingRowSeq);
       const ings      = allIngredients();
 
       const row = document.createElement("div");

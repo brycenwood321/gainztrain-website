@@ -7,7 +7,7 @@ import { json } from '../../_lib/respond.js';
 import { one } from '../../_lib/db.js';
 import { orderableWeek, orderingBlackout } from '../../_lib/menu.js';
 
-const CACHE = { 'Cache-Control': 'public, max-age=60' }; // fresh within a minute of a finalize
+const CACHE = { 'Cache-Control': 'no-store' }; // always fresh — a menu change shows immediately, no cache lag
 
 export async function onRequestGet(context) {
   const { env } = context;

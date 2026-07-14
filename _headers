@@ -29,6 +29,20 @@
 /app/ops/prep/index.html
   Cache-Control: no-store, must-revalidate
 
+# Menu pages: NEVER cache the HTML, so customers always see the current menu without clearing cache.
+# (These pages fetch the live menu data on load; only the small HTML shell is un-cached — its CSS/JS/images
+# under /assets/ still cache normally, so there's no real speed hit.)
+/menu/
+  Cache-Control: no-store, must-revalidate
+/menu
+  Cache-Control: no-store, must-revalidate
+/menu/index.html
+  Cache-Control: no-store, must-revalidate
+/app/menu/
+  Cache-Control: no-store, must-revalidate
+/app/menu/index.html
+  Cache-Control: no-store, must-revalidate
+
 /*.html
   Cache-Control: public, max-age=3600
 

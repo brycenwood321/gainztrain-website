@@ -3,7 +3,7 @@
 // publish-menu.js (which syncs from data/menus.json). A week finalized here is marked source='dashboard'
 // so the Wednesday cron publish (from menus.json) will NOT overwrite it (see publish-menu.js guard).
 //
-// AUTH: requireStaffOrAdmin — Brycen/Jayson hit "Finalize" while logged in as staff (session cookie),
+// AUTH: requireOwner — Brycen/Jayson hit "Finalize" while logged in as staff (session cookie),
 // or the admin token works for server-side runs.
 //
 // CUSTOMER "NEW MENU DROPPED" BLAST: built but GATED OFF. It only fires when env.MENU_BLAST_ENABLED ===
@@ -15,7 +15,7 @@
 // Target week defaults to the server's orderableWeek() (the week customers can order right now). A
 // client week_of is honored only if it's a future, unlocked Sunday.
 import { ok, fail } from '../../_lib/respond.js';
-import { requireStaffOrAdmin } from '../../_lib/admin.js';
+import { requireOwner } from '../../_lib/admin.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 import { orderableWeek } from '../../_lib/menu.js';
 
@@ -51,7 +51,7 @@ function normalizeMeal(m, i) {
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const denied = await requireStaffOrAdmin(context);
+  const denied = await requireOwner(context);
   if (denied) return denied;
 
   let body;

@@ -56,6 +56,7 @@ export async function onRequestGet(context) {
       first_name: customer.first_name,
       last_name: customer.last_name,
       role: customer.role,
+      is_owner: !!customer.is_owner,
       goal: customer.goal,
       sex: customer.sex,
       delivery_method: customer.delivery_method,

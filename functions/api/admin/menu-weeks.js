@@ -3,7 +3,7 @@
 // it has, where it came from (dashboard vs menus.json cron), and whether the kitchen has locked it (frozen).
 // The dashboard uses this to let Marissa build/publish a menu for any upcoming week, not just this one.
 import { ok } from '../../_lib/respond.js';
-import { requireStaffOrAdmin } from '../../_lib/admin.js';
+import { requireOwner } from '../../_lib/admin.js';
 import { all } from '../../_lib/db.js';
 import { orderableWeek } from '../../_lib/menu.js';
 
@@ -16,7 +16,7 @@ function addWeeks(iso, n) {
 }
 
 export async function onRequestGet(context) {
-  const denied = await requireStaffOrAdmin(context);
+  const denied = await requireOwner(context);
   if (denied) return denied;
   const { env } = context;
 

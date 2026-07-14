@@ -4,11 +4,11 @@
 //   ?limit=N   (default 100, max 300)
 //   ?since=ISO (optional: only rows at/after this timestamp)
 import { ok, fail } from '../../_lib/respond.js';
-import { requireStaffOrAdmin } from '../../_lib/admin.js';
+import { requireOwner } from '../../_lib/admin.js';
 import { all } from '../../_lib/db.js';
 
 export async function onRequestGet(context) {
-  const denied = await requireStaffOrAdmin(context);
+  const denied = await requireOwner(context);
   if (denied) return denied;
   const u = new URL(context.request.url);
   const limit = Math.min(300, Math.max(1, parseInt(u.searchParams.get('limit'), 10) || 100));

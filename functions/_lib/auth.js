@@ -86,8 +86,15 @@ export async function getSessionCustomer(context) {
   return { session, customer };
 }
 
+// Ops dashboard access. Everyone who can use the dashboard has role='staff' (the role CHECK constraint only
+// allows customer/staff). Owners are staff with is_owner=1 — that flag gates the owner-only tabs/data:
+//   OWNER (is_owner=1) — Brycen/Jayson/Marissa/Alyssa: full dashboard (all tabs, all data).
+//   STAFF (is_owner=0) — kitchen hires: prep tabs only (Orders/Assembly/Pickup/Delivery/Ingredients).
 export function isStaff(customer) {
   return !!customer && customer.role === 'staff';
+}
+export function isOwner(customer) {
+  return !!customer && customer.role === 'staff' && !!customer.is_owner;
 }
 
 export async function revokeSession(env, sessionId) {

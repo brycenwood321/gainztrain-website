@@ -7,11 +7,11 @@
 //                      customers with ≥4 locked weeks (the day-60 success-gate metric).
 // Staff-or-admin gated, read-only.
 import { ok } from '../../_lib/respond.js';
-import { requireStaffOrAdmin } from '../../_lib/admin.js';
+import { requireOwner } from '../../_lib/admin.js';
 import { all } from '../../_lib/db.js';
 
 export async function onRequestGet(context) {
-  const denied = await requireStaffOrAdmin(context);
+  const denied = await requireOwner(context);
   if (denied) return denied;
   const db = context.env.DB;
 

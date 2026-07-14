@@ -3,7 +3,7 @@
 // The customer "new menu dropped" blast fires HERE (gated by MENU_BLAST_ENABLED), i.e. at go-live.
 // BODY: { week_of: "YYYY-MM-DD" } — defaults to the orderable week.
 import { ok, fail } from '../../_lib/respond.js';
-import { requireStaffOrAdmin } from '../../_lib/admin.js';
+import { requireOwner } from '../../_lib/admin.js';
 import { one, all, run, nowIso } from '../../_lib/db.js';
 import { orderableWeek } from '../../_lib/menu.js';
 import { notify } from '../../_lib/notify.js';
@@ -13,7 +13,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const denied = await requireStaffOrAdmin(context);
+  const denied = await requireOwner(context);
   if (denied) return denied;
 
   let body;

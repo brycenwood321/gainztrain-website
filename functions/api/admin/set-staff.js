@@ -3,14 +3,14 @@
 // others). Creates the customer if the email isn't on file yet (e.g. Marissa, who had no account).
 //   Body { email, staff?=true, first_name?, last_name?, phone?, password? }
 import { ok, fail, readJson } from '../../_lib/respond.js';
-import { requireAdmin } from '../../_lib/admin.js';
+import { requireOwner } from '../../_lib/admin.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 import { randomToken, hashPassword } from '../../_lib/crypto.js';
 import { str, normEmail, toE164 } from '../../_lib/validate.js';
 
 export async function onRequestPost(context) {
   const { env } = context;
-  const denied = await requireAdmin(context);
+  const denied = await requireOwner(context);
   if (denied) return denied;
 
   const body = await readJson(context.request);

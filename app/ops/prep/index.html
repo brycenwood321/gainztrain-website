@@ -1824,6 +1824,13 @@
     #auth-btn:disabled { opacity: .6; }
     .auth-err { color: #f87171; font-size: .88rem; margin-top: 12px; min-height: 18px; }
 
+    /* Owner-tab placeholders (Overview/Customers/Activity/Marketing) until their content ports in. */
+    .owner-placeholder { max-width: 560px; margin: 48px auto; padding: 0 24px; text-align: center; }
+    .owner-placeholder h2 { font-family: "Barlow Condensed", sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; font-size: 1.9rem; margin-bottom: 10px; }
+    .owner-placeholder p { color: #5a524e; margin-bottom: 8px; }
+    .owner-placeholder-note { color: #9a908c; font-size: .9rem; }
+    .owner-placeholder-btn { display: inline-block; margin-top: 18px; background: #ff6b35; color: #fff; font-weight: 800; padding: 12px 20px; border-radius: 10px; text-decoration: none; }
+
     /* ── MOBILE (phones) ── finger-friendly tap targets + tighter padding. The dashboard was built for
        desktop; this makes the phone-used surfaces (tabs, Assembly, scan bar) usable on a small screen. */
     @media (max-width: 640px) {
@@ -1890,10 +1897,21 @@
       const btn = document.getElementById("auth-btn");
       const isStaff = (d) => d && d.customer && (d.customer.role === "staff" || d.customer.role === "admin");
 
+      // Owner vs staff: owners (is_owner) see every tab; plain staff only see the prep tabs. This hides the
+      // owner-only nav — the real enforcement is server-side (owner-only endpoints return 403 for staff).
+      function applyRole(d) {
+        const owner = !!(d && d.customer && d.customer.is_owner);
+        window.GT_IS_OWNER = owner;
+        if (!owner) document.querySelectorAll(".owner-only").forEach((el) => { el.style.display = "none"; });
+      }
+
       async function check() {
         try {
           const r = await fetch("/api/me", { credentials: "include" });
-          if (r.ok && isStaff(await r.json())) { gate.style.display = "none"; return; }
+          if (r.ok) {
+            const d = await r.json();
+            if (isStaff(d)) { applyRole(d); gate.style.display = "none"; return; }
+          }
         } catch { /* fall through to login */ }
         checking.style.display = "none";
         form.style.display = "";
@@ -1932,14 +1950,19 @@
   <div id="toast"></div>
 
   <!-- ── TAB BAR ── -->
+  <!-- owner-only tabs are hidden for plain staff by the auth gate (and their data endpoints are server-gated). -->
   <div class="tab-bar">
     <div class="tab-bar-title"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></div>
+    <div class="tab owner-only" data-tab="overview">Overview</div>
     <div class="tab active" data-tab="orders">Orders</div>
     <div class="tab" data-tab="assembly">Assembly</div>
     <div class="tab" data-tab="pickup">Pickup</div>
     <div class="tab" data-tab="delivery">Delivery</div>
-    <div class="tab" data-tab="menu">Menu</div>
+    <div class="tab owner-only" data-tab="menu">Menu</div>
     <div class="tab" data-tab="ingredients">Ingredients</div>
+    <div class="tab owner-only" data-tab="customers">Customers</div>
+    <div class="tab owner-only" data-tab="activity">Activity</div>
+    <div class="tab owner-only" data-tab="marketing">Marketing</div>
     <div class="tab-spacer"></div>
     <a href="/app/" class="back-link">← My Account</a>
     <!-- Mobile-only: current tab name + hamburger -->
@@ -1950,13 +1973,43 @@
   <!-- Mobile stacked menu (mirrors gainztrainprep.com nav) -->
   <div class="tab-mobile-menu" id="tab-mobile-menu">
     <button class="tab-mobile-close" id="tab-mobile-close" aria-label="Close">✕</button>
+    <a data-goto="overview" class="owner-only">Overview</a>
     <a data-goto="orders" class="active">Orders</a>
     <a data-goto="assembly">Assembly</a>
     <a data-goto="pickup">Pickup</a>
     <a data-goto="delivery">Delivery</a>
-    <a data-goto="menu">Menu</a>
+    <a data-goto="menu" class="owner-only">Menu</a>
     <a data-goto="ingredients">Ingredients</a>
+    <a data-goto="customers" class="owner-only">Customers</a>
+    <a data-goto="activity" class="owner-only">Activity</a>
+    <a data-goto="marketing" class="owner-only">Marketing</a>
     <a href="/app/" class="tab-mobile-account">← My Account</a>
+  </div>
+
+  <!-- ── OWNER-ONLY TABS (placeholders — content ports from the business dashboard next) ── -->
+  <div class="tab-panel" id="tab-overview">
+    <div class="owner-placeholder"><h2>Overview</h2>
+      <p>Business overview — active subscriptions, revenue, and system health.</p>
+      <p class="owner-placeholder-note">This is moving into this dashboard next. For now it lives on the business dashboard.</p>
+      <a class="owner-placeholder-btn" href="/app/ops/">Open business dashboard →</a></div>
+  </div>
+  <div class="tab-panel" id="tab-customers">
+    <div class="owner-placeholder"><h2>Customers</h2>
+      <p>Customer list, subscriptions, and meal picks.</p>
+      <p class="owner-placeholder-note">Moving here next — for now, use the business dashboard.</p>
+      <a class="owner-placeholder-btn" href="/app/ops/">Open business dashboard →</a></div>
+  </div>
+  <div class="tab-panel" id="tab-activity">
+    <div class="owner-placeholder"><h2>Activity</h2>
+      <p>Recent account activity (signups, pauses, cancels, payments).</p>
+      <p class="owner-placeholder-note">Moving here next — for now, use the business dashboard.</p>
+      <a class="owner-placeholder-btn" href="/app/ops/">Open business dashboard →</a></div>
+  </div>
+  <div class="tab-panel" id="tab-marketing">
+    <div class="owner-placeholder"><h2>Marketing</h2>
+      <p>Attribution funnel, spend, and CPL/CAC.</p>
+      <p class="owner-placeholder-note">Moving here next — for now, use the business dashboard.</p>
+      <a class="owner-placeholder-btn" href="/app/ops/">Open business dashboard →</a></div>
   </div>
 
   <!-- ── ORDERS TAB ── -->

@@ -3,13 +3,13 @@
 // funnel can compute real CPL/CAC. GET: recent entries + per-channel totals. POST: add one entry
 // { day: 'YYYY-MM-DD', channel: meta|google|gbp|tiktok|marketplace|other, spend: dollars, campaign?, notes? }
 import { ok, fail, readJson } from '../../_lib/respond.js';
-import { requireStaffOrAdmin } from '../../_lib/admin.js';
+import { requireOwner } from '../../_lib/admin.js';
 import { all, run, nowIso } from '../../_lib/db.js';
 
 const CHANNELS = new Set(['meta', 'google', 'gbp', 'tiktok', 'marketplace', 'other']);
 
 export async function onRequestGet(context) {
-  const denied = await requireStaffOrAdmin(context);
+  const denied = await requireOwner(context);
   if (denied) return denied;
   const entries = await all(context.env.DB,
     `SELECT id, day, channel, campaign, spend_cents, notes FROM marketing_spend ORDER BY day DESC, id DESC LIMIT 200`);
@@ -21,7 +21,7 @@ export async function onRequestGet(context) {
 }
 
 export async function onRequestPost(context) {
-  const denied = await requireStaffOrAdmin(context);
+  const denied = await requireOwner(context);
   if (denied) return denied;
   const b = await readJson(context.request);
   const day = String(b.day || '').slice(0, 10);

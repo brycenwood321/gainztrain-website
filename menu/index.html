@@ -216,7 +216,6 @@
         // MEALS-FIRST FLOW: pick meals here → account + checkout on /start → picks auto-save in the app.
         // Picking is enabled only for the actually-orderable week outside the Saturday blackout.
         var pickable = cur.is_orderable !== false && !cur.ordering_closed;
-        try { window.__gtDebug = { io: cur.is_orderable, oc: cur.ordering_closed, pickable: pickable, week: cur.week_of, keys: Object.keys(cur) }; } catch (e) {}
         var plans = [], MINM = 6, MAXM = 16;
         try {
           var pr = await fetch('/api/plans').then(function (r) { return r.json(); });
@@ -290,7 +289,7 @@
             '<div class="macro-pill"><span class="macro-val">' + esc(m.fat) + 'g</span><span class="macro-key">Fat</span></div>' +
             '<div class="macro-divider"></div>' +
             '<div class="macro-pill"><span class="macro-val">' + esc(m.calories) + '</span><span class="macro-key">Cal</span></div>' +
-            '</div></div></div>';
+            '</div>' + picker + '</div></div>';
         }).join('');
         // Reveal the meals + hide the loader/empty message IMMEDIATELY, before any picker/cart wiring.
         // Previously an error in the cart wiring (which runs AFTER the meals are built) hit the outer catch

@@ -5,10 +5,13 @@
 // device (localStorage was per-browser and lost meals on a device switch). Keys are whitelisted so this
 // can't become an open data dump. Auth: requireStaffOrAdmin (session cookie or admin token).
 import { json, fail } from '../../_lib/respond.js';
-import { requireStaffOrAdmin } from '../../_lib/admin.js';
+import { requireStaffOrAdmin, requireOwner } from '../../_lib/admin.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 
-const ALLOWED = new Set(['meal_library', 'custom_ingredients']);
+const ALLOWED = new Set(['meal_library', 'custom_ingredients', 'ingredient_library']);
+// Keys whose WRITES are owner-only (reads stay staff-level so the kitchen shopping list can use them).
+// The ingredient library drives shopping-list quantities + costs, so only owners may edit it.
+const OWNER_WRITE = new Set(['ingredient_library']);
 // Per-week menu drafts (menu_week_YYYYMMDD) also sync here so the Menu + Ingredients tabs populate on any
 // device (phone), not just the laptop the menu was built on.
 const MENU_DRAFT_RE = /^menu_week_\d{8}$/;
@@ -27,12 +30,13 @@ export async function onRequestGet(context) {
 }
 
 export async function onRequestPost(context) {
-  const denied = await requireStaffOrAdmin(context);
-  if (denied) return denied;
   let body;
   try { body = await context.request.json(); } catch { return fail(400, 'bad_json', 'Body must be JSON.'); }
   const key = String(body.key || '');
   if (!keyAllowed(key)) return fail(400, 'bad_key', 'Unknown store key.');
+  // Owner-only keys (ingredient library) require owner; everything else is staff-writable.
+  const denied = OWNER_WRITE.has(key) ? await requireOwner(context) : await requireStaffOrAdmin(context);
+  if (denied) return denied;
   if (!('value' in body)) return fail(400, 'no_value', 'Missing value.');
   const valueJson = JSON.stringify(body.value);
   if (valueJson.length > MAX_BYTES) return fail(413, 'too_large', 'Store value too large.');

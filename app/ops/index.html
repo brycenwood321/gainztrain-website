@@ -1475,6 +1475,23 @@
       margin-top: 2px;
     }
 
+    /* ── Ingredient Library (owner-only management table) ── */
+    .ing-lib { margin: 22px 16px 40px; padding: 16px; border: 1px solid #e6e0dc; border-radius: 12px; background: #fbf9f7; }
+    .ing-lib-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .ing-lib-title { font-family: 'Barlow Condensed', sans-serif; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #1a1614; }
+    .ing-lib-sub { font-size: 0.76rem; color: #7a7270; margin-top: 2px; max-width: 52ch; }
+    .ing-lib-add-btn { flex: none; padding: 8px 14px; border-radius: 8px; font-size: 0.82rem; font-weight: 700; border: 1px solid #1a1614; background: #1a1614; color: #fff; cursor: pointer; }
+    .ing-lib-add-btn:hover { opacity: 0.88; }
+    .ing-lib-table-wrap { overflow-x: auto; }
+    .ing-lib-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .ing-lib-table th { text-align: left; padding: 6px 10px; color: #7a7270; font-weight: 700; border-bottom: 1px solid #e6e0dc; white-space: nowrap; }
+    .ing-lib-table td { padding: 6px 10px; border-bottom: 1px solid #efe9e5; color: #1a1614; white-space: nowrap; }
+    .ing-lib-table tr:last-child td { border-bottom: none; }
+    .ing-lib-misc { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #fff3e0; color: #b45309; }
+    .ing-lib-edit { padding: 4px 12px; border-radius: 6px; font-size: 0.76rem; font-weight: 700; border: 1px solid #cfc7c2; background: #fff; color: #1a1614; cursor: pointer; }
+    .ing-lib-edit:hover { border-color: #7a7270; }
+    .ing-lib-dash { color: #b8b0ab; }
+
     .ing-copy-btn {
       margin-left: auto;
       padding: 8px 14px;
@@ -2130,6 +2147,25 @@
         <div class="ing-empty">Switch to this tab to load ingredients.</div>
       </div>
 
+    </div>
+
+    <!-- Owner-only: editable ingredient library (shrinkage + purchase units live here now, not in code) -->
+    <div class="ing-lib owner-only" id="ing-lib-panel">
+      <div class="ing-lib-head">
+        <div>
+          <div class="ing-lib-title">⚙ Ingredient Library</div>
+          <div class="ing-lib-sub">The master list that drives shopping quantities. Editing here changes the math for everyone. Owner-only.</div>
+        </div>
+        <button class="ing-lib-add-btn" onclick="openLibEditor()">+ Add ingredient</button>
+      </div>
+      <div class="ing-lib-table-wrap">
+        <table class="ing-lib-table" id="ing-lib-table">
+          <thead>
+            <tr><th>Name</th><th>Unit</th><th>g / unit</th><th>Shrinkage</th><th>Pkg size</th><th>Misc?</th><th></th></tr>
+          </thead>
+          <tbody id="ing-lib-tbody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -2989,8 +3025,39 @@
       "Onions":          { unit: "lbs", g: 453.59 },
     };
 
-    // Returns unit data for an ingredient: checks UNITS table first, then custom ingredients
+    // ── INGREDIENT LIBRARY (server-backed, owner-editable) ──────────────────────────────────────────
+    // The editable ingredient library (ops_kv key 'ingredient_library') is the SOURCE OF TRUTH for
+    // shrinkage + purchase-unit conversions. The hardcoded SHRINKAGE/UNITS tables above are now only a
+    // bootstrap FALLBACK used if the library hasn't loaded yet (offline / not logged in).
+    // Each record: { name, unit, grams_per_unit, shrinkage, package_size, package_size_unit, is_misc }.
+    let INGREDIENT_LIB = {};   // name → record
+    function ingLibList() { return Object.values(INGREDIENT_LIB).sort((a,b) => a.name.localeCompare(b.name)); }
+    function ingRec(name) { return INGREDIENT_LIB[name] || null; }
+    async function loadIngredientLib() {
+      try {
+        const res = await fetch("/api/admin/ops-store?key=ingredient_library", { credentials: "include" });
+        if (!res.ok) return;
+        const v = (await res.json()).value;
+        if (Array.isArray(v) && v.length) {
+          const map = {};
+          v.forEach(r => { if (r && r.name) map[r.name] = r; });
+          INGREDIENT_LIB = map;
+        }
+      } catch { /* offline → keep whatever's loaded (or the hardcoded fallback) */ }
+    }
+    // Raw-per-cooked multiplier. Library first, then the legacy hardcoded table. null = unknown.
+    function ingShrinkage(name) {
+      const r = INGREDIENT_LIB[name];
+      if (r && r.shrinkage != null && r.shrinkage !== "") {
+        const s = parseFloat(r.shrinkage);
+        if (!isNaN(s)) return s;
+      }
+      return SHRINKAGE[name] != null ? SHRINKAGE[name] : null;
+    }
+    // Returns unit data for an ingredient: library first, then the legacy UNITS table, then custom ingredients.
     function getIngUnit(name) {
+      const r = INGREDIENT_LIB[name];
+      if (r && r.unit && parseFloat(r.grams_per_unit) > 0) return { unit: r.unit, g: parseFloat(r.grams_per_unit) };
       if (UNITS[name]) return UNITS[name];
       const custom = loadCustomIngs().find(i => i.name === name);
       if (custom && custom.unit && parseFloat(custom.conversion) > 0) {
@@ -3059,6 +3126,7 @@
 
     async function hydrateSharedStores() {
       let changed = false;
+      await loadIngredientLib();  // pull the editable ingredient library (shrinkage + units source of truth)
       for (const [key, lsKey] of SHARED_STORES) {
         try {
           const res = await fetch(`/api/admin/ops-store?key=${key}`, { credentials: "include" });
@@ -3078,7 +3146,12 @@
       }
       if (changed) { try { initMenuTab(); } catch { /* menu tab may not be active yet */ } }
     }
-    function allIngredients()    { return [...DEFAULT_INGREDIENTS, ...loadCustomIngs().map(i => i.name)]; }
+    // Ingredient names for the meal-builder dropdown: library first (source of truth), then legacy
+    // defaults + any custom ingredients, de-duplicated so nothing shows twice.
+    function allIngredients() {
+      const names = [...ingLibList().map(r => r.name), ...DEFAULT_INGREDIENTS, ...loadCustomIngs().map(i => i.name)];
+      return [...new Set(names.filter(Boolean))];
+    }
     function menuUid()           { return "m" + Date.now() + Math.random().toString(36).slice(2,6); }
 
     let menuSwappingId  = null;  // pill ID currently being swapped
@@ -3673,46 +3746,133 @@
     }
 
     // ── ADD INGREDIENT MINI-OVERLAY ──
+    // The Add/Edit Ingredient overlay writes to the ingredient LIBRARY (source of truth). It's opened two
+    // ways: from the meal-builder "+ Add new ingredient" select (menuIngSelectEl set → also selects it back
+    // into the meal), or from the Ingredient Library table's Add/Edit buttons (menuIngSelectEl = null).
+    let libEditOrigName = null;  // set when EDITING an existing record (supports rename)
+
+    function fillIngOverlay(rec) {
+      document.getElementById("new-ing-name").value        = rec ? (rec.name || "") : "";
+      document.getElementById("new-ing-misc").checked      = rec ? !!rec.is_misc : false;
+      document.getElementById("new-ing-unit").value        = rec ? (rec.unit || "") : "";
+      document.getElementById("new-ing-conversion").value  = rec && rec.grams_per_unit != null ? rec.grams_per_unit : "";
+      document.getElementById("new-ing-shrinkage").value   = rec && rec.shrinkage != null ? rec.shrinkage : "";
+      document.getElementById("new-ing-pkg").value         = rec && rec.package_size != null ? rec.package_size : "";
+      document.getElementById("new-ing-pkg-unit").value    = rec ? (rec.package_size_unit || "") : "";
+      toggleMiscFields();
+    }
+
+    function toggleMiscFields() {
+      const misc = document.getElementById("new-ing-misc").checked;
+      document.getElementById("new-ing-measured-fields").style.display = misc ? "none" : "";
+    }
+
+    // Opened from the meal-builder "+ Add new ingredient" option.
     function openIngOverlay() {
-      document.getElementById("new-ing-name").value       = "";
-      document.getElementById("new-ing-unit").value       = "";
-      document.getElementById("new-ing-conversion").value = "";
+      libEditOrigName = null;
+      document.getElementById("ing-overlay-title").textContent = "Add New Ingredient";
+      fillIngOverlay(null);
+      document.getElementById("ing-overlay").style.display = "flex";
+    }
+
+    // Opened from the Ingredient Library table. name → edit that record; no name → add fresh.
+    function openLibEditor(name) {
+      menuIngSelectEl = null;
+      libEditOrigName = name || null;
+      const rec = name ? ingRec(name) : null;
+      document.getElementById("ing-overlay-title").textContent = name ? "Edit Ingredient" : "Add New Ingredient";
+      fillIngOverlay(rec);
       document.getElementById("ing-overlay").style.display = "flex";
     }
 
     function closeIngOverlay() {
       document.getElementById("ing-overlay").style.display = "none";
       menuIngSelectEl = null;
+      libEditOrigName = null;
     }
 
     function handleIngOverlayClick(e) {
       if (e.target === document.getElementById("ing-overlay")) closeIngOverlay();
     }
 
+    function saveIngredientLibrary() { pushSharedStore("ingredient_library", ingLibList()); }
+
     function saveNewIngredient() {
-      const name       = document.getElementById("new-ing-name").value.trim();
-      const unit       = document.getElementById("new-ing-unit").value.trim();
-      const conversion = document.getElementById("new-ing-conversion").value.trim();
+      const name   = document.getElementById("new-ing-name").value.trim();
+      const isMisc = document.getElementById("new-ing-misc").checked;
+      const unit   = document.getElementById("new-ing-unit").value.trim();
+      const convStr = document.getElementById("new-ing-conversion").value.trim();
+      const shrStr  = document.getElementById("new-ing-shrinkage").value.trim();
+      const pkgStr  = document.getElementById("new-ing-pkg").value.trim();
+      const pkgUnit = document.getElementById("new-ing-pkg-unit").value.trim();
 
       if (!name) { showToast("Please enter an ingredient name."); return; }
-      if (!unit) { showToast("Please enter a unit (oz, g, cups…)"); return; }
+      if (!isMisc) {
+        if (!unit) { showToast("Enter a purchase unit (lbs, oz, cups…), or check Misc."); return; }
+        if (!(parseFloat(convStr) > 0)) { showToast("Enter grams per 1 unit (a number above 0), or check Misc."); return; }
+      }
+      // Guard against a duplicate name (unless we're editing that same record).
+      if ((!libEditOrigName || libEditOrigName !== name) && INGREDIENT_LIB[name]) {
+        showToast(`"${name}" already exists in the library.`); return;
+      }
 
-      const custom = loadCustomIngs();
-      custom.push({ name, unit, conversion });
-      saveCustomIngs(custom);
+      const rec = isMisc
+        ? { name, unit: null, grams_per_unit: null, shrinkage: null, package_size: null, package_size_unit: null, is_misc: true }
+        : {
+            name,
+            unit,
+            grams_per_unit: parseFloat(convStr),
+            shrinkage: shrStr !== "" && !isNaN(parseFloat(shrStr)) ? parseFloat(shrStr) : null,
+            package_size: pkgStr !== "" && !isNaN(parseFloat(pkgStr)) ? parseFloat(pkgStr) : null,
+            package_size_unit: pkgUnit || null,
+            is_misc: false,
+          };
 
-      // Update the triggering select and choose the new ingredient
+      // If we renamed an existing record, drop the old key.
+      if (libEditOrigName && libEditOrigName !== name) delete INGREDIENT_LIB[libEditOrigName];
+      INGREDIENT_LIB[name] = rec;
+      saveIngredientLibrary();
+
+      // If this came from the meal builder, add + select the new name in that dropdown.
       if (menuIngSelectEl) {
-        const opt = document.createElement("option");
-        opt.value = name;
-        opt.textContent = name;
-        // Insert before the "Add new" option (last child)
-        menuIngSelectEl.insertBefore(opt, menuIngSelectEl.lastElementChild);
+        if (![...menuIngSelectEl.options].some(o => o.value === name)) {
+          const opt = document.createElement("option");
+          opt.value = name; opt.textContent = name;
+          menuIngSelectEl.insertBefore(opt, menuIngSelectEl.lastElementChild);
+        }
         menuIngSelectEl.value = name;
       }
 
+      const wasEdit = !!libEditOrigName;
       closeIngOverlay();
-      showToast(`"${name}" added to ingredients.`);
+      renderIngLibrary();
+      try { renderIngPills(); } catch { /* ingredients list may not be built yet */ }
+      showToast(`"${name}" ${wasEdit ? "updated" : "added"} in the ingredient library.`);
+    }
+
+    // Owner-only management table under the Ingredients tab.
+    function renderIngLibrary() {
+      const tbody = document.getElementById("ing-lib-tbody");
+      if (!tbody) return;
+      const rows = ingLibList();
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="ing-lib-dash">No ingredients yet — add one to get started.</td></tr>`;
+        return;
+      }
+      const dash = '<span class="ing-lib-dash">—</span>';
+      tbody.innerHTML = rows.map(r => {
+        const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+        const pkg = r.package_size != null ? `${r.package_size}${r.package_size_unit ? " " + esc(r.package_size_unit) : ""}` : dash;
+        return `<tr>
+          <td>${esc(r.name)}</td>
+          <td>${r.unit ? esc(r.unit) : dash}</td>
+          <td>${r.grams_per_unit != null ? r.grams_per_unit : dash}</td>
+          <td>${r.shrinkage != null ? r.shrinkage : dash}</td>
+          <td>${pkg}</td>
+          <td>${r.is_misc ? '<span class="ing-lib-misc">misc</span>' : dash}</td>
+          <td><button class="ing-lib-edit" onclick="openLibEditor('${esc(r.name).replace(/'/g,"\\'")}')">Edit</button></td>
+        </tr>`;
+      }).join("");
     }
 
     // ── FINALIZE MENU ──
@@ -3840,9 +4000,11 @@
     }
 
     async function initIngredientsTab() {
-      await hydrateMenuDraft();  // shopping list derives from the confirmed menu — pull the shared draft first
+      await hydrateMenuDraft();     // shopping list derives from the confirmed menu — pull the shared draft first
+      await loadIngredientLib();    // refresh shrinkage/unit data before computing quantities
       renderIngChecklist();
       renderIngPills();
+      renderIngLibrary();           // owner-only management table
     }
 
     function renderIngChecklist() {
@@ -3902,7 +4064,7 @@
         if (pill.isMisc) {
           qtyHtml = `<div class="ing-qty-tbd">shop manually</div>`;
         } else if (pill.cookedG > 0) {
-          const shrink  = SHRINKAGE[pill.name];
+          const shrink  = ingShrinkage(pill.name);
           const cookedG = Math.round(pill.cookedG);
           if (shrink != null) {
             const rawG    = Math.round(pill.cookedG * shrink);
@@ -3968,7 +4130,7 @@
         if (p.isMisc) {
           qty = "shop manually";
         } else if (p.cookedG > 0) {
-          const shrink = SHRINKAGE[p.name];
+          const shrink = ingShrinkage(p.name);
           if (shrink != null) {
             const rawG    = Math.round(p.cookedG * shrink);
             const unitDef = getIngUnit(p.name);
@@ -4769,21 +4931,41 @@
   <div id="ing-overlay" class="menu-overlay-bg ing-overlay" style="display:none" onclick="handleIngOverlayClick(event)">
     <div class="menu-modal mini-modal">
       <div class="menu-modal-head">
-        <div class="menu-modal-title">Add New Ingredient</div>
+        <div class="menu-modal-title" id="ing-overlay-title">Add New Ingredient</div>
         <button class="menu-modal-close" onclick="closeIngOverlay()">✕</button>
       </div>
       <div class="menu-modal-body">
         <div class="menu-field-group">
           <label class="menu-field-label">Name *</label>
-          <input type="text" id="new-ing-name" class="menu-field-input" placeholder="e.g. Quinoa" />
+          <input type="text" id="new-ing-name" class="menu-field-input" placeholder="e.g. Quinoa (singular)" />
         </div>
-        <div class="menu-field-group">
-          <label class="menu-field-label">Unit *</label>
-          <input type="text" id="new-ing-unit" class="menu-field-input" placeholder="e.g. oz, g, cups" />
-        </div>
-        <div class="menu-field-group">
-          <label class="menu-field-label">Grams per 1 unit (optional)</label>
-          <input type="text" id="new-ing-conversion" class="menu-field-input" placeholder="e.g. 453.59 for lbs, 28.35 for oz" />
+        <label class="menu-field-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px;">
+          <input type="checkbox" id="new-ing-misc" onchange="toggleMiscFields()" style="width:auto;" />
+          Misc / eyeball item (no quantity math — sauces, garnishes)
+        </label>
+        <div id="new-ing-measured-fields">
+          <div class="menu-field-group">
+            <label class="menu-field-label">Purchase unit *</label>
+            <input type="text" id="new-ing-unit" class="menu-field-input" placeholder="e.g. lbs, oz, cups, each" />
+          </div>
+          <div class="menu-field-group">
+            <label class="menu-field-label">Grams per 1 unit *</label>
+            <input type="text" id="new-ing-conversion" class="menu-field-input" placeholder="e.g. 453.59 for lbs, 28.34 for oz" />
+          </div>
+          <div class="menu-field-group">
+            <label class="menu-field-label">Shrinkage (raw ÷ cooked)</label>
+            <input type="text" id="new-ing-shrinkage" class="menu-field-input" placeholder="e.g. 1.8 chicken · 0.33 rice (expands) · 1.0 canned" />
+          </div>
+          <div class="menu-field-group" style="display:flex;gap:8px;">
+            <div style="flex:2;">
+              <label class="menu-field-label">Package size (optional, display only)</label>
+              <input type="text" id="new-ing-pkg" class="menu-field-input" placeholder="e.g. 4" />
+            </div>
+            <div style="flex:1;">
+              <label class="menu-field-label">Pkg unit</label>
+              <input type="text" id="new-ing-pkg-unit" class="menu-field-input" placeholder="lbs" />
+            </div>
+          </div>
         </div>
       </div>
       <div class="menu-modal-footer">

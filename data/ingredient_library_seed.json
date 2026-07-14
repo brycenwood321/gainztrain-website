@@ -1,0 +1,263 @@
+[
+  {
+    "name": "Chicken Breast",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.8,
+    "package_size": 4,
+    "package_size_unit": "lbs",
+    "is_misc": false
+  },
+  {
+    "name": "Ground Beef",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.15,
+    "package_size": 1,
+    "package_size_unit": "lbs",
+    "is_misc": false
+  },
+  {
+    "name": "Ground Turkey",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.27,
+    "package_size": 1,
+    "package_size_unit": "lbs",
+    "is_misc": false
+  },
+  {
+    "name": "Sirloin Steak",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.3,
+    "package_size": 1,
+    "package_size_unit": "lbs",
+    "is_misc": false
+  },
+  {
+    "name": "Broccoli",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.15,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": false
+  },
+  {
+    "name": "Zucchini",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.5,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": false
+  },
+  {
+    "name": "Squash",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.5,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": false
+  },
+  {
+    "name": "Bell Pepper",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.35,
+    "package_size": 0.33,
+    "package_size_unit": "lbs",
+    "is_misc": false
+  },
+  {
+    "name": "Jasmine Rice",
+    "unit": "cups",
+    "grams_per_unit": 185,
+    "shrinkage": 0.33,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": false
+  },
+  {
+    "name": "Potato",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.5,
+    "package_size": 1,
+    "package_size_unit": "lbs",
+    "is_misc": false
+  },
+  {
+    "name": "Sweet Potato",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.5,
+    "package_size": 1,
+    "package_size_unit": "lbs",
+    "is_misc": false
+  },
+  {
+    "name": "Carrot",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.3,
+    "package_size": 1,
+    "package_size_unit": "lbs",
+    "is_misc": false
+  },
+  {
+    "name": "Onion",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.8,
+    "package_size": 0.4,
+    "package_size_unit": "lbs",
+    "is_misc": false
+  },
+  {
+    "name": "Green Bean",
+    "unit": "lbs",
+    "grams_per_unit": 453.59,
+    "shrinkage": 1.4,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": false
+  },
+  {
+    "name": "Protein Pasta",
+    "unit": "oz",
+    "grams_per_unit": 28.34,
+    "shrinkage": 0.45,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": false
+  },
+  {
+    "name": "Black Bean",
+    "unit": "oz",
+    "grams_per_unit": 28.34,
+    "shrinkage": 1.0,
+    "package_size": 15,
+    "package_size_unit": "oz",
+    "is_misc": false
+  },
+  {
+    "name": "Kidney Bean",
+    "unit": "oz",
+    "grams_per_unit": 28.34,
+    "shrinkage": 1.0,
+    "package_size": 15,
+    "package_size_unit": "oz",
+    "is_misc": false
+  },
+  {
+    "name": "Pinto Bean",
+    "unit": "oz",
+    "grams_per_unit": 28.34,
+    "shrinkage": 1.0,
+    "package_size": 15,
+    "package_size_unit": "oz",
+    "is_misc": false
+  },
+  {
+    "name": "Corn",
+    "unit": "oz",
+    "grams_per_unit": 28.34,
+    "shrinkage": 1.0,
+    "package_size": 15,
+    "package_size_unit": "oz",
+    "is_misc": false
+  },
+  {
+    "name": "Roasted Tomato",
+    "unit": "oz",
+    "grams_per_unit": 28.34,
+    "shrinkage": 1.0,
+    "package_size": 15,
+    "package_size_unit": "oz",
+    "is_misc": false
+  },
+  {
+    "name": "Cottage Cheese",
+    "unit": "cups",
+    "grams_per_unit": 225,
+    "shrinkage": 1.0,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": false
+  },
+  {
+    "name": "Marinara Sauce",
+    "unit": "oz",
+    "grams_per_unit": 28.34,
+    "shrinkage": 1.0,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": false
+  },
+  {
+    "name": "Chipotle Sauce",
+    "unit": "oz",
+    "grams_per_unit": 28.34,
+    "shrinkage": 1.0,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": true
+  },
+  {
+    "name": "Teriyaki Sauce",
+    "unit": "oz",
+    "grams_per_unit": 28.34,
+    "shrinkage": 1.0,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": true
+  },
+  {
+    "name": "BBQ Sauce",
+    "unit": "oz",
+    "grams_per_unit": 28.34,
+    "shrinkage": 1.0,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": true
+  },
+  {
+    "name": "Cilantro",
+    "unit": null,
+    "grams_per_unit": null,
+    "shrinkage": null,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": true
+  },
+  {
+    "name": "Lime",
+    "unit": null,
+    "grams_per_unit": null,
+    "shrinkage": null,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": true
+  },
+  {
+    "name": "Parsley",
+    "unit": null,
+    "grams_per_unit": null,
+    "shrinkage": null,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": true
+  },
+  {
+    "name": "Hot Honey",
+    "unit": null,
+    "grams_per_unit": null,
+    "shrinkage": null,
+    "package_size": null,
+    "package_size_unit": null,
+    "is_misc": true
+  }
+]

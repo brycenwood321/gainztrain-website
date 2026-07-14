@@ -202,7 +202,9 @@
       try {
         // Reads live from D1 (the same source the ordering app + prep-dashboard Finalize write to), so a
         // finalized menu shows here automatically — no more editing data/menus.json by hand.
-        var res = await fetch('/api/menu/public', { cache: 'no-cache' });
+        // Cache-bust so the browser can never serve a stale menu response (a stale is_orderable was hiding
+        // the "Add to your week" steppers even after the menu itself updated).
+        var res = await fetch('/api/menu/public?t=' + Date.now(), { cache: 'no-store' });
         if (!res.ok) throw new Error('fetch ' + res.status);
         var cur = await res.json();
         if (!cur || !Array.isArray(cur.meals) || !cur.meals.length) throw new Error('no menu');

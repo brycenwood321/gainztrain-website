@@ -46,6 +46,13 @@ export async function onRequest(context) {
     if (denied) return denied;
   }
 
+  // The unified ops/prep dashboard moved from /app/ops/prep/ to /app/ops/ (2026-07). Permanently
+  // redirect any old bookmark, home-screen app, or link (incl. the old /app/ops/prep/labels.html)
+  // to the new dashboard root so nothing dead-ends after the prep folder is deleted.
+  if (/^\/app\/ops\/prep(\/|$)/i.test(norm)) {
+    return Response.redirect('https://gainztrainprep.com/app/ops/', 301);
+  }
+
   // menu.gainztrainprep.com → the public "this week's menu" page (same site serves both hosts).
   if (url.hostname === 'menu.gainztrainprep.com') {
     const target = new URL('https://gainztrainprep.com/menu/');

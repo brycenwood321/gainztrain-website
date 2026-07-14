@@ -1824,12 +1824,35 @@
     #auth-btn:disabled { opacity: .6; }
     .auth-err { color: #f87171; font-size: .88rem; margin-top: 12px; min-height: 18px; }
 
-    /* Owner-tab placeholders (Overview/Customers/Activity/Marketing) until their content ports in. */
-    .owner-placeholder { max-width: 560px; margin: 48px auto; padding: 0 24px; text-align: center; }
-    .owner-placeholder h2 { font-family: "Barlow Condensed", sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; font-size: 1.9rem; margin-bottom: 10px; }
-    .owner-placeholder p { color: #5a524e; margin-bottom: 8px; }
-    .owner-placeholder-note { color: #9a908c; font-size: .9rem; }
-    .owner-placeholder-btn { display: inline-block; margin-top: 18px; background: #ff6b35; color: #fff; font-weight: 800; padding: 12px 20px; border-radius: 10px; text-decoration: none; }
+    /* ── OWNER TABS (Overview/Customers/Activity/Marketing) — ported from the business dashboard ── */
+    .owner-view { max-width: 940px; margin: 0 auto; padding: 20px 20px 60px; }
+    .owner-view .ownv-loading { text-align: center; padding: 3rem; color: #7a7270; }
+    .owner-view .ownv-ctl { display: flex; gap: .5rem; align-items: center; margin: 0 0 1rem; flex-wrap: wrap; }
+    .owner-view .ownv-ctl label { font-size: .82rem; color: #7a7270; }
+    .owner-view input, .owner-view select { font: inherit; font-size: .95rem; padding: .5rem .7rem; border: 1px solid #ede9e3; border-radius: 8px; background: #fff; }
+    .owner-view .ownv-btn { font: inherit; font-weight: 700; font-size: .88rem; border: none; border-radius: 8px; padding: .55rem 1rem; cursor: pointer; background: #ff6b35; color: #fff; }
+    .owner-view .ownv-btn.ghost { background: transparent; color: #4a4440; border: 1px solid #ede9e3; }
+    .owner-view .ownv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+    .owner-view .ownv-card { background: #fff; border: 1px solid #ede9e3; border-radius: 12px; padding: 1.1rem; }
+    .owner-view .ownv-card h2 { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: #7a7270; margin-bottom: .4rem; font-family: inherit; font-weight: 700; }
+    .owner-view .stat { font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 1.9rem; line-height: 1; }
+    .owner-view .stat.sm { font-size: 1.3rem; }
+    .owner-view .stat-sub { color: #7a7270; font-size: .82rem; }
+    .owner-view .ok { color: #16a34a; } .owner-view .warn { color: #b45309; } .owner-view .bad { color: #dc2626; }
+    .owner-view table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    .owner-view th { text-align: left; color: #7a7270; font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; padding: .5rem .4rem; border-bottom: 1px solid #ede9e3; }
+    .owner-view td { padding: .55rem .4rem; border-bottom: 1px solid #ede9e3; }
+    .owner-view tr:last-child td { border-bottom: none; }
+    .owner-view .badge { display: inline-block; padding: .15rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 600; text-transform: capitalize; background: #f5f2ee; color: #4a4440; }
+    .owner-view .badge.active, .owner-view .badge.trialing, .owner-view .badge.delivered, .owner-view .badge.paid { background: #f0fdf4; color: #16a34a; }
+    .owner-view .badge.paused, .owner-view .badge.out_for_delivery, .owner-view .badge.prepping, .owner-view .badge.pickup_ready { background: #fffbeb; color: #b45309; }
+    .owner-view .badge.canceled, .owner-view .badge.past_due, .owner-view .badge.failed { background: #fef2f2; color: #dc2626; }
+    .owner-view .mealrow { display: flex; align-items: center; justify-content: space-between; padding: .5rem .2rem; border-bottom: 1px solid #ede9e3; }
+    .owner-view .mealrow .q { font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 1.3rem; color: #ff6b35; text-align: right; }
+    .owner-view .stop { padding: .5rem .2rem; border-bottom: 1px solid #ede9e3; font-size: .9rem; }
+    .owner-view .stop .nm { font-weight: 600; } .owner-view .stop .ad { color: #7a7270; font-size: .84rem; }
+    .owner-view .link { color: #cc5520; font-weight: 600; cursor: pointer; }
+    .owner-view h2.section { font-family: "Barlow Condensed", sans-serif; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; margin: 1rem 0 .3rem; }
 
     /* ── MOBILE (phones) ── finger-friendly tap targets + tighter padding. The dashboard was built for
        desktop; this makes the phone-used surfaces (tabs, Assembly, scan bar) usable on a small screen. */
@@ -1986,31 +2009,11 @@
     <a href="/app/" class="tab-mobile-account">← My Account</a>
   </div>
 
-  <!-- ── OWNER-ONLY TABS (placeholders — content ports from the business dashboard next) ── -->
-  <div class="tab-panel" id="tab-overview">
-    <div class="owner-placeholder"><h2>Overview</h2>
-      <p>Business overview — active subscriptions, revenue, and system health.</p>
-      <p class="owner-placeholder-note">This is moving into this dashboard next. For now it lives on the business dashboard.</p>
-      <a class="owner-placeholder-btn" href="/app/ops/">Open business dashboard →</a></div>
-  </div>
-  <div class="tab-panel" id="tab-customers">
-    <div class="owner-placeholder"><h2>Customers</h2>
-      <p>Customer list, subscriptions, and meal picks.</p>
-      <p class="owner-placeholder-note">Moving here next — for now, use the business dashboard.</p>
-      <a class="owner-placeholder-btn" href="/app/ops/">Open business dashboard →</a></div>
-  </div>
-  <div class="tab-panel" id="tab-activity">
-    <div class="owner-placeholder"><h2>Activity</h2>
-      <p>Recent account activity (signups, pauses, cancels, payments).</p>
-      <p class="owner-placeholder-note">Moving here next — for now, use the business dashboard.</p>
-      <a class="owner-placeholder-btn" href="/app/ops/">Open business dashboard →</a></div>
-  </div>
-  <div class="tab-panel" id="tab-marketing">
-    <div class="owner-placeholder"><h2>Marketing</h2>
-      <p>Attribution funnel, spend, and CPL/CAC.</p>
-      <p class="owner-placeholder-note">Moving here next — for now, use the business dashboard.</p>
-      <a class="owner-placeholder-btn" href="/app/ops/">Open business dashboard →</a></div>
-  </div>
+  <!-- ── OWNER-ONLY TABS (ported from the business dashboard, rendered in this dashboard's style) ── -->
+  <div class="tab-panel" id="tab-overview"><div class="owner-view" id="ov-view"><div class="ownv-loading">Loading…</div></div></div>
+  <div class="tab-panel" id="tab-customers"><div class="owner-view" id="cust-view"><div class="ownv-loading">Loading…</div></div></div>
+  <div class="tab-panel" id="tab-activity"><div class="owner-view" id="act-view"><div class="ownv-loading">Loading…</div></div></div>
+  <div class="tab-panel" id="tab-marketing"><div class="owner-view" id="mkt-view"><div class="ownv-loading">Loading…</div></div></div>
 
   <!-- ── ORDERS TAB ── -->
   <div class="tab-panel active" id="tab-orders">
@@ -4044,8 +4047,126 @@
           refreshAppState();
           initDeliveryTab();
         }
+        // Owner-only tabs (rendered by the ported business-dashboard code).
+        if (tab.dataset.tab === "overview")  ownRenderOverview();
+        if (tab.dataset.tab === "customers") ownRenderCustomers();
+        if (tab.dataset.tab === "activity")  ownRenderActivity();
+        if (tab.dataset.tab === "marketing") ownRenderMarketing();
       });
     });
+
+    // ── OWNER TABS (Overview / Customers / Activity / Marketing) ──────────────────────────────────────
+    // Ported from the business dashboard, session-authed (owner cookie), rendered in this dashboard's style.
+    const ownEsc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const ownMoney = (c) => "$" + ((c || 0) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const ownFmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
+    async function ownGet(path) { const r = await fetch(path, { credentials: "include" }); if (!r.ok) { const e = new Error("http" + r.status); e.status = r.status; throw e; } return r.json().catch(() => ({})); }
+    async function ownPost(path, body) { const r = await fetch(path, { method: "POST", credentials: "include", headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined }); return r.json().catch(() => ({})); }
+    function ownErr(el, e) { el.innerHTML = '<div class="ownv-loading">' + (e && e.status === 403 ? "Owner access required." : "Could not load this view.") + "</div>"; }
+    function ownHead(title, sub, refreshFn) { return '<div class="ownv-ctl"><b style="font-family:\'Barlow Condensed\',sans-serif;text-transform:uppercase;letter-spacing:.04em;font-size:1.4rem">' + title + "</b>" + (sub ? '<span class="stat-sub">' + sub + "</span>" : "") + (refreshFn ? '<button class="ownv-btn ghost" onclick="' + refreshFn + '()">Refresh</button>' : "") + "</div>"; }
+
+    async function ownRenderOverview() {
+      const el = document.getElementById("ov-view"); el.innerHTML = '<div class="ownv-loading">Loading…</div>';
+      try {
+        const d = await ownGet("/api/admin/overview");
+        const split = {}; (d.delivery_split || []).forEach((s) => (split[s.method || "pickup"] = s.n));
+        const h = d.health || {}, subs = d.subscriptions || {}, prod = d.production || {};
+        el.innerHTML = ownHead("Overview", "Production week of " + ownFmtDate(d.week_of), "ownRenderOverview") +
+          '<div class="ownv-grid">' +
+            '<div class="ownv-card"><h2>Active subscriptions</h2><div class="stat">' + (subs.active || 0) + "</div></div>" +
+            '<div class="ownv-card"><h2>Weekly list price</h2><div class="stat">' + ownMoney(d.weekly_list_price_cents) + '</div><div class="stat-sub">pre-discount/wk</div></div>' +
+            '<div class="ownv-card"><h2>Net revenue (30d)</h2><div class="stat">' + ownMoney(d.revenue_30d_cents) + '</div><div class="stat-sub">' + (d.refunds_30d_cents ? "incl. " + ownMoney(d.refunds_30d_cents) + " refunds" : "after refunds") + "</div></div>" +
+            '<div class="ownv-card"><h2>This week locked</h2><div class="stat">' + (prod.orders || 0) + '</div><div class="stat-sub">' + (prod.meals || 0) + " meals</div></div>" +
+            '<div class="ownv-card"><h2>Delivery / Pickup</h2><div class="stat sm">' + (split.delivery || 0) + " / " + (split.pickup || 0) + "</div></div>" +
+            '<div class="ownv-card"><h2>Specialty upcharge</h2><div class="stat sm">' + ownMoney(prod.upcharge_cents) + '</div><div class="stat-sub">this week</div></div>' +
+          "</div>" +
+          '<div class="ownv-grid">' +
+            '<div class="ownv-card"><h2>Failed comms (24h)</h2><div class="stat sm ' + (h.failed_comms_24h ? "bad" : "ok") + '">' + (h.failed_comms_24h || 0) + "</div></div>" +
+            '<div class="ownv-card"><h2>Stuck webhooks</h2><div class="stat sm ' + (h.stuck_webhooks ? "bad" : "ok") + '">' + (h.stuck_webhooks || 0) + '</div><div class="stat-sub">unprocessed Stripe events</div></div>' +
+            '<div class="ownv-card"><h2>Subscriptions by status</h2>' + ((subs.by_status || []).map((s) => '<div style="display:flex;justify-content:space-between;font-size:.88rem;padding:.15rem 0;"><span class="badge ' + ownEsc(s.status) + '">' + ownEsc(s.status) + "</span><b>" + s.n + "</b></div>").join("") || '<span class="stat-sub">none</span>') + "</div>" +
+          "</div>";
+      } catch (e) { ownErr(el, e); }
+    }
+
+    let OWN_CUSTS = [];
+    async function ownRenderCustomers() {
+      const el = document.getElementById("cust-view"); el.innerHTML = '<div class="ownv-loading">Loading…</div>';
+      try { const d = await ownGet("/api/admin/customers"); OWN_CUSTS = d.customers || []; ownDrawCustList(OWN_CUSTS, d.count); } catch (e) { ownErr(el, e); }
+    }
+    function ownDrawCustList(list, count) {
+      const el = document.getElementById("cust-view");
+      el.innerHTML = ownHead("Customers", (count != null ? count : list.length) + " customers", "ownRenderCustomers") +
+        '<div class="ownv-ctl"><input id="own-csearch" placeholder="Search name or email" style="flex:1;" /></div>' +
+        '<div class="ownv-card"><table><thead><tr><th>Name</th><th>Status</th><th>Meals</th><th>Spent</th></tr></thead><tbody>' +
+        list.map((c) => '<tr><td><span class="link" data-id="' + ownEsc(c.id) + '">' + (ownEsc((c.first_name || "") + " " + (c.last_name || "")).trim() || ownEsc(c.email)) + '</span><div class="stat-sub">' + ownEsc(c.email) + "</div></td><td>" + (c.sub_status ? '<span class="badge ' + ownEsc(c.sub_status) + '">' + ownEsc(c.sub_status) + "</span>" : "—") + "</td><td>" + (c.meals_per_week || "—") + "</td><td>" + ownMoney(c.spent_cents) + "</td></tr>").join("") +
+        "</tbody></table></div>";
+      const cs = document.getElementById("own-csearch");
+      cs.oninput = (e) => { const q = e.target.value.toLowerCase(); ownDrawCustList(OWN_CUSTS.filter((c) => ((c.first_name || "") + " " + (c.last_name || "") + " " + c.email).toLowerCase().includes(q)), null); document.getElementById("own-csearch").focus(); };
+      el.querySelectorAll(".link[data-id]").forEach((x) => (x.onclick = () => ownShowCustomer(x.dataset.id)));
+    }
+    async function ownShowCustomer(id) {
+      const el = document.getElementById("cust-view"); el.innerHTML = '<div class="ownv-loading">Loading…</div>';
+      try {
+        const d = await ownGet("/api/admin/customers?id=" + encodeURIComponent(id)); const c = d.customer;
+        const ordByWeek = {}; (d.orders || []).forEach((o) => (ordByWeek[o.week_of] = o));
+        const weeks = [...new Set((d.selections || []).map((s) => s.week_of))];
+        const mealsCard = '<div class="ownv-card"><h2>Meal picks</h2>' + (weeks.length ? weeks.map((w) => {
+          const items = (d.selections || []).filter((s) => s.week_of === w); const total = items.reduce((a, s) => a + (s.qty || 0), 0); const ord = ordByWeek[w];
+          const badge = ord ? '<span class="badge ' + ownEsc(ord.status) + '">' + ownEsc(ord.status) + "</span>" : '<span class="stat-sub">(no order row)</span>';
+          return '<div style="margin-bottom:.7rem"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.2rem"><b>Week of ' + ownFmtDate(w) + '</b><span class="stat-sub">' + total + " meals · " + badge + "</span></div>" + items.map((s) => '<div class="mealrow"><span>' + ownEsc(s.meal_name) + '</span><span class="q">×' + s.qty + "</span></div>").join("") + "</div>";
+        }).join("") : '<div class="stat-sub" style="padding:.4rem 0">No meal selections on record yet.</div>') + "</div>";
+        el.innerHTML =
+          '<div class="ownv-ctl"><span class="link" id="own-backCust">← All customers</span></div>' +
+          '<div class="ownv-card"><h2 style="font-size:1.1rem;color:#1a1614;">' + ownEsc((c.first_name || "") + " " + (c.last_name || "")) + "</h2>" +
+            '<div class="stat-sub">' + ownEsc(c.email) + (c.phone ? " · " + ownEsc(c.phone) : "") + "</div>" +
+            '<div class="stat-sub">' + (c.delivery_method === "delivery" ? "Delivery zone " + (c.delivery_zone == null ? "—" : c.delivery_zone) + " · " + ownEsc(c.address || "") + ", " + ownEsc(c.city || "") + " " + ownEsc(c.zip || "") : "Pickup") + "</div>" +
+            '<div class="stat-sub">Goal: ' + ownEsc(c.goal || "—") + " · " + ownEsc(c.sex || "—") + " · joined " + ownFmtDate(c.created_at) + "</div>" +
+            '<div class="stat" style="margin-top:.5rem;">' + ownMoney(d.total_spent_cents) + ' <span class="stat-sub">lifetime</span></div></div>' +
+          '<div class="ownv-card"><h2>Subscriptions</h2><table><tbody>' + ((d.subscriptions || []).map((s) => "<tr><td><span class=\"badge " + ownEsc(s.status) + "\">" + ownEsc(s.status) + "</span></td><td>" + s.meals_per_week + " meals</td><td>" + (s.coupon_code ? ownEsc(s.coupon_code) : "") + "</td><td>" + (s.cancel_at_period_end ? "cancels " + ownFmtDate(s.current_period_end) : (s.current_period_end ? "renews " + ownFmtDate(s.current_period_end) : "")) + "</td></tr>").join("") || '<tr><td class="stat-sub">none</td></tr>') + "</tbody></table></div>" +
+          mealsCard +
+          '<div class="ownv-card"><h2>Invoices</h2><table><thead><tr><th>Date</th><th>Status</th><th>Paid</th><th></th></tr></thead><tbody>' + ((d.invoices || []).map((i) => "<tr><td>" + ownFmtDate(i.created_at) + '</td><td><span class="badge ' + ownEsc(i.status || "incomplete") + '">' + ownEsc(i.status || "—") + "</span></td><td>" + ownMoney(i.status === "paid" ? i.amount_paid_cents : i.amount_due_cents) + "</td><td>" + (i.hosted_invoice_url ? '<a href="' + ownEsc(i.hosted_invoice_url) + '" target="_blank" rel="noopener" class="link">view</a>' : "") + "</td></tr>").join("") || '<tr><td class="stat-sub">no invoices</td></tr>') + "</tbody></table></div>";
+        document.getElementById("own-backCust").onclick = ownRenderCustomers;
+      } catch (e) { ownErr(el, e); }
+    }
+
+    async function ownRenderActivity() {
+      const el = document.getElementById("act-view"); el.innerHTML = '<div class="ownv-loading">Loading…</div>';
+      try {
+        const d = await ownGet("/api/admin/activity?limit=150");
+        const fmtT = (s) => { try { return new Date(s).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch (e) { return s; } };
+        const rows = (d.events || []).map((e) => { const desc = e.summary || (ownEsc(e.action.replace(/_/g, " ")) + " · " + ownEsc(e.entity || "")); return '<div class="stop"><div class="nm">' + ownEsc(desc) + '</div><div class="ad">' + fmtT(e.at) + " · " + ownEsc(e.actor || "") + "</div></div>"; }).join("");
+        el.innerHTML = ownHead("Activity", "Recent activity", "ownRenderActivity") + '<div class="ownv-card"><h2>Customer &amp; system activity</h2>' + (rows || '<div class="stat-sub" style="padding:1rem 0;">No activity recorded yet.</div>') + "</div>";
+      } catch (e) { ownErr(el, e); }
+    }
+
+    async function ownRenderMarketing() {
+      const el = document.getElementById("mkt-view"); el.innerHTML = '<div class="ownv-loading">Loading…</div>';
+      try {
+        const [a, sp] = await Promise.all([ownGet("/api/admin/attribution"), ownGet("/api/admin/spend")]);
+        const num = (v) => (v == null ? "—" : v.toLocaleString());
+        const cents = (v) => (v == null ? "—" : ownMoney(v));
+        const funnelRows = (a.funnel || []).map((f) => "<tr><td><b>" + ownEsc(f.channel) + "</b></td><td>" + num(f.views) + "</td><td>" + num(f.views_30d) + "</td><td>" + num(f.signups) + "</td><td>" + num(f.paying) + "</td><td>" + cents(f.revenue_cents) + "</td><td>" + cents(f.spend_cents) + "</td><td>" + cents(f.cpl_cents) + "</td><td>" + cents(f.cac_cents) + "</td></tr>").join("");
+        const selfRows = (a.by_self_reported || []).map((r) => "<tr><td>" + ownEsc(r.source) + "</td><td>" + num(r.signups) + "</td><td>" + num(r.paying) + "</td><td>" + cents(r.revenue_cents) + "</td></tr>").join("");
+        const cohortRows = (a.cohort_by_coupon || []).map((c) => "<tr><td>" + ownEsc(c.coupon) + "</td><td>" + num(c.customers) + "</td><td>" + (c.weeks_avg == null ? "—" : c.weeks_avg) + "</td><td>" + num(c.retained_4wk) + "</td><td>" + num(c.canceled) + "</td></tr>").join("");
+        const spendRows = ((sp.entries) || []).slice(0, 30).map((e) => "<tr><td>" + ownEsc(e.day) + "</td><td>" + ownEsc(e.channel) + "</td><td>" + ownEsc(e.campaign || "") + "</td><td>" + ownMoney(e.spend_cents) + "</td><td>" + ownEsc(e.notes || "") + "</td></tr>").join("");
+        const tbl = (head, rows, empty) => '<div style="overflow-x:auto;"><table><thead><tr>' + head.map((h) => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" + (rows || '<tr><td colspan="' + head.length + '" class="stat-sub" style="padding:1rem .6rem;">' + empty + "</td></tr>") + "</tbody></table></div>";
+        el.innerHTML = ownHead("Marketing", "Funnel", "ownRenderMarketing") +
+          '<div class="ownv-card"><h2>Funnel — views → signups → customers → CAC</h2>' + tbl(["Channel", "Views", "Views 30d", "Signups", "Paying", "Revenue", "Spend", "CPL", "CAC"], funnelRows, "No data yet.") + "</div>" +
+          '<div class="ownv-card"><h2>"How did you hear about us?"</h2>' + tbl(["Source", "Signups", "Paying", "Revenue"], selfRows, "Fills in as customers answer at signup.") + "</div>" +
+          '<div class="ownv-card"><h2>Retention by offer code</h2>' + tbl(["Coupon", "Customers", "Avg weeks", "4wk+", "Canceled"], cohortRows, "No subscriptions yet.") + "</div>" +
+          '<div class="ownv-card"><h2>Log ad spend</h2><div class="ownv-ctl">' +
+            '<input id="own-spDay" type="date" /><select id="own-spCh"><option value="meta">Meta</option><option value="google">Google</option><option value="gbp">GBP</option><option value="tiktok">TikTok</option><option value="marketplace">Marketplace</option><option value="other">Other</option></select>' +
+            '<input id="own-spCamp" type="text" placeholder="campaign (optional)" style="width:11rem;" /><input id="own-spAmt" type="number" min="0" step="0.01" placeholder="$ spend" style="width:7rem;" /><button class="ownv-btn" id="own-spGo">Log</button></div>' +
+            tbl(["Day", "Channel", "Campaign", "Spend", "Notes"], spendRows, "No spend logged yet.") + "</div>";
+        document.getElementById("own-spDay").value = new Date().toISOString().slice(0, 10);
+        document.getElementById("own-spGo").onclick = async () => {
+          const body = { day: document.getElementById("own-spDay").value, channel: document.getElementById("own-spCh").value, campaign: document.getElementById("own-spCamp").value.trim(), spend: parseFloat(document.getElementById("own-spAmt").value) };
+          if (!body.day || !(body.spend >= 0)) { showToast("Enter a date and a spend amount."); return; }
+          const r = await ownPost("/api/admin/spend", body);
+          if (r.ok) { showToast("Spend logged."); ownRenderMarketing(); } else showToast(r.detail || "Could not log spend.");
+        };
+      } catch (e) { ownErr(el, e); }
+    }
 
     // ── PICKUP STATE ──
     function loadCollected() {

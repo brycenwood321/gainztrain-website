@@ -289,28 +289,36 @@
             '<div class="macro-pill"><span class="macro-val">' + esc(m.calories) + '</span><span class="macro-key">Cal</span></div>' +
             '</div></div></div>';
         }).join('');
-        if (pickable) {
-          cur.meals.forEach(function (m) {
-            document.getElementById('pp_' + m.position).onclick = function () { if (total() < MAXM) { qty[m.position] = (qty[m.position] || 0) + 1; refresh(); } };
-            document.getElementById('pm_' + m.position).onclick = function () { if (qty[m.position] > 0) { qty[m.position]--; refresh(); } };
-          });
-          // Restore an in-progress pick (e.g. they bounced to /start and came back to edit).
-          try {
-            var saved = JSON.parse(localStorage.getItem('gt_meal_picks') || 'null');
-            if (saved && saved.week_of === cur.week_of && Array.isArray(saved.selections)) {
-              saved.selections.forEach(function (s) { qty[s.position] = s.qty; });
-            }
-          } catch (e) {}
-          refresh();
-        }
-        // main.js's fade-up observer already ran on the initial DOM, so it never
-        // sees these dynamically-injected cards. Reveal them directly (rAF lets the
-        // opacity:0 paint first so the transition still animates).
+        // Reveal the meals + hide the loader/empty message IMMEDIATELY, before any picker/cart wiring.
+        // Previously an error in the cart wiring (which runs AFTER the meals are built) hit the outer catch
+        // and hid the WHOLE menu behind "being updated" with the meals left invisible. The menu must always
+        // show once the meals render — the cart is secondary.
+        document.getElementById('menuLoading').style.display = 'none';
+        document.getElementById('menuEmpty').style.display = 'none';
+        document.getElementById('weekPill').style.display = '';
         requestAnimationFrame(function () {
           grid.querySelectorAll('.fade-up').forEach(function (el) { el.classList.add('visible'); });
         });
-        document.getElementById('menuLoading').style.display = 'none';
+        // Picker/cart wiring — isolated so a failure here can never hide the menu.
+        if (pickable) {
+          try {
+            cur.meals.forEach(function (m) {
+              var pp = document.getElementById('pp_' + m.position), pm = document.getElementById('pm_' + m.position);
+              if (pp) pp.onclick = function () { if (total() < MAXM) { qty[m.position] = (qty[m.position] || 0) + 1; refresh(); } };
+              if (pm) pm.onclick = function () { if (qty[m.position] > 0) { qty[m.position]--; refresh(); } };
+            });
+            // Restore an in-progress pick (e.g. they bounced to /start and came back to edit).
+            try {
+              var saved = JSON.parse(localStorage.getItem('gt_meal_picks') || 'null');
+              if (saved && saved.week_of === cur.week_of && Array.isArray(saved.selections)) {
+                saved.selections.forEach(function (s) { qty[s.position] = s.qty; });
+              }
+            } catch (e) {}
+            refresh();
+          } catch (e) { if (window.console && console.error) console.error('GT menu: cart wiring failed (menu still shown):', e); }
+        }
       } catch (e) {
+        if (window.console && console.error) console.error('GT menu render failed:', e);
         document.getElementById('menuLoading').style.display = 'none';
         document.getElementById('weekPill').style.display = 'none';
         document.getElementById('menuEmpty').style.display = 'block';

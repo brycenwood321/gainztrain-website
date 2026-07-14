@@ -216,6 +216,7 @@
         // MEALS-FIRST FLOW: pick meals here → account + checkout on /start → picks auto-save in the app.
         // Picking is enabled only for the actually-orderable week outside the Saturday blackout.
         var pickable = cur.is_orderable !== false && !cur.ordering_closed;
+        try { window.__gtDebug = { io: cur.is_orderable, oc: cur.ordering_closed, pickable: pickable, week: cur.week_of, keys: Object.keys(cur) }; } catch (e) {}
         var plans = [], MINM = 6, MAXM = 16;
         try {
           var pr = await fetch('/api/plans').then(function (r) { return r.json(); });

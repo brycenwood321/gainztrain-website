@@ -1384,6 +1384,24 @@
 
     .ing-row-remove:hover { color: #f87171; }
 
+    /* ── Stage 4: cooking mode + per-ingredient % allocation ── */
+    .mode-toggle { display: inline-flex; border: 1px solid #d8d0cb; border-radius: 8px; overflow: hidden; }
+    .mode-btn { padding: 7px 18px; font-size: 0.82rem; font-weight: 700; background: #fff; color: #7a7270; border: none; cursor: pointer; }
+    .mode-btn.active { background: #1a1614; color: #fff; }
+    .batch-cats { margin-top: 10px; padding: 10px 12px; border: 1px dashed #d8d0cb; border-radius: 8px; background: #fbf9f7; }
+    .batch-cats-label { font-size: 0.78rem; font-weight: 700; color: #4a4440; margin-right: 8px; }
+    .batch-cats label { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; font-size: 0.85rem; font-weight: 700; cursor: pointer; }
+    .batch-cats label input { width: auto; }
+    .batch-hint { font-size: 0.72rem; color: #9a928d; margin-top: 6px; }
+    .ing-row-pct-wrap { flex: none; width: 118px; display: flex; flex-direction: column; }
+    .ing-row-pct { width: 100%; padding: 6px 8px; border: 1px solid #d8d0cb; border-radius: 6px; font-size: 0.82rem; text-align: right; }
+    .ing-row-pct-label { font-size: 0.64rem; color: #9a928d; margin-top: 2px; line-height: 1.1; text-align: right; }
+    .ing-valid-summary { font-size: 0.72rem; font-weight: 600; margin-left: 8px; }
+    .ing-valid-summary .good { color: #16a34a; }
+    .ing-valid-summary .bad  { color: #dc2626; }
+    .ing-valid-summary .warn { color: #b45309; }
+    .menu-btn-save.disabled, .menu-btn-save:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+
     .menu-add-ing-btn {
       background: none;
       border: 1px dashed #e8e4df;
@@ -3483,6 +3501,8 @@
       document.getElementById("new-meal-photo-status").textContent = "";
       showMealPhoto("");
       document.getElementById("ing-rows-container").innerHTML = "";
+      document.querySelectorAll(".batch-cat-cb").forEach(c => { c.checked = false; });
+      setMealMode("separate");   // also runs onIngredientsChanged → Save starts disabled until valid
       hideAllModals();
       document.getElementById("add-meal-modal").style.display = "";
       document.getElementById("menu-overlay").style.display   = "flex";
@@ -3508,6 +3528,12 @@
       document.getElementById("new-meal-photo-status").textContent = "";
       showMealPhoto(meal.image || "");
 
+      // Restore cooking mode + batch categories before building rows (labels depend on them)
+      document.querySelectorAll(".batch-cat-cb").forEach(c => {
+        c.checked = Array.isArray(meal.batch_categories) && meal.batch_categories.includes(c.value);
+      });
+      setMealMode(meal.mode === "batch" ? "batch" : "separate");
+
       // Pre-populate ingredient rows
       const container = document.getElementById("ing-rows-container");
       container.innerHTML = "";
@@ -3526,7 +3552,12 @@
         }
         selEl.value = ing.item;
         if (ing.category) setIngCatByName(rowId, ing.category);
+        if (ing.pct != null && ing.category && ing.category !== "misc") {
+          const pctEl = lastRow.querySelector(".ing-row-pct");
+          if (pctEl) pctEl.value = ing.pct;
+        }
       });
+      onIngredientsChanged();  // refresh labels + validation with the restored %
 
       hideAllModals();
       document.getElementById("add-meal-modal").style.display = "";
@@ -3579,9 +3610,19 @@
           <button type="button" class="ing-cat-btn" data-cat="veggies" onclick="setIngCat(this,'${rowId}')" title="Veggies">V</button>
           <button type="button" class="ing-cat-btn" data-cat="misc"    onclick="setIngCat(this,'${rowId}')" title="No macro (garnish, extra, etc.)">–</button>
         </div>
-        <button class="ing-row-remove" onclick="document.getElementById('${rowId}').remove()" title="Remove">✕</button>
+        <div class="ing-row-pct-wrap" style="visibility:hidden;">
+          <input type="number" class="ing-row-pct" min="0" max="100" step="1" placeholder="%" oninput="onIngredientsChanged()" />
+          <div class="ing-row-pct-label"></div>
+        </div>
+        <button class="ing-row-remove" onclick="removeIngRow('${rowId}')" title="Remove">✕</button>
       `;
       container.appendChild(row);
+    }
+
+    function removeIngRow(rowId) {
+      const row = document.getElementById(rowId);
+      if (row) row.remove();
+      onIngredientsChanged();
     }
 
     function setIngCat(btnEl, rowId) {
@@ -3592,6 +3633,7 @@
       });
       const map = { protein: "active-p", carbs: "active-c", veggies: "active-v", misc: "active-misc" };
       btnEl.classList.add(map[btnEl.dataset.cat]);
+      onIngredientsChanged();
     }
 
     function setIngCatByName(rowId, cat) {
@@ -3604,6 +3646,78 @@
     function getIngRowCategory(row) {
       const active = row.querySelector(".ing-cat-btn.active-p,.ing-cat-btn.active-c,.ing-cat-btn.active-v,.ing-cat-btn.active-misc");
       return active ? active.dataset.cat : null;
+    }
+
+    // ── Stage 4: cooking mode + % allocation state/validation ──
+    const CAT_LETTER = { protein: "P", carbs: "C", veggies: "V" };
+    function catLetter(c) { return CAT_LETTER[c] || c; }
+
+    function setMealMode(mode) {
+      const batchOn = mode === "batch";
+      document.getElementById("mode-batch-btn").classList.toggle("active", batchOn);
+      document.getElementById("mode-separate-btn").classList.toggle("active", !batchOn);
+      document.getElementById("batch-cats").style.display = batchOn ? "" : "none";
+      onIngredientsChanged();
+    }
+    function currentMealMode() { return document.getElementById("mode-batch-btn").classList.contains("active") ? "batch" : "separate"; }
+    function currentBatchCats() { return [...document.querySelectorAll(".batch-cat-cb:checked")].map(c => c.value); }
+
+    // Recompute every ingredient row's % label + visibility, the running validation summary, and the
+    // Save-button enabled state. Called on any change to ingredients, categories, %, mode, or batch cats.
+    function onIngredientsChanged() {
+      const mode  = currentMealMode();
+      const batch = mode === "batch" ? currentBatchCats() : [];
+      const rows  = [...document.querySelectorAll("#ing-rows-container .ing-row")];
+
+      const info = rows.map(row => {
+        const cat   = getIngRowCategory(row);
+        const pctEl = row.querySelector(".ing-row-pct");
+        const pct   = pctEl && pctEl.value !== "" ? parseFloat(pctEl.value) : null;
+        return { row, cat, pctEl, pct };
+      });
+
+      // Per-row % field: hidden for misc/uncategorized; label shows category vs combined-batch context.
+      info.forEach(r => {
+        const wrap  = r.row.querySelector(".ing-row-pct-wrap");
+        const label = r.row.querySelector(".ing-row-pct-label");
+        if (!r.cat || r.cat === "misc") {
+          wrap.style.visibility = "hidden";
+          if (r.pctEl) r.pctEl.value = "";
+          label.textContent = "";
+        } else {
+          wrap.style.visibility = "visible";
+          label.textContent = batch.includes(r.cat)
+            ? `% of ${batch.map(catLetter).join("+")} batch`
+            : `% of ${catLetter(r.cat)}`;
+        }
+      });
+
+      const measured = info.filter(r => r.cat && r.cat !== "misc");
+      const groupKey = r => (mode === "batch" && batch.includes(r.cat)) ? "BATCH" : r.cat;
+      const groups = {};
+      measured.forEach(r => { (groups[groupKey(r)] = groups[groupKey(r)] || []).push(r); });
+
+      let valid = measured.length > 0;
+      const parts = [];
+      if (mode === "batch" && batch.length < 2) { valid = false; parts.push('<span class="bad">pick ≥2 batch categories</span>'); }
+
+      Object.entries(groups).forEach(([k, rs]) => {
+        const sum = rs.reduce((s, r) => s + (r.pct || 0), 0);
+        const ok  = Math.abs(sum - 100) < 0.01;
+        if (!ok) valid = false;
+        const label = k === "BATCH" ? batch.map(catLetter).join("+") + " batch" : catLetter(k);
+        parts.push(`<span class="${ok ? "good" : "bad"}">${label}: ${Math.round(sum * 10) / 10}%</span>`);
+      });
+      // Soft warning (does NOT block): a batched category with no ingredients assigned.
+      if (mode === "batch") batch.forEach(c => {
+        if (!measured.some(r => r.cat === c)) parts.push(`<span class="warn">no ${catLetter(c)} yet</span>`);
+      });
+
+      const sum = document.getElementById("ing-valid-summary");
+      if (sum) sum.innerHTML = measured.length ? parts.join(" · ") : "";
+      const saveBtn = document.getElementById("save-meal-btn");
+      if (saveBtn) { saveBtn.disabled = !valid; saveBtn.classList.toggle("disabled", !valid); }
+      return valid;
     }
 
     function handleIngSelectChange(selectEl) {
@@ -3697,6 +3811,12 @@
       if (isNaN(protein) || protein < 0) { showToast("Enter a valid protein amount (g)."); return; }
       if (isNaN(carbs)   || carbs   < 0) { showToast("Enter a valid carbs amount (g).");   return; }
 
+      // Save is gated by onIngredientsChanged() validation, but re-check defensively.
+      if (!onIngredientsChanged()) { showToast("Fix the % totals (each group must equal 100%) before saving."); return; }
+
+      const mode = currentMealMode();
+      const batch_categories = mode === "batch" ? currentBatchCats() : [];
+
       const rows = document.querySelectorAll("#ing-rows-container .ing-row");
       const ingredients = [];
       let missingCat = 0;
@@ -3707,7 +3827,9 @@
         const category = getIngRowCategory(row);
         if (sel && sel !== "" && sel !== "__add_new__") {
           if (!category) missingCat++;
-          ingredients.push({ item: sel, category: category || null });
+          const pctEl = row.querySelector(".ing-row-pct");
+          const pct   = (category && category !== "misc" && pctEl && pctEl.value !== "") ? parseFloat(pctEl.value) : null;
+          ingredients.push({ item: sel, category: category || null, pct });
         }
       });
 
@@ -3719,14 +3841,14 @@
         if (!stored) { showToast("Save failed — menu data missing. Please refresh."); return; }
         const idx = (stored.meals || []).findIndex(m => m.id === menuEditingId);
         if (idx === -1) { showToast("Save failed — meal not found. Please refresh."); return; }
-        stored.meals[idx] = { ...stored.meals[idx], name, macros, ingredients, upcharge, image: menuPhotoUrl };
+        stored.meals[idx] = { ...stored.meals[idx], name, macros, ingredients, upcharge, mode, batch_categories, image: menuPhotoUrl };
         saveCurrentMenu(stored);
         // Keep the permanent meal library in sync (match by name) so the photo + edits stick for future
         // weeks — otherwise an edit only lived on this week's menu and was lost on the next rebuild.
         const lib = loadMealLibrary();
         const li  = lib.findIndex(x => (x.name || "").toLowerCase() === name.toLowerCase());
-        if (li >= 0) lib[li] = { ...lib[li], name, macros, ingredients, upcharge, image: menuPhotoUrl };
-        else         lib.unshift({ id: menuUid(), name, macros, ingredients, upcharge, image: menuPhotoUrl });
+        if (li >= 0) lib[li] = { ...lib[li], name, macros, ingredients, upcharge, mode, batch_categories, image: menuPhotoUrl };
+        else         lib.unshift({ id: menuUid(), name, macros, ingredients, upcharge, mode, batch_categories, image: menuPhotoUrl });
         saveMealLibrary(lib);
         closeMenuOverlay();
         renderMenuTab();
@@ -3737,7 +3859,7 @@
       } else {
         // Add mode — single ID used for both library and menu entries
         const newId  = menuUid();
-        const newMeal = { id: newId, name, macros, ingredients, upcharge, image: menuPhotoUrl };
+        const newMeal = { id: newId, name, macros, ingredients, upcharge, mode, batch_categories, image: menuPhotoUrl };
         const library = loadMealLibrary();
         library.unshift({ ...newMeal });
         saveMealLibrary(library);
@@ -3982,16 +4104,36 @@
         const mealKey = meal.name.toLowerCase().trim();
         const sv      = mealServings[mealKey]; // { male, female } or undefined
 
+        // Cooking mode: batched categories share ONE combined grams pool; each ingredient's % is a share
+        // of that pool. Separate categories split their own macro-target grams among their ingredients.
+        const batch = (meal.mode === "batch" && Array.isArray(meal.batch_categories)) ? meal.batch_categories : [];
+        // Count measured ingredients per group for the even-split FALLBACK (used only when % is missing).
+        const groupCount = {};   // groupKey → count
+        const groupKey = c => (batch.includes(c) ? "BATCH" : c);
+        meal.ingredients.forEach(ing => {
+          if (ing.item && ing.category && ing.category !== "misc") {
+            const k = groupKey(ing.category);
+            groupCount[k] = (groupCount[k] || 0) + 1;
+          }
+        });
+
         meal.ingredients.forEach(ing => {
           if (!ing.item || !ing.category) return;
           if (!ingMap[ing.item]) {
             ingMap[ing.item] = { name: ing.item, category: ing.category, cookedG: 0, hasOrders: false, isMisc: ing.category === "misc" };
           }
           if (ing.category !== "misc" && sv) {
-            const femaleG = F[ing.category] || 0;
-            const maleG   = M[ing.category] || 0;
-            ingMap[ing.item].cookedG   += (sv.female * femaleG) + (sv.male * maleG);
-            ingMap[ing.item].hasOrders  = true;
+            const inBatch = batch.includes(ing.category);
+            // grams available to this ingredient's GROUP, per gender (combined pool if batched)
+            const poolG = g => inBatch
+              ? batch.reduce((s, c) => s + ((g === "f" ? F : M)[c] || 0), 0)
+              : ((g === "f" ? F : M)[ing.category] || 0);
+            // this ingredient's share: explicit % if set, else even split across the group
+            const share = (ing.pct != null && ing.pct !== "")
+              ? parseFloat(ing.pct) / 100
+              : (groupCount[groupKey(ing.category)] ? 1 / groupCount[groupKey(ing.category)] : 0);
+            ingMap[ing.item].cookedG  += (sv.female * poolG("f") + sv.male * poolG("m")) * share;
+            ingMap[ing.item].hasOrders = true;
           }
         });
       });
@@ -4915,7 +5057,21 @@
           <label class="menu-field-label">Specialty upcharge ($ per meal) — optional</label>
           <input type="number" id="new-meal-upcharge" class="menu-field-input" min="0" step="0.50" placeholder="0" />
         </div>
-        <div class="menu-field-label" style="margin-bottom:8px;">Ingredients</div>
+        <div class="menu-field-group">
+          <label class="menu-field-label">Cooking mode</label>
+          <div class="mode-toggle">
+            <button type="button" id="mode-separate-btn" class="mode-btn active" onclick="setMealMode('separate')">Separate</button>
+            <button type="button" id="mode-batch-btn" class="mode-btn" onclick="setMealMode('batch')">Batch</button>
+          </div>
+          <div id="batch-cats" class="batch-cats" style="display:none;">
+            <span class="batch-cats-label">Cooked together:</span>
+            <label><input type="checkbox" class="batch-cat-cb" value="protein" onchange="onIngredientsChanged()"> P</label>
+            <label><input type="checkbox" class="batch-cat-cb" value="veggies" onchange="onIngredientsChanged()"> V</label>
+            <label><input type="checkbox" class="batch-cat-cb" value="carbs" onchange="onIngredientsChanged()"> C</label>
+            <div class="batch-hint">Pick at least 2. Batched ingredients are cooked as one combined batch — each %  is its share of that combined batch.</div>
+          </div>
+        </div>
+        <div class="menu-field-label" style="margin-bottom:8px;">Ingredients <span id="ing-valid-summary" class="ing-valid-summary"></span></div>
         <div id="ing-rows-container"></div>
         <button class="menu-add-ing-btn" onclick="addIngredientRow()">+ Add Ingredient</button>
       </div>

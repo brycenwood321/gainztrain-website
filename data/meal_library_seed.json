@@ -1,0 +1,496 @@
+[
+  {
+    "id": "m1782857340116hx3f",
+    "name": "Fiesta Chicken",
+    "macros": {
+      "protein": 45,
+      "carbs": 62,
+      "fat": 12,
+      "cal": 550
+    },
+    "upcharge": 0,
+    "mode": "batch",
+    "batch_categories": [
+      "protein",
+      "veggies"
+    ],
+    "image": "/meal-photos/meals/fiesta-chicken-761f3b84.jpg",
+    "ingredients": [
+      {
+        "item": "Chicken Breast",
+        "category": "protein",
+        "pct": 60
+      },
+      {
+        "item": "Jasmine Rice",
+        "category": "carbs",
+        "pct": 100
+      },
+      {
+        "item": "Black Bean",
+        "category": "veggies",
+        "pct": 10
+      },
+      {
+        "item": "Kidney Bean",
+        "category": "veggies",
+        "pct": 10
+      },
+      {
+        "item": "Corn",
+        "category": "veggies",
+        "pct": 10
+      },
+      {
+        "item": "Roasted Tomato",
+        "category": "veggies",
+        "pct": 10
+      },
+      {
+        "item": "Cilantro",
+        "category": "misc",
+        "pct": null
+      },
+      {
+        "item": "Lime",
+        "category": "misc",
+        "pct": null
+      }
+    ]
+  },
+  {
+    "id": "m1782857375025sx2u",
+    "name": "Chipotle Chicken",
+    "macros": {
+      "protein": 45,
+      "carbs": 62,
+      "fat": 8,
+      "cal": 500
+    },
+    "upcharge": 0,
+    "mode": "separate",
+    "batch_categories": [],
+    "image": "",
+    "ingredients": [
+      {
+        "item": "Chicken Breast",
+        "category": "protein",
+        "pct": 100
+      },
+      {
+        "item": "Jasmine Rice",
+        "category": "carbs",
+        "pct": 100
+      },
+      {
+        "item": "Corn",
+        "category": "veggies",
+        "pct": 100
+      },
+      {
+        "item": "Chipotle Sauce",
+        "category": "misc",
+        "pct": null
+      },
+      {
+        "item": "Cilantro",
+        "category": "misc",
+        "pct": null
+      },
+      {
+        "item": "Lime",
+        "category": "misc",
+        "pct": null
+      }
+    ]
+  },
+  {
+    "id": "m1782857282105b9e6",
+    "name": "Steak Fajita",
+    "macros": {
+      "protein": 58,
+      "carbs": 45,
+      "fat": 22,
+      "cal": 560
+    },
+    "upcharge": 3,
+    "mode": "separate",
+    "batch_categories": [],
+    "image": "",
+    "ingredients": [
+      {
+        "item": "Sirloin Steak",
+        "category": "protein",
+        "pct": 100
+      },
+      {
+        "item": "Jasmine Rice",
+        "category": "carbs",
+        "pct": 100
+      },
+      {
+        "item": "Bell Pepper",
+        "category": "veggies",
+        "pct": 50
+      },
+      {
+        "item": "Onion",
+        "category": "veggies",
+        "pct": 50
+      },
+      {
+        "item": "Cilantro",
+        "category": "misc",
+        "pct": null
+      },
+      {
+        "item": "Lime",
+        "category": "misc",
+        "pct": null
+      }
+    ]
+  },
+  {
+    "id": "m1782857132051vp1c",
+    "name": "Chicken Carrot Potato",
+    "macros": {
+      "protein": 45,
+      "carbs": 34,
+      "fat": 30,
+      "cal": 542
+    },
+    "upcharge": 0,
+    "mode": "separate",
+    "batch_categories": [],
+    "image": "",
+    "ingredients": [
+      {
+        "item": "Chicken Breast",
+        "category": "protein",
+        "pct": 100
+      },
+      {
+        "item": "Carrot",
+        "category": "veggies",
+        "pct": 100
+      },
+      {
+        "item": "Potato",
+        "category": "carbs",
+        "pct": 100
+      }
+    ]
+  },
+  {
+    "id": "m17828570363905dsy",
+    "name": "Protein Baked Ziti",
+    "macros": {
+      "protein": 36,
+      "carbs": 40,
+      "fat": 21,
+      "cal": 500
+    },
+    "upcharge": 0,
+    "mode": "batch",
+    "batch_categories": [
+      "protein",
+      "veggies",
+      "carbs"
+    ],
+    "image": "",
+    "ingredients": [
+      {
+        "item": "Ground Beef",
+        "category": "protein",
+        "pct": 30
+      },
+      {
+        "item": "Cottage Cheese",
+        "category": "protein",
+        "pct": 5
+      },
+      {
+        "item": "Zucchini",
+        "category": "veggies",
+        "pct": 10
+      },
+      {
+        "item": "Squash",
+        "category": "veggies",
+        "pct": 10
+      },
+      {
+        "item": "Protein Pasta",
+        "category": "carbs",
+        "pct": 40
+      },
+      {
+        "item": "Marinara Sauce",
+        "category": "carbs",
+        "pct": 5
+      },
+      {
+        "item": "Parsley",
+        "category": "misc",
+        "pct": null
+      }
+    ]
+  },
+  {
+    "id": "m17828569212766d8g",
+    "name": "Beef Fajita",
+    "macros": {
+      "protein": 45,
+      "carbs": 45,
+      "fat": 18,
+      "cal": 520
+    },
+    "upcharge": 0,
+    "mode": "separate",
+    "batch_categories": [],
+    "image": "",
+    "ingredients": [
+      {
+        "item": "Ground Beef",
+        "category": "protein",
+        "pct": 100
+      },
+      {
+        "item": "Jasmine Rice",
+        "category": "carbs",
+        "pct": 100
+      },
+      {
+        "item": "Bell Pepper",
+        "category": "veggies",
+        "pct": 50
+      },
+      {
+        "item": "Onion",
+        "category": "veggies",
+        "pct": 50
+      },
+      {
+        "item": "Cilantro",
+        "category": "misc",
+        "pct": null
+      },
+      {
+        "item": "Lime",
+        "category": "misc",
+        "pct": null
+      }
+    ]
+  },
+  {
+    "id": "m17828568765846uh6",
+    "name": "Teriyaki Turkey",
+    "macros": {
+      "protein": 42,
+      "carbs": 58,
+      "fat": 14,
+      "cal": 480
+    },
+    "upcharge": 0,
+    "mode": "separate",
+    "batch_categories": [],
+    "image": "",
+    "ingredients": [
+      {
+        "item": "Ground Turkey",
+        "category": "protein",
+        "pct": 100
+      },
+      {
+        "item": "Jasmine Rice",
+        "category": "carbs",
+        "pct": 100
+      },
+      {
+        "item": "Zucchini",
+        "category": "veggies",
+        "pct": 50
+      },
+      {
+        "item": "Squash",
+        "category": "veggies",
+        "pct": 50
+      },
+      {
+        "item": "Teriyaki Sauce",
+        "category": "misc",
+        "pct": null
+      }
+    ]
+  },
+  {
+    "id": "m1782856814293nua9",
+    "name": "Chicken Bro-Tato",
+    "macros": {
+      "protein": 55,
+      "carbs": 22,
+      "fat": 24,
+      "cal": 520
+    },
+    "upcharge": 0,
+    "mode": "separate",
+    "batch_categories": [],
+    "image": "/meal-photos/meals/chicken-bro-tato-4fb09990.jpg",
+    "ingredients": [
+      {
+        "item": "Chicken Breast",
+        "category": "protein",
+        "pct": 100
+      },
+      {
+        "item": "Broccoli",
+        "category": "veggies",
+        "pct": 100
+      },
+      {
+        "item": "Potato",
+        "category": "carbs",
+        "pct": 100
+      }
+    ]
+  },
+  {
+    "id": "m1782856778279hiqw",
+    "name": "Beef Sweet Potato",
+    "macros": {
+      "protein": 52,
+      "carbs": 42,
+      "fat": 27,
+      "cal": 619
+    },
+    "upcharge": 0,
+    "mode": "separate",
+    "batch_categories": [],
+    "image": "",
+    "ingredients": [
+      {
+        "item": "Ground Beef",
+        "category": "protein",
+        "pct": 100
+      },
+      {
+        "item": "Sweet Potato",
+        "category": "carbs",
+        "pct": 100
+      },
+      {
+        "item": "Onion",
+        "category": "veggies",
+        "pct": 100
+      },
+      {
+        "item": "Hot Honey",
+        "category": "misc",
+        "pct": null
+      }
+    ]
+  },
+  {
+    "id": "m1782849778524ygug",
+    "name": "Chicken Broccoli Rice",
+    "macros": {
+      "protein": 56,
+      "carbs": 45,
+      "fat": 10,
+      "cal": 490
+    },
+    "upcharge": 0,
+    "mode": "separate",
+    "batch_categories": [],
+    "image": "",
+    "ingredients": [
+      {
+        "item": "Chicken Breast",
+        "category": "protein",
+        "pct": 100
+      },
+      {
+        "item": "Broccoli",
+        "category": "veggies",
+        "pct": 100
+      },
+      {
+        "item": "Jasmine Rice",
+        "category": "carbs",
+        "pct": 100
+      }
+    ]
+  },
+  {
+    "id": "m1783904700437k48j",
+    "name": "Teriyaki Chicken",
+    "macros": {
+      "protein": 42,
+      "carbs": 58,
+      "fat": 14,
+      "cal": 480
+    },
+    "upcharge": 0,
+    "mode": "separate",
+    "batch_categories": [],
+    "image": "",
+    "ingredients": [
+      {
+        "item": "Chicken Breast",
+        "category": "protein",
+        "pct": 100
+      },
+      {
+        "item": "Broccoli",
+        "category": "veggies",
+        "pct": 100
+      },
+      {
+        "item": "Jasmine Rice",
+        "category": "carbs",
+        "pct": 100
+      },
+      {
+        "item": "Teriyaki Sauce",
+        "category": "misc",
+        "pct": null
+      }
+    ]
+  },
+  {
+    "id": "m17839855552264lsx",
+    "name": "BBQ Chicken",
+    "macros": {
+      "protein": 55,
+      "carbs": 43,
+      "fat": 20,
+      "cal": 495
+    },
+    "upcharge": 0,
+    "mode": "separate",
+    "batch_categories": [],
+    "image": "",
+    "ingredients": [
+      {
+        "item": "Chicken Breast",
+        "category": "protein",
+        "pct": 100
+      },
+      {
+        "item": "Potato",
+        "category": "carbs",
+        "pct": 100
+      },
+      {
+        "item": "Broccoli",
+        "category": "veggies",
+        "pct": 100
+      },
+      {
+        "item": "BBQ Sauce",
+        "category": "misc",
+        "pct": null
+      }
+    ]
+  }
+]

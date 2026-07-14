@@ -1684,6 +1684,13 @@
 
     .ing-pill.checked .ing-qty-tbd { background: #f5f2ee; color: #7a7270; }
 
+    /* Stage 5: pack estimate, misc meal breakdown, unmatched-meal warning */
+    .ing-pill-pack { font-size: 0.76rem; font-weight: 600; color: rgba(255,255,255,0.8); margin-top: 1px; }
+    .ing-pill.checked .ing-pill-pack { color: #7a7270; }
+    .ing-pill.misc { opacity: 0.95; }
+    .ing-misc-meals { font-size: 0.74rem; font-weight: 500; color: rgba(255,255,255,0.8); line-height: 1.35; }
+    .ing-unmatched-warn { grid-column: 1 / -1; background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c; font-size: 0.8rem; font-weight: 500; padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; }
+
     .ing-pill-tap {
       font-size: 0.72rem;
       color: rgba(255,255,255,0.75);
@@ -2919,7 +2926,16 @@
         return;
       }
 
-      list.innerHTML = all.map((order, idx) => {
+      // Flag ordered meals that don't exist in the meal library (won't be counted in shopping quantities).
+      const libNames = new Set((loadMealLibrary() || []).map(m => (m.name || "").toLowerCase().trim()));
+      const unmatched = [...new Set(all.flatMap(o => (o.meals || []).map(m => (m.meal_name || "").trim()))
+        .filter(n => n && !libNames.has(n.toLowerCase())))];
+      const escO = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      const warnBanner = unmatched.length
+        ? `<div class="ing-unmatched-warn">⚠ ${unmatched.length} ordered meal${unmatched.length > 1 ? "s" : ""} not in the meal library — won't be counted in ingredient quantities: <b>${unmatched.map(escO).join(", ")}</b>. Fix the meal name (Menu tab) so it matches.</div>`
+        : "";
+
+      list.innerHTML = warnBanner + all.map((order, idx) => {
         const fulfBadge = order.fulfillment === "delivery"
           ? '<span class="o-badge o-badge-delivery">DELIVERY</span>'
           : '<span class="o-badge o-badge-pickup">PICKUP</span>';
@@ -4121,9 +4137,13 @@
         meal.ingredients.forEach(ing => {
           if (!ing.item || !ing.category) return;
           if (!ingMap[ing.item]) {
-            ingMap[ing.item] = { name: ing.item, category: ing.category, cookedG: 0, hasOrders: false, isMisc: ing.category === "misc" };
+            ingMap[ing.item] = { name: ing.item, category: ing.category, cookedG: 0, hasOrders: false, isMisc: ing.category === "misc", usedIn: [] };
           }
-          if (ing.category !== "misc" && sv) {
+          if (ing.category === "misc") {
+            // Misc/eyeball: no quantity math — just record which ordered meals include it, with counts.
+            const ordCount = sv ? (sv.female + sv.male) : 0;
+            if (ordCount > 0) ingMap[ing.item].usedIn.push({ meal: meal.name, orders: ordCount });
+          } else if (sv) {
             const inBatch = batch.includes(ing.category);
             // grams available to this ingredient's GROUP, per gender (combined pool if batched)
             const poolG = g => inBatch
@@ -4139,8 +4159,37 @@
         });
       });
 
-      return Object.values(ingMap).sort((a, b) => a.name.localeCompare(b.name));
+      // Derived purchase quantities per non-misc ingredient: aggregated cooked → raw (shrinkage) →
+      // purchase units → pack estimate (all from the ingredient library).
+      Object.values(ingMap).forEach(p => {
+        if (p.isMisc) return;
+        const shrink = ingShrinkage(p.name);
+        p.shrink   = shrink;
+        p.cookedGr = Math.round(p.cookedG);
+        if (shrink != null && p.cookedG > 0) {
+          p.rawG = Math.round(p.cookedG * shrink);
+          const u = getIngUnit(p.name);
+          if (u) {
+            p.unit    = u.unit;
+            p.unitQty = p.rawG / u.g;
+            const rec = ingRec(p.name);
+            if (rec && rec.package_size) {
+              p.packs    = Math.ceil(p.unitQty / rec.package_size);
+              p.packSize = rec.package_size;
+              p.packUnit = rec.package_size_unit || u.unit;
+            }
+          }
+        }
+      });
+
+      // Flag any ordered meal name that isn't in the meal library at all (a data-sync problem to fix,
+      // not something to silently drop). Surfaced on the Ingredients + Orders tabs.
+      const libNames = new Set((loadMealLibrary() || []).map(m => (m.name || "").toLowerCase().trim()));
+      ingUnmatchedMeals = Object.keys(mealServings).filter(k => k && !libNames.has(k));
+
+      return Object.values(ingMap);
     }
+    let ingUnmatchedMeals = [];
 
     async function initIngredientsTab() {
       await hydrateMenuDraft();     // shopping list derives from the confirmed menu — pull the shared draft first
@@ -4190,13 +4239,27 @@
         return;
       }
 
-      const doneCount = pills.filter(p => done.includes(p.name)).length;
-      sub.textContent = `${doneCount} of ${pills.length} checked off`;
+      const measured = pills.filter(p => !p.isMisc);
+      const miscPills = pills.filter(p => p.isMisc && p.usedIn && p.usedIn.length);
+      // Shop by quantity: biggest raw purchase first (unknown-qty ingredients sink to the bottom).
+      measured.sort((a, b) => (b.rawG || -1) - (a.rawG || -1));
 
-      const pending  = pills.filter(p => !done.includes(p.name));
-      const finished = pills.filter(p => done.includes(p.name));
+      const doneCount = measured.filter(p => done.includes(p.name)).length;
+      sub.textContent = `${doneCount} of ${measured.length} checked off`;
+
+      const pending  = measured.filter(p => !done.includes(p.name));
+      const finished = measured.filter(p => done.includes(p.name));
 
       main.innerHTML = "";
+      const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+
+      // Data-sync warning: ordered meals that aren't in the library (would otherwise be silently skipped).
+      if (ingUnmatchedMeals && ingUnmatchedMeals.length) {
+        const w = document.createElement("div");
+        w.className = "ing-unmatched-warn";
+        w.innerHTML = `⚠ ${ingUnmatchedMeals.length} ordered meal${ingUnmatchedMeals.length > 1 ? "s" : ""} not found in the meal library — quantities can't be computed for: <b>${ingUnmatchedMeals.map(esc).join(", ")}</b>. Fix the meal name on the Menu tab.`;
+        main.appendChild(w);
+      }
 
       function buildPillEl(pill) {
         const isChecked = done.includes(pill.name);
@@ -4204,53 +4267,56 @@
         el.className = "ing-pill" + (isChecked ? " checked" : "");
 
         let qtyHtml;
-        if (pill.isMisc) {
-          qtyHtml = `<div class="ing-qty-tbd">shop manually</div>`;
+        if (pill.rawG != null && pill.unit) {
+          const packLine = pill.packs
+            ? `<div class="ing-pill-pack">~${pill.packs} pack${pill.packs > 1 ? "s" : ""} of ${pill.packSize} ${esc(pill.packUnit)}</div>`
+            : "";
+          qtyHtml = `<div class="ing-pill-qty">${pill.unitQty.toFixed(1)} ${esc(pill.unit)}</div>${packLine}`
+                  + `<div class="ing-qty-cooked">${pill.rawG.toLocaleString()}g raw → ${pill.cookedGr.toLocaleString()}g cooked</div>`;
+        } else if (pill.cookedG > 0 && pill.shrink == null) {
+          qtyHtml = `<div class="ing-pill-qty">${pill.cookedGr.toLocaleString()}g cooked</div><div class="ing-qty-cooked">no shrinkage data — add it in the Ingredient Library</div>`;
         } else if (pill.cookedG > 0) {
-          const shrink  = ingShrinkage(pill.name);
-          const cookedG = Math.round(pill.cookedG);
-          if (shrink != null) {
-            const rawG    = Math.round(pill.cookedG * shrink);
-            const unitDef = getIngUnit(pill.name);
-            if (unitDef) {
-              const unitQty = (rawG / unitDef.g).toFixed(1);
-              qtyHtml = `<div class="ing-pill-qty">${unitQty} ${unitDef.unit}<span class="ing-qty-cooked"> (${rawG}g raw → ${cookedG}g cooked)</span></div>`;
-            } else {
-              qtyHtml = `<div class="ing-pill-qty">${rawG}g raw<span class="ing-qty-cooked"> → ${cookedG}g cooked</span></div>`;
-            }
-          } else {
-            qtyHtml = `<div class="ing-pill-qty">${cookedG}g cooked<span class="ing-qty-cooked"> (no shrinkage data)</span></div>`;
-          }
+          qtyHtml = `<div class="ing-pill-qty">${pill.rawG != null ? pill.rawG.toLocaleString() + "g raw" : pill.cookedGr.toLocaleString() + "g cooked"}</div>`;
         } else if (!pill.hasOrders) {
-          qtyHtml = `<div class="ing-qty-tbd">no orders match this meal</div>`;
+          qtyHtml = `<div class="ing-qty-tbd">no orders this week</div>`;
         } else {
           qtyHtml = `<div class="ing-qty-tbd">0g</div>`;
         }
 
         el.innerHTML = `
-          <div class="ing-pill-name">${pill.name}</div>
+          <div class="ing-pill-name">${esc(pill.name)}</div>
           ${qtyHtml}
           <div class="ing-pill-tap">Tap when grabbed →</div>
-          <button class="ing-undo-btn" onclick="event.stopPropagation(); undoIngPill('${pill.name}')">Undo</button>
+          <button class="ing-undo-btn" onclick="event.stopPropagation(); undoIngPill('${esc(pill.name).replace(/'/g,"\\'")}')">Undo</button>
         `;
-
-        if (!isChecked) {
-          el.addEventListener("click", () => checkIngPill(pill.name));
-        }
+        if (!isChecked) el.addEventListener("click", () => checkIngPill(pill.name));
         return el;
       }
 
-      function appendSection(label, items, headingClass) {
+      function buildMiscEl(pill) {
+        const el = document.createElement("div");
+        el.className = "ing-pill misc";
+        const meals = pill.usedIn.map(u => `${esc(u.meal)}: ${u.orders}`).join(" · ");
+        el.innerHTML = `
+          <div class="ing-pill-name">${esc(pill.name)}</div>
+          <div class="ing-misc-meals">${meals}</div>
+          <div class="ing-qty-tbd">eyeball qty</div>
+        `;
+        return el;
+      }
+
+      function appendSection(label, items, headingClass, builder) {
         if (items.length === 0) return;
         const h = document.createElement("div");
         h.className = "ing-section-heading" + (headingClass ? " " + headingClass : "");
         h.textContent = label;
         main.appendChild(h);
-        items.forEach(pill => main.appendChild(buildPillEl(pill)));
+        items.forEach(pill => main.appendChild(builder(pill)));
       }
 
-      appendSection("Still need to grab", pending, "");
-      appendSection("Got it", finished, "done-heading");
+      appendSection("Still need to grab", pending, "", buildPillEl);
+      appendSection("Got it", finished, "done-heading", buildPillEl);
+      appendSection("Eyeball / misc — no exact qty", miscPills, "done-heading", buildMiscEl);
     }
 
     function checkIngPill(name) {
@@ -4268,29 +4334,33 @@
       const pills = buildIngredientPills();
       if (pills.length === 0) { showToast("No ingredients to copy."); return; }
 
-      const lines = pills.map(p => {
+      const measured = pills.filter(p => !p.isMisc).sort((a, b) => (b.rawG || -1) - (a.rawG || -1));
+      const miscP    = pills.filter(p => p.isMisc && p.usedIn && p.usedIn.length);
+
+      const lines = measured.map(p => {
         let qty;
-        if (p.isMisc) {
-          qty = "shop manually";
-        } else if (p.cookedG > 0) {
-          const shrink = ingShrinkage(p.name);
-          if (shrink != null) {
-            const rawG    = Math.round(p.cookedG * shrink);
-            const unitDef = getIngUnit(p.name);
-            qty = unitDef
-              ? `${(rawG / unitDef.g).toFixed(1)} ${unitDef.unit} (${rawG}g raw → ${Math.round(p.cookedG)}g cooked)`
-              : `${rawG}g raw (${Math.round(p.cookedG)}g cooked)`;
-          } else {
-            qty = `${Math.round(p.cookedG)}g cooked`;
-          }
+        if (p.rawG != null && p.unit) {
+          const pack = p.packs ? ` (~${p.packs} pack${p.packs > 1 ? "s" : ""} of ${p.packSize} ${p.packUnit})` : "";
+          qty = `${p.unitQty.toFixed(1)} ${p.unit}${pack} — ${p.rawG}g raw → ${p.cookedGr}g cooked`;
+        } else if (p.cookedG > 0 && p.shrink == null) {
+          qty = `${p.cookedGr}g cooked (no shrinkage data)`;
+        } else if (!p.hasOrders) {
+          qty = "no orders this week";
         } else {
           qty = "qty TBD";
         }
         return `${p.name}: ${qty}`;
       });
 
+      if (miscP.length) {
+        lines.push("", "— Eyeball / misc —");
+        miscP.forEach(p => lines.push(`${p.name}: ${p.usedIn.map(u => `${u.meal} ${u.orders}`).join(" · ")}`));
+      }
+
       const weekStr = getWeekStr();
-      const header  = `GainzTrain Ingredients — Week of ${weekStr}\n`;
+      const warn = (ingUnmatchedMeals && ingUnmatchedMeals.length)
+        ? `\n⚠ Not in library (fix name): ${ingUnmatchedMeals.join(", ")}\n` : "";
+      const header  = `GainzTrain Ingredients — Week of ${weekStr}\n${warn}`;
       navigator.clipboard.writeText(header + lines.join("\n"))
         .then(() => showToast("Ingredient list copied!"));
     }

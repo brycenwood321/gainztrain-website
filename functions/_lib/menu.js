@@ -23,15 +23,15 @@ function denverOffsetHours(date) {
   } catch { return -7; }
 }
 
-// Order cutoff for a given week: FRIDAY 11:59pm Mountain — the boundary into Saturday.
-// Computed as Friday 23:59 America/Denver → UTC, DST-correct (Sat 05:59Z in summer / Sat 06:59Z in winter).
+// Order cutoff for a given week: FRIDAY 11:00pm Mountain — the boundary into Saturday.
+// Computed as Friday 23:00 America/Denver → UTC, DST-correct (Sat 05:00Z in summer / Sat 06:00Z in winter).
 export function cutoffForWeek(weekOfISO) {
   const sunday = new Date(`${weekOfISO}T12:00:00Z`);            // noon avoids date rollover
   const friday = new Date(sunday);
   friday.setUTCDate(friday.getUTCDate() - 2);
   const off = denverOffsetHours(friday);                        // -7 or -6
-  // 23:59 local Denver → UTC hour = 23 - offset (MDT -6 → Sat 05:59Z, MST -7 → Sat 06:59Z)
-  return new Date(Date.UTC(friday.getUTCFullYear(), friday.getUTCMonth(), friday.getUTCDate(), 23 - off, 59, 0));
+  // 23:00 local Denver → UTC hour = 23 - offset (MDT -6 → Sat 05:00Z, MST -7 → Sat 06:00Z)
+  return new Date(Date.UTC(friday.getUTCFullYear(), friday.getUTCMonth(), friday.getUTCDate(), 23 - off, 0, 0));
 }
 
 export function isLocked(weekOfISO, now = new Date()) {

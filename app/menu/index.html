@@ -55,7 +55,7 @@
   </style>
 </head>
 <body>
-  <div class="topbar"><div class="brand">GAINZ<span class="t">TRAIN</span></div><a href="/app/">← My account</a></div>
+  <div class="topbar"><a href="/" class="brand" style="text-decoration:none;color:inherit;" aria-label="Go to homepage">GAINZ<span class="t">TRAIN</span></a><a href="/app/">← My account</a></div>
   <div class="wrap">
     <div id="loading" class="loading">Loading this week's menu…</div>
     <div id="msg" class="msg"></div>
@@ -182,8 +182,8 @@
       }catch(e){}
       const d=new Date(body.week_of+'T00:00:00Z');
       $('weekLine').textContent=`Week of ${d.toLocaleDateString('en-US',{month:'long',day:'numeric',timeZone:'UTC'})} · choose ${need} meals`;
-      if(locked){$('lockBanner').classList.remove('hidden');$('lockBanner').textContent='Ordering for this week has closed (Friday 11:59 pm MT cutoff). These are your locked-in meals.';}
-      else{$('openBanner').classList.remove('hidden');$('openBanner').textContent='Pick by Friday 11:59 pm MT — after that we lock your order and prep Saturday.';}
+      if(locked){$('lockBanner').classList.remove('hidden');$('lockBanner').textContent='Ordering for this week has closed (Friday 11:00 pm MT cutoff). These are your locked-in meals.';}
+      else{$('openBanner').classList.remove('hidden');$('openBanner').textContent='Pick by Friday 11:00 pm MT — after that we lock your order and prep Saturday.';}
       $('app').classList.remove('hidden');$('bar').classList.remove('hidden');
       renderMeals();refresh();
       if(autoPicks){
@@ -192,7 +192,7 @@
           const r=await saveSelections();
           if(r.status===200&&r.body.ok){
             try{localStorage.removeItem('gt_meal_picks');}catch(e){}
-            msg(`Your ${r.body.total_meals} meals are locked in for the week 🎉 You can change them until Friday 11:59 pm MT.`,'ok');refresh();
+            msg(`Your ${r.body.total_meals} meals are locked in for the week 🎉 You can change them until Friday 11:00 pm MT.`,'ok');refresh();
           }else{
             msg('We loaded the meals you picked — hit Save to lock them in.','ok');
           }

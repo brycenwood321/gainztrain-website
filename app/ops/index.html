@@ -4512,6 +4512,22 @@
           '<div class="stat-sub" style="margin-top:.35rem;color:#9a928d;">Every change syncs to Stripe immediately. Cancel keeps meals through the paid period.</div>' +
           "</div>"
         ) : "";
+        // Owner edit of the customer's profile (name/phone), address (Stripe-synced), and password reset.
+        const inp = (id, ph, val, w) => '<span style="display:inline-flex;flex-direction:column;gap:.15rem;"><label class="stat-sub">' + ph + '</label><input id="' + id + '" type="text" value="' + ownEsc(val || "") + '" style="padding:.4rem;width:' + (w || "9rem") + ';"></span>';
+        const isDel = c.delivery_method === "delivery";
+        const editCard =
+          '<div class="ownv-card"><h2>Edit details</h2>' +
+          '<div class="ownv-ctl" style="flex-wrap:wrap;gap:.6rem;align-items:flex-end;">' + inp("own-edFirst", "First name", c.first_name) + inp("own-edLast", "Last name", c.last_name) + inp("own-edPhone", "Phone", c.phone, "10rem") + '<button class="ownv-btn" data-ed="profile">Save name/phone</button></div>' +
+          '<div style="margin-top:1rem;border-top:1px solid #efe9e5;padding-top:.9rem;"><div class="stat-sub" style="font-weight:700;color:#4a4440;margin-bottom:.4rem;">Address</div>' +
+            '<div class="ownv-ctl" style="flex-wrap:wrap;gap:.6rem;align-items:flex-end;">' +
+              '<span style="display:inline-flex;flex-direction:column;gap:.15rem;"><label class="stat-sub">Method</label><select id="own-edMethod" onchange="ownEdToggleAddr()" style="padding:.4rem;"><option value="pickup">Pickup</option><option value="delivery">Delivery</option></select></span>' +
+              '<span id="own-edAddrWrap" style="display:' + (isDel ? "inline-flex" : "none") + ';gap:.6rem;flex-wrap:wrap;align-items:flex-end;">' + inp("own-edAddr", "Street address", c.address, "12rem") + inp("own-edCity", "City", c.city) + inp("own-edZip", "Zip", c.zip, "6rem") + '</span>' +
+              '<button class="ownv-btn" data-ed="address">Update address</button></div>' +
+            '<div class="stat-sub" style="color:#9a928d;margin-top:.3rem;">Delivery changes recompute the zone fee and sync to Stripe.</div></div>' +
+          '<div style="margin-top:1rem;border-top:1px solid #efe9e5;padding-top:.9rem;"><div class="stat-sub" style="font-weight:700;color:#4a4440;margin-bottom:.4rem;">Reset password</div>' +
+            '<div class="ownv-ctl" style="gap:.6rem;align-items:flex-end;"><input id="own-edPw" type="text" placeholder="New password (min 8)" style="padding:.4rem;width:14rem;"><button class="ownv-btn" data-ed="password">Reset</button></div></div>' +
+          '<div class="stat-sub" id="own-edMsg" style="margin-top:.6rem;"></div>' +
+          "</div>";
         el.innerHTML =
           '<div class="ownv-ctl"><span class="link" id="own-backCust">← All customers</span></div>' +
           '<div class="ownv-card"><h2 style="font-size:1.1rem;color:#1a1614;">' + ownEsc((c.first_name || "") + " " + (c.last_name || "")) + "</h2>" +
@@ -4521,11 +4537,45 @@
             '<div class="stat" style="margin-top:.5rem;">' + ownMoney(d.total_spent_cents) + ' <span class="stat-sub">lifetime</span></div></div>' +
           '<div class="ownv-card"><h2>Subscriptions</h2><table><tbody>' + ((d.subscriptions || []).map((s) => "<tr><td><span class=\"badge " + ownEsc(s.status) + "\">" + ownEsc(s.status) + "</span></td><td>" + s.meals_per_week + " meals</td><td>" + (s.coupon_code ? ownEsc(s.coupon_code) : "") + "</td><td>" + (s.cancel_at_period_end ? "cancels " + ownFmtDate(s.current_period_end) : (s.current_period_end ? "renews " + ownFmtDate(s.current_period_end) : "")) + "</td></tr>").join("") || '<tr><td class="stat-sub">none</td></tr>') + "</tbody></table></div>" +
           manageCard +
+          editCard +
           mealsCard +
           '<div class="ownv-card"><h2>Invoices</h2><table><thead><tr><th>Date</th><th>Status</th><th>Paid</th><th></th></tr></thead><tbody>' + ((d.invoices || []).map((i) => "<tr><td>" + ownFmtDate(i.created_at) + '</td><td><span class="badge ' + ownEsc(i.status || "incomplete") + '">' + ownEsc(i.status || "—") + "</span></td><td>" + ownMoney(i.status === "paid" ? i.amount_paid_cents : i.amount_due_cents) + "</td><td>" + (i.hosted_invoice_url ? '<a href="' + ownEsc(i.hosted_invoice_url) + '" target="_blank" rel="noopener" class="link">view</a>' : "") + "</td></tr>").join("") || '<tr><td class="stat-sub">no invoices</td></tr>') + "</tbody></table></div>";
         document.getElementById("own-backCust").onclick = ownRenderCustomers;
         if (msub) el.querySelectorAll("[data-sub-act]").forEach((b) => (b.onclick = () => ownSubDo(id, b.dataset.subAct)));
+        const methodSel = document.getElementById("own-edMethod");
+        if (methodSel) methodSel.value = isDel ? "delivery" : "pickup";
+        el.querySelectorAll("[data-ed]").forEach((b) => (b.onclick = () => ownEditCustomer(id, b.dataset.ed)));
       } catch (e) { ownErr(el, e); }
+    }
+
+    function ownEdToggleAddr() {
+      const del = document.getElementById("own-edMethod").value === "delivery";
+      document.getElementById("own-edAddrWrap").style.display = del ? "inline-flex" : "none";
+    }
+
+    // Owner edit of a customer's profile / address / password → /api/admin/customer-edit, then refresh.
+    async function ownEditCustomer(customerId, kind) {
+      const msg = document.getElementById("own-edMsg");
+      const set = (t, c) => { if (msg) { msg.textContent = t; msg.style.color = c || "#9a928d"; } };
+      const body = { customer_id: customerId };
+      if (kind === "profile") {
+        body.first_name = document.getElementById("own-edFirst").value;
+        body.last_name  = document.getElementById("own-edLast").value;
+        body.phone      = document.getElementById("own-edPhone").value;
+      } else if (kind === "address") {
+        const method = document.getElementById("own-edMethod").value;
+        body.address_change = { delivery_method: method, address: document.getElementById("own-edAddr").value, city: document.getElementById("own-edCity").value, zip: document.getElementById("own-edZip").value };
+        if (method === "delivery" && !confirm("Update delivery address? This recomputes the zone fee and adjusts Stripe billing.")) return;
+      } else if (kind === "password") {
+        const pw = document.getElementById("own-edPw").value;
+        if (pw.length < 8) { set("Password must be at least 8 characters.", "#dc2626"); return; }
+        if (!confirm("Reset this customer's password? Their current sessions will be logged out.")) return;
+        body.password = pw;
+      }
+      set("Saving…");
+      const r = await ownPost("/api/admin/customer-edit", body);
+      if (r && r.ok) { showToast("Saved."); ownShowCustomer(customerId); }
+      else { const em = (r && (r.detail || r.error)) || "Save failed."; set(em, "#dc2626"); showToast(em); }
     }
 
     // Owner action on a customer's subscription → /api/admin/customer-sub (Stripe-synced), then refresh.

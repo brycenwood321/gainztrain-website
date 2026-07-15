@@ -14,10 +14,14 @@ import { one, run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
 import { str } from '../../_lib/validate.js';
-import { tierForMeals, ensureStripePrice, ensureDeliveryPrice, MIN_MEALS, MAX_MEALS } from '../../_lib/plans.js';
+import { tierForMeals, ensureStripePrice, ensureDeliveryPrice, ensureFuel8Coupon, MIN_MEALS, MAX_MEALS } from '../../_lib/plans.js';
 
 // Stripe statuses that mean "this person already has a plan" — block a second subscription.
 const LIVE_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
+
+// FUEL8 flyer promo: 2 free meals/week for 4 weeks, sized to the customer's tier. Once per customer,
+// ends 2026-09-01 (end of day Mountain). Handled specially below (dynamic tier coupon, not a static code).
+const FUEL8_ENDS_MS = Date.parse('2026-09-01T23:59:59-06:00');
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -34,7 +38,18 @@ export async function onRequestPost(context) {
   // Internal comps like OWNERS100 (is_public=0) are blocked here — a customer can't grant themselves
   // a free-forever sub. The code IS the Stripe coupon id; we apply it directly to the Checkout Session.
   const code = str(body.code).trim().toUpperCase();
-  if (code) {
+  let couponToApply = null;   // the actual Stripe coupon id we attach to the Checkout Session
+  let isFuel8 = false;
+  if (code === 'FUEL8') {
+    // FUEL8: 2 free meals/week for 4 weeks, sized to THIS order's tier. Special-cased (not a static code).
+    if (Number.isNaN(FUEL8_ENDS_MS) || Date.now() > FUEL8_ENDS_MS) return fail(400, 'code_expired', 'That promo has ended.');
+    // Once per customer — blocks reuse even after a cancel + resubscribe (the double-billing guard below
+    // separately blocks anyone with a currently-active plan).
+    const prior = await one(env.DB, `SELECT 1 AS x FROM promo_redemptions WHERE customer_id = ? AND code = 'FUEL8'`, customer.id);
+    if (prior) return fail(400, 'code_used', "You've already used the FUEL8 offer.");
+    couponToApply = await ensureFuel8Coupon(env, tier); // tier-sized coupon = 2 meals off/wk
+    isFuel8 = true;
+  } else if (code) {
     const c = await one(env.DB, `SELECT code, is_public, expires_at, cap FROM coupons WHERE code = ?`, code);
     if (!c || !c.is_public) return fail(400, 'invalid_code', "That promo code isn't valid.");
     if (c.expires_at && new Date(c.expires_at) < new Date()) return fail(400, 'code_expired', 'That promo code has expired.');
@@ -49,6 +64,7 @@ export async function onRequestPost(context) {
         return fail(400, 'code_maxed', 'That promo code has reached its limit.');
       }
     } catch { /* Stripe unreachable — proceed; Stripe enforces any native max at checkout */ }
+    couponToApply = code;
   }
 
   const deliveryMethod = str(body.delivery_method) === 'delivery' ? 'delivery' : 'pickup';
@@ -119,6 +135,7 @@ export async function onRequestPost(context) {
         metadata: {
           meals_per_week: String(meals), tier: tier.key, d1_customer_id: customer.id,
           delivery_method: deliveryMethod, delivery_zone: String(zone),
+          promo: isFuel8 ? 'FUEL8' : '', // webhook watches this to trim FUEL8 to exactly 4 weeks
         },
       },
       metadata: { d1_customer_id: customer.id, meals: String(meals), tier: tier.key, delivery_method: deliveryMethod, code: code || '' },
@@ -127,10 +144,10 @@ export async function onRequestPost(context) {
       success_url: `${base}/app/menu/?checkout=success`,
       cancel_url: `${base}/start/?checkout=cancel`,
     };
-    // A validated code applies its coupon directly. We deliberately DON'T enable Stripe's hosted
-    // promotion-code box — every code must go through our /start form so the is_public + cap gate can't
-    // be bypassed by typing a non-public code (e.g. OWNERS100) on Stripe's checkout page.
-    if (code) sessionParams.discounts = [{ coupon: code }];
+    // A validated code applies its coupon directly (for FUEL8 this is the tier-sized coupon, not the
+    // literal "FUEL8"). We deliberately DON'T enable Stripe's hosted promotion-code box — every code must
+    // go through our /start form so the is_public + cap gate can't be bypassed by typing a non-public code.
+    if (couponToApply) sessionParams.discounts = [{ coupon: couponToApply }];
 
     const session = await stripe(env, 'POST', 'checkout/sessions', sessionParams,
       `gt_checkout_${customer.id}_${meals}_${deliveryMethod}_${zone}_${code}`);

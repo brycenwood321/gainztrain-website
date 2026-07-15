@@ -237,7 +237,7 @@
       const code=($('code').value||'').trim().toUpperCase();const el=$('codeMsg');
       if(!code){el.className='zipmsg';el.textContent='';return;}
       try{const r=await api('/api/coupons/validate?code='+encodeURIComponent(code));
-        if(r.status===200&&r.body.valid===true){el.className='zipmsg ok';el.textContent=r.body.percent_off?`✓ ${r.body.percent_off}% off applied at checkout.`:'✓ Code applied at checkout.';}
+        if(r.status===200&&r.body.valid===true){el.className='zipmsg ok';el.textContent=r.body.label?('🎉 '+r.body.label):(r.body.percent_off?`✓ ${r.body.percent_off}% off applied at checkout.`:'✓ Code applied at checkout.');}
         else if(r.status===200&&r.body.valid===false){el.className='zipmsg bad';el.textContent=(r.body.reason==='expired')?'That code has expired.':"That code isn't valid.";}
         else{el.className='zipmsg';el.textContent='';}
       }catch(e){el.className='zipmsg';el.textContent='';}
@@ -347,6 +347,12 @@
       if(!isNaN(qsMeals))meals=Math.min(MAX,Math.max(MIN,qsMeals));
       // Restore a saved cart (zip/address/method/code, and meals only when ?meals= wasn't supplied).
       restoreCart(isNaN(qsMeals));
+      // Promo handoff: a QR/link (?code=FUEL8) or the /menu banner (localStorage gt_promo) pre-fills the
+      // promo field so the discount is already on. Validate it so they see "8 free meals applied".
+      try{
+        var promoIn=((new URLSearchParams(location.search).get('code'))||localStorage.getItem('gt_promo')||'').trim().toUpperCase();
+        if(promoIn&&!$('code').value){$('code').value=promoIn;saveCart();$('code').dispatchEvent(new Event('blur'));}
+      }catch(e){}
       // MEALS-FIRST: picks made on /menu drive the meal count here and auto-save in the app after
       // checkout. While picks exist the stepper is locked (count must match the picks exactly).
       try{

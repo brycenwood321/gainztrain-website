@@ -66,6 +66,31 @@ export async function ensureStripePrice(env, tier) {
   });
 }
 
+// FUEL8 flyer promo: 2 free meals/week for the first 4 weeks, sized to the customer's tier. Delivered as
+// a per-tier Stripe coupon (amount_off = 2 x that tier's per-meal price). duration=repeating/1-month is a
+// HARD CEILING (Stripe caps a weekly sub to ~4-5 discounted invoices); the webhook trims it to exactly 4
+// weekly applications, so the worst case if that trim ever misfired is ~5 weeks, never a runaway discount.
+// Idempotent by coupon id (FUEL8_STARTER / FUEL8_ATHLETE / FUEL8_ELITE).
+export async function ensureFuel8Coupon(env, tier) {
+  const id = `FUEL8_${tier.key.toUpperCase()}`;
+  const amountOff = 2 * tier.perMealCents; // 2 meals at this tier
+  try {
+    const existing = await stripe(env, 'GET', `coupons/${id}`);
+    if (existing && existing.id) return existing.id;
+  } catch { /* not found -> create below */ }
+  try {
+    const c = await stripe(env, 'POST', 'coupons', {
+      id, name: `FUEL8 - 2 free ${tier.name} meals/wk`,
+      amount_off: amountOff, currency: 'usd',
+      duration: 'repeating', duration_in_months: 1,
+    }, `gt_fuel8_${id}`);
+    return c.id;
+  } catch (e) {
+    if (e?.stripe?.code === 'resource_already_exists') return id;
+    throw e;
+  }
+}
+
 // Delivery fee as its own recurring weekly line item. feeCents comes from the delivery_zones table.
 export async function ensureDeliveryPrice(env, zone, feeCents) {
   return ensurePrice(env, {

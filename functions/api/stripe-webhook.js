@@ -18,6 +18,7 @@ import { ensureCustomer, mirrorSubscription, mirrorInvoice, mirrorPayment, audit
 import { notify } from '../_lib/notify.js';
 import { ownerNotify } from '../_lib/owner_notify.js';
 import { capiEvent } from '../_lib/capi.js';
+import { stripe } from '../_lib/stripe.js';
 
 const SIG_TOLERANCE_SECONDS = 300; // reject events whose timestamp is >5 min skewed
 
@@ -93,6 +94,49 @@ async function dispatch(env, event) {
   // OWNER alerts (signup / payment failed / refund). NOT gated by BILLING_NOTIFY_ENABLED — that gate is
   // for customer emails during cutover; the owners want to know about money events regardless.
   await safeNotifyOwner(env, event);
+  // FUEL8 promo: trim the discount to EXACTLY 4 weekly applications.
+  await safeFuel8Cap(env, event);
+}
+
+// FUEL8 flyer promo (2 free meals/wk x 4 weeks): count each discounted weekly invoice for a FUEL8 sub
+// and, once 4 weeks are delivered, remove the discount so week 5 onward bills at full price. Counting is
+// idempotent per invoice (promo_invoice_ledger) so a webhook retry/reprocess can't miscount. Fully
+// try/caught — the promo cap must NEVER fail the webhook (that would make Stripe retry + re-mirror).
+async function safeFuel8Cap(env, event) {
+  try {
+    if (event.type !== 'invoice.paid') return;
+    const inv = event.data?.object || {};
+    const subId = inv.subscription;
+    if (!subId || !inv.id) return;
+    const hadDiscount = (Array.isArray(inv.total_discount_amounts) && inv.total_discount_amounts.length > 0)
+      || !!inv.discount || (Array.isArray(inv.discounts) && inv.discounts.length > 0);
+    if (!hadDiscount) return; // no discount on this invoice -> not a FUEL8 week (skip the extra Stripe fetch)
+
+    const sub = await stripe(env, 'GET', `subscriptions/${subId}`);
+    if (!sub || sub.metadata?.promo !== 'FUEL8') return;
+    const customerId = sub.metadata?.d1_customer_id || null;
+    const now = nowIso();
+
+    // Count this invoice exactly once (survives webhook retries / reprocessing).
+    const led = await run(env.DB,
+      `INSERT OR IGNORE INTO promo_invoice_ledger (invoice_id, customer_id, code, at) VALUES (?, ?, 'FUEL8', ?)`,
+      inv.id, customerId, now);
+    if (!led || !led.meta || led.meta.changes === 0) return; // already counted this invoice
+    if (!customerId) return;
+
+    await run(env.DB,
+      `INSERT INTO promo_redemptions (customer_id, code, subscription_id, weeks_discounted, first_redeemed_at, last_applied_at)
+       VALUES (?, 'FUEL8', ?, 1, ?, ?)
+       ON CONFLICT(customer_id, code) DO UPDATE SET
+         weeks_discounted = weeks_discounted + 1, subscription_id = excluded.subscription_id, last_applied_at = excluded.last_applied_at`,
+      customerId, subId, now, now);
+
+    const row = await one(env.DB, `SELECT weeks_discounted FROM promo_redemptions WHERE customer_id = ? AND code = 'FUEL8'`, customerId);
+    if (row && row.weeks_discounted >= 4) {
+      try { await stripe(env, 'DELETE', `subscriptions/${subId}/discount`); } catch { /* discount may already be cleared */ }
+      try { await audit(env, `subscription:${subId}`, 'fuel8_completed', { customerId, weeks: row.weeks_discounted }); } catch { /* non-fatal */ }
+    }
+  } catch { /* promo cap must never fail the webhook */ }
 }
 
 async function safeNotifyOwner(env, event) {

@@ -42,7 +42,7 @@ const WEEK_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function corsHeaders(env) {
   return {
-    'Access-Control-Allow-Origin': env.KITCHEN_FEED_ORIGIN || '*',
+    'Access-Control-Allow-Origin': env.KITCHEN_FEED_ORIGIN || 'https://gainztrainprep.com',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'x-kitchen-token, content-type',
     'Access-Control-Max-Age': '86400',

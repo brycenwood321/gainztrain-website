@@ -1978,6 +1978,9 @@
             if (isStaff(d)) { applyRole(d); gate.style.display = "none"; return; }
           }
         } catch { /* fall through to login */ }
+        // Not authenticated (logged out / session expired): purge cached order PII (names + addresses)
+        // from this device's localStorage so it never lingers on a shared/logged-out machine.
+        try { localStorage.removeItem("gainztrain_orders"); } catch { /* ignore */ }
         checking.style.display = "none";
         form.style.display = "";
         document.getElementById("auth-email").focus();

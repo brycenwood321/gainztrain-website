@@ -13,13 +13,13 @@
 //     is_public = true            // 1 = shows as valid on /start; 0 = silent comp (e.g. OWNERS100)
 //   }
 import { ok, fail, readJson } from '../../_lib/respond.js';
-import { requireAdmin } from '../../_lib/admin.js';
+import { requireOwner } from '../../_lib/admin.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 import { stripe } from '../../_lib/stripe.js';
 
 export async function onRequestPost(context) {
   const { env } = context;
-  const denied = await requireAdmin(context);
+  const denied = await requireOwner(context); // owners can mint promo codes from the /ops Settings tab
   if (denied) return denied;
 
   const body = await readJson(context.request);

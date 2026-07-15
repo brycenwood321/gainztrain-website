@@ -4,9 +4,18 @@
 //   Body { email, staff?=true, first_name?, last_name?, phone?, password? }
 import { ok, fail, readJson } from '../../_lib/respond.js';
 import { requireOwner } from '../../_lib/admin.js';
-import { one, run, nowIso } from '../../_lib/db.js';
+import { one, all, run, nowIso } from '../../_lib/db.js';
 import { randomToken, hashPassword } from '../../_lib/crypto.js';
 import { str, normEmail, toE164 } from '../../_lib/validate.js';
+
+// GET /api/admin/set-staff — list current staff + owners (for the /ops Settings tab). Owner-gated.
+export async function onRequestGet(context) {
+  const denied = await requireOwner(context);
+  if (denied) return denied;
+  const rows = await all(context.env.DB,
+    `SELECT id, email, first_name, last_name, is_owner FROM customers WHERE role = 'staff' ORDER BY is_owner DESC, email`);
+  return ok({ staff: rows });
+}
 
 export async function onRequestPost(context) {
   const { env } = context;
@@ -58,8 +67,15 @@ export async function onRequestPost(context) {
     passwordSet = true;
   }
 
-  try { await run(env.DB, `INSERT INTO audit_log (at, actor, entity, action, detail_json) VALUES (?, 'admin', ?, 'set_staff', ?)`,
-    now, `customer:${row.id}`, JSON.stringify({ email, role, created, passwordSet })); } catch { /* non-fatal */ }
+  // Owner flag: set explicitly when provided, and ALWAYS cleared when demoting to a plain customer.
+  let ownerVal = null;
+  if (!staff) ownerVal = 0;
+  else if (body.is_owner === true) ownerVal = 1;
+  else if (body.is_owner === false) ownerVal = 0;
+  if (ownerVal !== null) await run(env.DB, `UPDATE customers SET is_owner=? WHERE id=?`, ownerVal, row.id);
 
-  return ok({ customer_id: row.id, email, role, created, password_set: passwordSet });
+  try { await run(env.DB, `INSERT INTO audit_log (at, actor, entity, action, detail_json) VALUES (?, 'admin', ?, 'set_staff', ?)`,
+    now, `customer:${row.id}`, JSON.stringify({ email, role, created, passwordSet, is_owner: ownerVal })); } catch { /* non-fatal */ }
+
+  return ok({ customer_id: row.id, email, role, created, password_set: passwordSet, is_owner: ownerVal });
 }

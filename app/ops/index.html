@@ -2028,6 +2028,7 @@
     <div class="tab owner-only" data-tab="customers">Customers</div>
     <div class="tab owner-only" data-tab="activity">Activity</div>
     <div class="tab owner-only" data-tab="marketing">Marketing</div>
+    <div class="tab owner-only" data-tab="settings">Settings</div>
     <div class="tab-spacer"></div>
     <a href="/app/" class="back-link">← My Account</a>
     <!-- Mobile-only: current tab name + hamburger -->
@@ -2048,6 +2049,7 @@
     <a data-goto="customers" class="owner-only">Customers</a>
     <a data-goto="activity" class="owner-only">Activity</a>
     <a data-goto="marketing" class="owner-only">Marketing</a>
+    <a data-goto="settings" class="owner-only">Settings</a>
     <a href="/app/" class="tab-mobile-account">← My Account</a>
   </div>
 
@@ -2056,6 +2058,7 @@
   <div class="tab-panel" id="tab-customers"><div class="owner-view" id="cust-view"><div class="ownv-loading">Loading…</div></div></div>
   <div class="tab-panel" id="tab-activity"><div class="owner-view" id="act-view"><div class="ownv-loading">Loading…</div></div></div>
   <div class="tab-panel" id="tab-marketing"><div class="owner-view" id="mkt-view"><div class="ownv-loading">Loading…</div></div></div>
+  <div class="tab-panel" id="tab-settings"><div class="owner-view" id="set-view"><div class="ownv-loading">Loading…</div></div></div>
 
   <!-- ── ORDERS TAB ── -->
   <div class="tab-panel active" id="tab-orders">
@@ -4428,6 +4431,7 @@
         if (tab.dataset.tab === "customers") ownRenderCustomers();
         if (tab.dataset.tab === "activity")  ownRenderActivity();
         if (tab.dataset.tab === "marketing") ownRenderMarketing();
+        if (tab.dataset.tab === "settings")  ownRenderSettings();
       });
     });
 
@@ -4638,6 +4642,113 @@
           const r = await ownPost("/api/admin/spend", body);
           if (r.ok) { showToast("Spend logged."); ownRenderMarketing(); } else showToast(r.detail || "Could not log spend.");
         };
+      } catch (e) { ownErr(el, e); }
+    }
+
+    // ── SETTINGS (owner) — coupons, staff/owner logins, delivery ZIPs ──
+    async function ownRenderSettings() {
+      const el = document.getElementById("set-view");
+      el.innerHTML = '<div class="ownv-loading">Loading…</div>';
+      const field = (label, id, ph, w) => '<span style="display:inline-flex;flex-direction:column;gap:.15rem;"><label class="stat-sub">' + label + '</label><input id="' + id + '" type="text" placeholder="' + ph + '" style="padding:.4rem;width:' + (w || "9rem") + ';"></span>';
+      const setMsg = (id, t, c) => { const m = document.getElementById(id); if (m) { m.textContent = t; m.style.color = c || "#9a928d"; } };
+      try {
+        const [staffData, zipData] = await Promise.all([ownGet("/api/admin/set-staff"), ownGet("/api/admin/delivery-zips")]);
+        const zones = zipData.zones || [];
+        const zipsByZone = {};
+        (zipData.zips || []).forEach((z) => { (zipsByZone[z.zone] = zipsByZone[z.zone] || []).push(z.zip); });
+
+        // COUPONS
+        const couponCard =
+          '<div class="ownv-card"><h2>Create a discount code</h2><div class="ownv-ctl" style="flex-wrap:wrap;gap:.6rem;align-items:flex-end;">' +
+          field("Code", "set-cpCode", "GAINZ20", "8rem") +
+          '<span style="display:inline-flex;flex-direction:column;gap:.15rem;"><label class="stat-sub">% off</label><input id="set-cpPct" type="number" min="1" max="100" value="20" style="padding:.4rem;width:5rem;"></span>' +
+          '<span style="display:inline-flex;flex-direction:column;gap:.15rem;"><label class="stat-sub">Applies to</label><select id="set-cpDur" style="padding:.4rem;"><option value="once">First order only</option><option value="forever">Every order</option></select></span>' +
+          field("Max uses (blank=∞)", "set-cpCap", "", "8rem") +
+          '<span style="display:inline-flex;flex-direction:column;gap:.15rem;"><label class="stat-sub">Expires (optional)</label><input id="set-cpExp" type="date" style="padding:.4rem;"></span>' +
+          '<label class="stat-sub" style="display:inline-flex;align-items:center;gap:.35rem;"><input type="checkbox" id="set-cpPub" checked style="width:auto;">Public</label>' +
+          '<button class="ownv-btn" id="set-cpGo">Create code</button></div>' +
+          '<div class="stat-sub" id="set-cpMsg" style="margin-top:.5rem;"></div>' +
+          '<div class="stat-sub" style="color:#9a928d;margin-top:.3rem;">"First order only" discounts their first week; "Every order" is forever. Creates it in Stripe + on the site instantly.</div></div>';
+
+        // STAFF
+        const staffRows = (staffData.staff || []).map((s) =>
+          "<tr><td>" + ownEsc(s.email) + "</td><td>" + ownEsc(((s.first_name || "") + " " + (s.last_name || "")).trim()) + "</td><td>" +
+          (s.is_owner ? '<span class="badge active">owner</span>' : "staff") + "</td><td>" +
+          '<button class="ing-lib-edit" data-staff-owner="' + ownEsc(s.email) + '" data-mkowner="' + (s.is_owner ? "0" : "1") + '">' + (s.is_owner ? "Make staff" : "Make owner") + "</button> " +
+          '<button class="ing-lib-edit" data-staff-remove="' + ownEsc(s.email) + '" style="color:#dc2626;border-color:#dc2626;">Remove</button></td></tr>').join("");
+        const staffCard =
+          '<div class="ownv-card"><h2>Staff &amp; owner logins</h2><div style="overflow-x:auto;"><table><thead><tr><th>Email</th><th>Name</th><th>Role</th><th></th></tr></thead><tbody>' +
+          (staffRows || '<tr><td colspan="4" class="stat-sub">No staff yet.</td></tr>') + "</tbody></table></div>" +
+          '<div class="ownv-ctl" style="flex-wrap:wrap;gap:.6rem;align-items:flex-end;margin-top:.8rem;">' +
+          field("New staff email", "set-stEmail", "name@email.com", "13rem") + field("Temp password", "set-stPw", "min 8 chars", "11rem") +
+          '<label class="stat-sub" style="display:inline-flex;align-items:center;gap:.35rem;"><input type="checkbox" id="set-stOwner" style="width:auto;">Owner</label>' +
+          '<button class="ownv-btn" id="set-stGo">Add staff</button></div><div class="stat-sub" id="set-stMsg" style="margin-top:.5rem;"></div>' +
+          '<div class="stat-sub" style="color:#9a928d;margin-top:.3rem;">Staff see the kitchen tabs; owners see everything. "Remove" turns them back into a regular customer.</div></div>';
+
+        // ZIPS
+        const zoneOpts = zones.map((z) => '<option value="' + z.zone + '">Zone ' + z.zone + " — " + ownEsc(z.name) + " ($" + Math.round(z.fee_cents / 100) + ")</option>").join("");
+        const zoneList = zones.map((z) =>
+          '<div style="margin-bottom:.5rem;"><b>Zone ' + z.zone + " — " + ownEsc(z.name) + '</b> <span class="stat-sub">$' + Math.round(z.fee_cents / 100) + '/wk</span><div style="display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.25rem;">' +
+          ((zipsByZone[z.zone] || []).map((zp) => '<span class="badge" style="background:#f5f2ee;color:#4a4440;">' + zp + ' <span data-zip-remove="' + zp + '" style="cursor:pointer;color:#dc2626;font-weight:800;" title="Remove">×</span></span>').join("") || '<span class="stat-sub">none</span>') + "</div></div>").join("");
+        const zipCard =
+          '<div class="ownv-card"><h2>Delivery ZIP codes</h2>' + zoneList +
+          '<div class="ownv-ctl" style="gap:.6rem;align-items:flex-end;margin-top:.6rem;">' + field("Add ZIP", "set-zpZip", "84xxx", "7rem") +
+          '<span style="display:inline-flex;flex-direction:column;gap:.15rem;"><label class="stat-sub">Zone</label><select id="set-zpZone" style="padding:.4rem;">' + zoneOpts + "</select></span>" +
+          '<button class="ownv-btn" id="set-zpGo">Add ZIP</button></div><div class="stat-sub" id="set-zpMsg" style="margin-top:.5rem;"></div>' +
+          '<div class="stat-sub" style="color:#9a928d;margin-top:.3rem;">Add a ZIP and customers there can check out with delivery right away. Click × to stop serving one.</div></div>';
+
+        el.innerHTML = ownHead("Settings", "Owner controls", "ownRenderSettings") + couponCard + staffCard + zipCard;
+
+        // wire coupon
+        document.getElementById("set-cpGo").onclick = async () => {
+          const code = document.getElementById("set-cpCode").value.trim();
+          if (!code) return setMsg("set-cpMsg", "Enter a code.", "#dc2626");
+          const body = { code, percent_off: parseInt(document.getElementById("set-cpPct").value, 10), duration: document.getElementById("set-cpDur").value, is_public: document.getElementById("set-cpPub").checked };
+          const capV = document.getElementById("set-cpCap").value.trim(); if (capV) body.cap = parseInt(capV, 10);
+          const expV = document.getElementById("set-cpExp").value; if (expV) body.expires_at = new Date(expV + "T23:59:59").toISOString();
+          setMsg("set-cpMsg", "Creating…");
+          const r = await ownPost("/api/admin/create-coupon", body);
+          if (r && r.ok) { setMsg("set-cpMsg", "✓ " + r.code + " is live (" + r.percent_off + "% off, " + (r.duration === "once" ? "first order" : "forever") + ").", "#16a34a"); showToast("Coupon created."); }
+          else setMsg("set-cpMsg", (r && (r.detail || r.error)) || "Failed.", "#dc2626");
+        };
+        // wire staff
+        document.getElementById("set-stGo").onclick = async () => {
+          const email = document.getElementById("set-stEmail").value.trim();
+          const password = document.getElementById("set-stPw").value;
+          if (!email) return setMsg("set-stMsg", "Enter an email.", "#dc2626");
+          if (password && password.length < 8) return setMsg("set-stMsg", "Password must be 8+ characters.", "#dc2626");
+          const body = { email, staff: true, is_owner: document.getElementById("set-stOwner").checked };
+          if (password) body.password = password;
+          setMsg("set-stMsg", "Adding…");
+          const r = await ownPost("/api/admin/set-staff", body);
+          if (r && r.ok) { showToast("Staff added."); ownRenderSettings(); } else setMsg("set-stMsg", (r && (r.detail || r.error)) || "Failed.", "#dc2626");
+        };
+        el.querySelectorAll("[data-staff-owner]").forEach((b) => (b.onclick = async () => {
+          const email = b.dataset.staffOwner, mk = b.dataset.mkowner === "1";
+          if (!confirm((mk ? "Make " : "Remove owner access from ") + email + "?")) return;
+          const r = await ownPost("/api/admin/set-staff", { email, staff: true, is_owner: mk });
+          if (r && r.ok) { showToast("Updated."); ownRenderSettings(); } else showToast((r && (r.detail || r.error)) || "Failed.");
+        }));
+        el.querySelectorAll("[data-staff-remove]").forEach((b) => (b.onclick = async () => {
+          const email = b.dataset.staffRemove;
+          if (!confirm("Remove " + email + " as staff? They become a regular customer.")) return;
+          const r = await ownPost("/api/admin/set-staff", { email, staff: false });
+          if (r && r.ok) { showToast("Removed."); ownRenderSettings(); } else showToast((r && (r.detail || r.error)) || "Failed.");
+        }));
+        // wire zips
+        document.getElementById("set-zpGo").onclick = async () => {
+          const zip = document.getElementById("set-zpZip").value.trim();
+          if (!/^\d{5}$/.test(zip)) return setMsg("set-zpMsg", "Enter a 5-digit ZIP.", "#dc2626");
+          setMsg("set-zpMsg", "Adding…");
+          const r = await ownPost("/api/admin/delivery-zips", { zip, zone: parseInt(document.getElementById("set-zpZone").value, 10) });
+          if (r && r.ok) { showToast("ZIP added."); ownRenderSettings(); } else setMsg("set-zpMsg", (r && (r.detail || r.error)) || "Failed.", "#dc2626");
+        };
+        el.querySelectorAll("[data-zip-remove]").forEach((x) => (x.onclick = async () => {
+          const zip = x.dataset.zipRemove;
+          if (!confirm("Stop delivering to " + zip + "?")) return;
+          const r = await ownPost("/api/admin/delivery-zips", { zip, remove: true });
+          if (r && r.ok) { showToast("Removed."); ownRenderSettings(); } else showToast((r && (r.detail || r.error)) || "Failed.");
+        }));
       } catch (e) { ownErr(el, e); }
     }
 

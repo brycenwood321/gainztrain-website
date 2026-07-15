@@ -14,10 +14,16 @@
   <link rel="stylesheet" href="../assets/css/global-light.css" />
   <link rel="stylesheet" href="../assets/css/editorial.css" />
   <style>
-    /* Minimal chrome: no nav links — an ad click has ONE job here. */
-    .lp-header{display:flex;justify-content:center;padding:1.1rem 1rem;border-bottom:1px solid var(--line,#eee);}
-    .lp-hero{max-width:1080px;margin:0 auto;padding:2.6rem 1.25rem 2.25rem;display:grid;grid-template-columns:1.15fr 1fr;gap:2.2rem;align-items:center;}
-    @media (max-width:760px){.lp-hero{grid-template-columns:1fr;text-align:center;padding-top:2rem;}}
+    /* Full site nav on a light page: pin the "scrolled" (solid) styling from editorial.css
+       unconditionally, since this page has no dark hero for the transparent variant to sit on. */
+    .nav{background:rgba(250,250,248,0.97);backdrop-filter:blur(20px);box-shadow:0 1px 0 rgba(26,22,20,0.08);}
+    .nav .logo-gainz{color:var(--black,#1a1614);}
+    .nav .nav-logo-tagline{color:var(--text-muted,#888);}
+    .nav .nav-links a{color:var(--text-muted,#666);}
+    .nav .nav-links a:hover{color:var(--black,#1a1614);}
+    .nav .nav-toggle span{background:var(--black,#1a1614);}
+    .lp-hero{max-width:1080px;margin:0 auto;padding:7rem 1.25rem 2.25rem;display:grid;grid-template-columns:1.15fr 1fr;gap:2.2rem;align-items:center;}
+    @media (max-width:760px){.lp-hero{grid-template-columns:1fr;text-align:center;padding-top:6rem;}}
     .lp-offer-badge{display:inline-block;background:var(--orange);color:#fff;font-weight:900;letter-spacing:.04em;
       border-radius:999px;padding:.55rem 1.3rem;font-size:1rem;text-transform:uppercase;}
     .lp-hero h1{font-size:clamp(2.5rem,6vw,4.1rem);line-height:1.0;margin:1rem 0 .8rem;}
@@ -56,12 +62,24 @@
 <script src="/assets/js/attribution.js" defer></script>
 </head>
 <body>
-  <header class="lp-header">
-    <a href="/" class="nav-logo" style="pointer-events:none;">
+  <nav class="nav" role="navigation">
+    <a href="/" class="nav-logo">
       <span class="nav-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></span>
       <span class="nav-logo-tagline">Fuel Your Engine</span>
     </a>
-  </header>
+    <div class="nav-links">
+      <a href="/menu/" style="color: var(--orange);">This Week's Menu</a>
+      <a href="/meals/">Meals</a>
+      <a href="/how-it-works/">How It Works</a>
+      <a href="/subscribe/">Pricing</a>
+      <a href="/about/">About</a>
+      <a href="/faqs/">FAQs</a>
+      <a href="/contact">Contact</a>
+      <a href="/app/" class="nav-login">Log In</a>
+      <a href="/menu/" class="btn btn-primary nav-cta">Start Today</a>
+    </div>
+    <button class="nav-toggle" aria-label="Open menu"><span></span><span></span><span></span></button>
+  </nav>
 
   <section class="lp-hero">
     <div>
@@ -117,6 +135,48 @@
     <p class="lp-fineprint">Weekly subscription · pause or cancel anytime · love your first week or we make it right.</p>
   </section>
 
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-logo-text"><span class="logo-gainz">GAINZ</span><span class="logo-train">TRAIN</span></div>
+          <span class="footer-logo-tagline">Fuel Your Engine</span>
+          <p>High-protein weekly meal prep for people serious about their goals. Utah County, UT.</p>
+        </div>
+        <div class="footer-col">
+          <h5>Pages</h5>
+          <ul>
+            <li><a href="/menu/">This Week's Menu</a></li>
+            <li><a href="/meals/">Meal Catalog</a></li>
+            <li><a href="/how-it-works/">How It Works</a></li>
+            <li><a href="/subscribe/">Pricing</a></li>
+            <li><a href="/delivery/">Delivery Zones</a></li>
+            <li><a href="/about/">About</a></li>
+            <li><a href="/faqs/">FAQs</a></li>
+            <li><a href="/contact">Contact</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h5>Contact</h5>
+          <ul>
+            <li><a href="tel:+13853278045">(385) 327-8045</a></li>
+            <li><a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener">@gainztrainprep</a></li>
+            <li><a href="/menu/">This Week's Menu</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p class="footer-copy">&copy; 2026 Gainz Train. All rights reserved.</p>
+        <div class="footer-social">
+          <a href="https://www.instagram.com/gainztrainprep" target="_blank" rel="noopener" aria-label="Instagram">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
   <script>
     // Offer variants. DEFAULT (?v absent) = 'menu' = NO discount — matches the founders ad (no offer
     // promised) and the Ad Library teardown finding (79% of long-running winners lead with product, not
@@ -127,10 +187,11 @@
       var v=new URLSearchParams(location.search).get('v')||'menu';
       var offers={
         'menu':{badge:"This Week's Menu Is Live",line:'',cta:"See This Week's Menu →"},
-        '2free':{badge:'2 Free Meals Every Week, Your First Month',line:' Use code FUEL8 at checkout — 2 free meals added to every box for your first 4 weeks.',cta:'Claim My Free Meals →'},
+        '2free':{badge:'2 Free Meals Every Week, Your First Month',line:' 2 free meals added to every box for your first 4 weeks — applied automatically at checkout.',cta:'Claim My Free Meals →',href:'/menu/?promo=FUEL8'},
         '20off':{badge:'$20 Off Your First Week',line:' Start this week and take $20 off your first box.',cta:'Get $20 Off →'}
       };
       var o=offers[v]||offers['menu'];
+      if(o.href){['ctaTop','ctaMid','ctaBottom'].forEach(function(id){var el=document.getElementById(id);if(el)el.href=o.href;});}
       document.getElementById('offerBadge').textContent=o.badge;
       document.getElementById('offerBadge2').textContent=o.badge;
       document.getElementById('offerLine').textContent=o.line;

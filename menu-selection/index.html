@@ -401,7 +401,7 @@
     <div class="container">
       <div class="section-label">This Week</div>
       <h1>Pick Your <span class="highlight">Meals.</span></h1>
-      <p id="menuGreeting">Choose how many of each meal you want for this week. Submit before the weekly cutoff Friday 11:00 pm MT.</p>
+      <p id="menuGreeting">Choose how many of each meal you want for this week. Submit before the weekly cutoff Friday midnight MT.</p>
     </div>
   </div>
 
@@ -504,7 +504,7 @@
       if (email) document.getElementById('inputEmail').value = email;
       if (fname) {
         var greet = document.getElementById('menuGreeting');
-        if (greet) greet.innerHTML = 'Hey <strong>' + escapeHtml(fname) + '</strong> — choose how many of each meal you want for this week. Submit before the weekly cutoff Friday 11:00 pm MT.';
+        if (greet) greet.innerHTML = 'Hey <strong>' + escapeHtml(fname) + '</strong> — choose how many of each meal you want for this week. Submit before the weekly cutoff Friday midnight MT.';
       }
 
       // ── SHOW COUNTER if subscription known ────────────────────────────────
@@ -560,7 +560,7 @@
         if (sub) {
           var ds = '';
           try { ds = new Date(menu.week_of + 'T00:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' }); } catch(e){}
-          sub.textContent = ds ? ('Pickup ' + ds + ' — order by Friday 11:00 pm MT.') : 'Order before Friday 11:00 pm MT.';
+          sub.textContent = ds ? ('Pickup ' + ds + ' — order by Friday midnight MT.') : 'Order before Friday midnight MT.';
         }
         grid.innerHTML = (menu.meals || []).map(function(meal){
           var pos = meal.position || 0;

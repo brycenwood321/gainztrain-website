@@ -89,7 +89,7 @@ export async function onRequestPost(context) {
               ? 'A menu is STAGED for this week but NOT live yet. Open the prep dashboard → Menu tab, review it, then hit "Confirm & Go Live" so customers can order.'
               : "Open the prep dashboard → Menu tab, build this week's menu, hit Finalize, then \"Confirm & Go Live\" so customers can order.",
             'Dashboard: https://gainztrainprep.com/app/ops/prep/ (log in first)',
-            `Nothing is visible to customers until you confirm. They can then order the week of ${orderWk} until Friday 11:00pm MT.`,
+            `Nothing is visible to customers until you confirm. They can then order the week of ${orderWk} until Friday midnight MT.`,
           ],
         });
     }

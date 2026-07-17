@@ -4,10 +4,12 @@ main = "worker.js"
 compatibility_date = "2024-09-23"
 
 [triggers]
-# Wed 17:00 — pick reminders. Fri 23:00 — last call (5pm MDT / 4pm MST; cutoff is Fri 11:59pm MT).
-# Sat 07:30 — lock (just after the Fri 11:59pm MT cutoff: Sat 05:59Z MDT / 06:59Z MST; kitchen shops
-# Saturday morning). Daily 13:00 — owner digest + health probe (also prunes feed + menu failsafe on
-# Mondays). Max 5 cron triggers/account — ONE SLOT FREE (Wed menus.json auto-publish retired
-# 2026-07-11: the prep dashboard Finalize→Confirm flow owns menus now; reserved for the ad-spend
-# kill-switch when campaigns launch).
-crons = ["0 17 * * 3", "0 23 * * 5", "30 7 * * 6", "0 13 * * *"]
+# ⚠️ ALL TRIGGERS ARE DAILY ON PURPOSE — the intended weekday is enforced in JS (getUTCDay) inside
+# worker.js, NOT by the cron day-of-week field. Cron DOW fired one day early for every trigger in
+# production (see the block comment at the top of worker.js). Do not reintroduce DOW fields here.
+#   17:00 → Wed pick reminders. 23:00 → Fri last call (5pm MDT / 4pm MST; cutoff is Fri MIDNIGHT MT).
+#   07:30 → Sat lock, after the Fri-midnight MT cutoff (Sat 06:00Z MDT / 07:00Z MST); kitchen shops
+#           Saturday morning. 13:00 → owner digest + health probe (+ feed prune + menu failsafe Mondays).
+# Max 5 cron triggers/account — ONE SLOT FREE (Wed menus.json auto-publish retired 2026-07-11: the prep
+# dashboard Finalize→Confirm flow owns menus now; reserved for the ad-spend kill-switch).
+crons = ["0 17 * * *", "0 23 * * *", "30 7 * * *", "0 13 * * *"]

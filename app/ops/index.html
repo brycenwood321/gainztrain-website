@@ -2031,6 +2031,7 @@
     <div class="tab owner-only" data-tab="customers">Customers</div>
     <div class="tab owner-only" data-tab="activity">Activity</div>
     <div class="tab owner-only" data-tab="marketing">Marketing</div>
+    <div class="tab owner-only" data-tab="analytics">Analytics</div>
     <div class="tab owner-only" data-tab="settings">Settings</div>
     <div class="tab-spacer"></div>
     <a href="/app/" class="back-link">← My Account</a>
@@ -2052,6 +2053,7 @@
     <a data-goto="customers" class="owner-only">Customers</a>
     <a data-goto="activity" class="owner-only">Activity</a>
     <a data-goto="marketing" class="owner-only">Marketing</a>
+    <a data-goto="analytics" class="owner-only">Analytics</a>
     <a data-goto="settings" class="owner-only">Settings</a>
     <a href="/app/" class="tab-mobile-account">← My Account</a>
   </div>
@@ -2061,6 +2063,7 @@
   <div class="tab-panel" id="tab-customers"><div class="owner-view" id="cust-view"><div class="ownv-loading">Loading…</div></div></div>
   <div class="tab-panel" id="tab-activity"><div class="owner-view" id="act-view"><div class="ownv-loading">Loading…</div></div></div>
   <div class="tab-panel" id="tab-marketing"><div class="owner-view" id="mkt-view"><div class="ownv-loading">Loading…</div></div></div>
+  <div class="tab-panel" id="tab-analytics"><div class="owner-view" id="anl-view"><div class="ownv-loading">Loading…</div></div></div>
   <div class="tab-panel" id="tab-settings"><div class="owner-view" id="set-view"><div class="ownv-loading">Loading…</div></div></div>
 
   <!-- ── ORDERS TAB ── -->
@@ -4434,6 +4437,7 @@
         if (tab.dataset.tab === "customers") ownRenderCustomers();
         if (tab.dataset.tab === "activity")  ownRenderActivity();
         if (tab.dataset.tab === "marketing") ownRenderMarketing();
+        if (tab.dataset.tab === "analytics") ownRenderAnalytics();
         if (tab.dataset.tab === "settings")  ownRenderSettings();
       });
     });
@@ -4645,6 +4649,77 @@
           const r = await ownPost("/api/admin/spend", body);
           if (r.ok) { showToast("Spend logged."); ownRenderMarketing(); } else showToast(r.detail || "Could not log spend.");
         };
+      } catch (e) { ownErr(el, e); }
+    }
+
+    // ── ANALYTICS (owner) — first-party web analytics: sources, pages, funnel, journeys ──
+    let anlDays = 30;
+    // Global (inline onclick can't see the script-scoped `let`, but CAN call this fn, which closes over it).
+    function anlSetDays(n) { anlDays = n; ownRenderAnalytics(); }
+    async function ownRenderAnalytics() {
+      const el = document.getElementById("anl-view");
+      el.innerHTML = '<div class="ownv-loading">Loading…</div>';
+      try {
+        const d = await ownGet("/api/admin/analytics?days=" + anlDays);
+        const o = d.overview || {};
+        const num = (v) => (v == null ? "0" : Number(v).toLocaleString());
+        const pct = (n, tot) => (tot > 0 ? Math.round((n / tot) * 100) + "%" : "—");
+        const dur = (ms) => { ms = ms || 0; const s = Math.round(ms / 1000); return s >= 60 ? Math.floor(s / 60) + "m " + (s % 60) + "s" : s + "s"; };
+        const tbl = (head, rows, empty) => '<div style="overflow-x:auto;"><table><thead><tr>' + head.map((h) => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" + (rows || '<tr><td colspan="' + head.length + '" class="stat-sub" style="padding:1rem .6rem;">' + empty + "</td></tr>") + "</tbody></table></div>";
+
+        // Window selector.
+        const picker = '<div class="ownv-ctl" style="gap:.4rem;">' + [7, 30, 90].map((n) =>
+          '<button class="ownv-btn ' + (anlDays === n ? "" : "ghost") + '" onclick="anlSetDays(' + n + ')">' + n + "d</button>").join("") + "</div>";
+
+        // Stat tiles.
+        const bounceRate = pct(o.bounces, o.sessions);
+        const stat = (label, val, sub) => '<div class="ownv-card" style="flex:1;min-width:8rem;"><div class="stat-sub">' + label + '</div><div style="font-size:1.7rem;font-weight:800;">' + val + "</div>" + (sub ? '<div class="stat-sub">' + sub + "</div>" : "") + "</div>";
+        const tiles = '<div style="display:flex;flex-wrap:wrap;gap:.6rem;">' +
+          stat("Sessions", num(o.sessions), num(o.sessions_24h) + " today") +
+          stat("Visitors", num(o.visitors), pct(o.returning, o.sessions) + " returning") +
+          stat("Page views", num(o.pageviews), num(o.pageviews_24h) + " today") +
+          stat("Avg. visit", dur(o.avg_dur_ms), "time on site") +
+          stat("Bounce rate", bounceRate, "single-page visits") + "</div>";
+
+        // Where they come from.
+        const srcRows = (d.sources || []).map((s) => "<tr><td><b>" + ownEsc(s.source) + "</b>" + (s.medium ? ' <span class="stat-sub">/ ' + ownEsc(s.medium) + "</span>" : "") + "</td><td>" + num(s.sessions) + "</td><td>" + pct(s.bounces, s.sessions) + "</td><td>" + dur(s.avg_dur_ms) + "</td><td>" + num(s.conversions) + "</td></tr>").join("");
+
+        // Top pages by views + attention.
+        const pgRows = (d.pages || []).map((p) => "<tr><td><b>" + ownEsc(p.path) + "</b></td><td>" + num(p.views) + "</td><td>" + num(p.visitors) + "</td><td>" + dur(p.avg_dwell_ms) + "</td><td>" + (p.avg_scroll == null ? "—" : Math.round(p.avg_scroll) + "%") + "</td><td>" + num(p.entries) + "</td></tr>").join("");
+
+        // Funnel (ad landing → menu → start → signup).
+        const f = d.funnel || {};
+        const funnelStep = (label, v, base) => '<div style="flex:1;min-width:6rem;text-align:center;"><div style="font-size:1.5rem;font-weight:800;">' + num(v) + '</div><div class="stat-sub">' + label + "</div>" + (base && base > 0 ? '<div class="stat-sub">' + Math.round((v / base) * 100) + "%</div>" : "") + "</div>";
+        const funnelCard = '<div class="ownv-card"><h2>Funnel — landing → menu → signup</h2><div style="display:flex;align-items:center;gap:.3rem;flex-wrap:wrap;">' +
+          funnelStep("Fuel/landing", f.fuel || 0, null) + '<div class="stat-sub">→</div>' +
+          funnelStep("Saw menu", f.menu || 0, f.fuel) + '<div class="stat-sub">→</div>' +
+          funnelStep("Started signup", f.start || 0, f.menu) + '<div class="stat-sub">→</div>' +
+          funnelStep("Signed up", f.signups || 0, f.start) + '</div><div class="stat-sub" style="margin-top:.4rem;">Distinct visitors reaching each page in the last ' + anlDays + " days (signups = new accounts).</div></div>";
+
+        // Devices + geo.
+        const devRows = (d.devices || []).map((x) => "<tr><td>" + ownEsc(x.device) + "</td><td>" + num(x.sessions) + "</td></tr>").join("");
+        const geoRows = (d.geo || []).map((x) => "<tr><td>" + ownEsc((x.city ? x.city + ", " : "") + x.region) + "</td><td>" + num(x.sessions) + "</td></tr>").join("");
+
+        // Top clicks.
+        const ctaRows = (d.ctas || []).map((c) => "<tr><td>" + ownEsc(c.label) + "</td><td>" + ownEsc(c.type) + "</td><td class='stat-sub'>" + ownEsc(c.href || "") + "</td><td>" + num(c.clicks) + "</td></tr>").join("");
+
+        // Recent journeys.
+        const jour = (d.journeys || []).map((j) => {
+          const path = (j.steps || []).map((s) => ownEsc(s.path)).join(' <span class="stat-sub">→</span> ') || '<span class="stat-sub">—</span>';
+          const head = ownEsc(j.source) + " · " + ownEsc(j.device || "?") + (j.city ? " · " + ownEsc(j.city) : "") + " · " + dur(j.duration_ms) + (j.converted ? ' · <b style="color:#16a34a;">converted</b>' : "");
+          return '<div style="padding:.5rem 0;border-bottom:1px solid #efeae3;"><div class="stat-sub">' + head + '</div><div style="margin-top:.2rem;">' + path + "</div></div>";
+        }).join("");
+
+        el.innerHTML = ownHead("Analytics", "First-party web analytics — last " + anlDays + " days", "ownRenderAnalytics") +
+          '<div style="margin:-.4rem 0 .6rem;">' + picker + "</div>" +
+          tiles +
+          '<div class="ownv-card"><h2>Where visitors come from</h2>' + tbl(["Source", "Sessions", "Bounce", "Avg. visit", "Conversions"], srcRows, "No sessions yet — data fills as visitors arrive.") + "</div>" +
+          funnelCard +
+          '<div class="ownv-card"><h2>Top pages</h2>' + tbl(["Page", "Views", "Visitors", "Avg. time", "Avg. scroll", "Entries"], pgRows, "No page views yet.") + "</div>" +
+          '<div style="display:flex;gap:.6rem;flex-wrap:wrap;"><div class="ownv-card" style="flex:1;min-width:14rem;"><h2>Devices</h2>' + tbl(["Device", "Sessions"], devRows, "—") + "</div>" +
+          '<div class="ownv-card" style="flex:1;min-width:14rem;"><h2>Where they are</h2>' + tbl(["Location", "Sessions"], geoRows, "—") + "</div></div>" +
+          '<div class="ownv-card"><h2>Most-clicked links &amp; buttons</h2>' + tbl(["Label", "Type", "Destination", "Clicks"], ctaRows, "No clicks tracked yet.") + "</div>" +
+          '<div class="ownv-card"><h2>Recent visitor journeys</h2>' + (jour || '<div class="stat-sub">No sessions yet.</div>') + "</div>";
       } catch (e) { ownErr(el, e); }
     }
 

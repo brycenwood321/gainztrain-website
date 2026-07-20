@@ -25,11 +25,13 @@ CREATE INDEX IF NOT EXISTS idx_pv_pvid    ON page_views(pv_id);
 CREATE INDEX IF NOT EXISTS idx_pv_session ON page_views(session_id);
 CREATE INDEX IF NOT EXISTS idx_pv_visitor ON page_views(visitor_id);
 
--- 2) Sessions — one row per visit (30-min inactivity window). The FIRST pageview writes the entry
---    source ONCE here; every later pageview in the session inherits it. This is what makes the whole
---    funnel measurable after the utm drops off the URL (the /fuel -> /menu blind spot), because
+-- 2) Analytics sessions — one row per visit (30-min inactivity window). The FIRST pageview writes the
+--    entry source ONCE here; every later pageview in the session inherits it. This is what makes the
+--    whole funnel measurable after the utm drops off the URL (the /fuel -> /menu blind spot), because
 --    attribution lives at the session level keyed to visitor_id, not on each page's query string.
-CREATE TABLE IF NOT EXISTS sessions (
+--    ⚠️ NAMED analytics_sessions, NOT sessions — `sessions` already exists as the auth/login table
+--    (customer_id, expires_at, revoked_at). Do not collide with it.
+CREATE TABLE IF NOT EXISTS analytics_sessions (
   id                  TEXT PRIMARY KEY,          -- session_id
   visitor_id          TEXT,
   started_at          TEXT NOT NULL,
@@ -56,10 +58,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   converted           INTEGER DEFAULT 0,         -- signup/purchase happened in this session
   customer_id         TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_sessions_visitor  ON sessions(visitor_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_started  ON sessions(started_at);
-CREATE INDEX IF NOT EXISTS idx_sessions_campaign ON sessions(utm_campaign, utm_content);
-CREATE INDEX IF NOT EXISTS idx_sessions_source   ON sessions(utm_source, utm_medium);
+CREATE INDEX IF NOT EXISTS idx_asessions_visitor  ON analytics_sessions(visitor_id);
+CREATE INDEX IF NOT EXISTS idx_asessions_started  ON analytics_sessions(started_at);
+CREATE INDEX IF NOT EXISTS idx_asessions_campaign ON analytics_sessions(utm_campaign, utm_content);
+CREATE INDEX IF NOT EXISTS idx_asessions_source   ON analytics_sessions(utm_source, utm_medium);
 
 -- 3) Events — clicks, CTA clicks, scroll milestones, outbound links, funnel steps, custom.
 CREATE TABLE IF NOT EXISTS analytics_events (

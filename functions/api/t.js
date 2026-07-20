@@ -57,7 +57,7 @@ export async function onRequestPost(context) {
            WHERE pv_id = ?`, int(b.dwell_ms) || 0, int(b.max_scroll_pct) || 0, pvId);
       }
       const sid = clip(b.session_id, 40);
-      if (sid) await run(env.DB, `UPDATE sessions SET last_seen_at = ?, duration_ms = MAX(duration_ms, ?) WHERE id = ?`,
+      if (sid) await run(env.DB, `UPDATE analytics_sessions SET last_seen_at = ?, duration_ms = MAX(duration_ms, ?) WHERE id = ?`,
         now, int(b.dwell_ms) || 0, sid);
       return ok({});
     }
@@ -76,7 +76,7 @@ export async function onRequestPost(context) {
           clip(e.label, 120), clip(e.href, 200), int(e.value), clip(e.at, 30) || now);
         n++;
       }
-      if (sid && n) await run(env.DB, `UPDATE sessions SET event_count = event_count + ?, last_seen_at = ? WHERE id = ?`, n, now, sid);
+      if (sid && n) await run(env.DB, `UPDATE analytics_sessions SET event_count = event_count + ?, last_seen_at = ? WHERE id = ?`, n, now, sid);
       return ok({});
     }
 
@@ -96,11 +96,11 @@ export async function onRequestPost(context) {
     // touch last_seen + pageviews. INSERT OR IGNORE keeps the first-touch entry immutable.
     let isEntry = 0;
     if (sid) {
-      const existing = await one(env.DB, `SELECT id FROM sessions WHERE id = ?`, sid);
+      const existing = await one(env.DB, `SELECT id FROM analytics_sessions WHERE id = ?`, sid);
       if (!existing) {
         isEntry = 1;
         await run(env.DB,
-          `INSERT OR IGNORE INTO sessions (id, visitor_id, started_at, last_seen_at, entry_path, entry_referrer_host,
+          `INSERT OR IGNORE INTO analytics_sessions (id, visitor_id, started_at, last_seen_at, entry_path, entry_referrer_host,
              utm_source, utm_medium, utm_campaign, utm_content, utm_term, fbclid, gclid,
              country, region, city, device, browser, os, is_returning, pageviews)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
@@ -108,7 +108,7 @@ export async function onRequestPost(context) {
           utm.source, utm.medium, utm.campaign, utm.content, utm.term, utm.fbclid, utm.gclid,
           geo.country, geo.region, geo.city, d.device, d.browser, d.os, returning);
       } else {
-        await run(env.DB, `UPDATE sessions SET last_seen_at = ?, pageviews = pageviews + 1 WHERE id = ?`, now, sid);
+        await run(env.DB, `UPDATE analytics_sessions SET last_seen_at = ?, pageviews = pageviews + 1 WHERE id = ?`, now, sid);
       }
     }
 

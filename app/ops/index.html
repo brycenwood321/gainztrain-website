@@ -3149,6 +3149,18 @@
     function savePreviousMenu(a) { localStorage.setItem("gainztrain_menu_previous", JSON.stringify(a)); }
     function loadMealLibrary()   { try { return JSON.parse(localStorage.getItem("gainztrain_meal_library")  || "[]");  } catch { return []; } }
     function saveMealLibrary(a)  { localStorage.setItem("gainztrain_meal_library",  JSON.stringify(a)); pushSharedStore("meal_library", a); }
+    // The meal LIBRARY is the single source of truth for a meal's photo. Weekly menus (drafts + published)
+    // only ever hold a copy, which used to go stale (a photo uploaded later never propagated to old/new
+    // weeks) or get wiped (editing a meal on a photo-less week wrote a blank back over the library). Resolve
+    // the photo from the library by name so upload-once-sticks-everywhere and edits can never blank it.
+    function libImageFor(name) {
+      const key = String(name || "").toLowerCase().trim();
+      if (!key) return "";
+      const hit = (loadMealLibrary() || []).find(x => String(x.name || "").toLowerCase().trim() === key);
+      return (hit && hit.image) || "";
+    }
+    // A meal's effective photo = its own image if set, else the library's canonical one.
+    function mealImage(m) { return (m && m.image) || libImageFor(m && m.name); }
     function loadCustomIngs()    { try { return JSON.parse(localStorage.getItem("gainztrain_ingredients")   || "[]");  } catch { return []; } }
     function saveCustomIngs(a)   { localStorage.setItem("gainztrain_ingredients",   JSON.stringify(a)); pushSharedStore("custom_ingredients", a); }
 
@@ -3208,7 +3220,7 @@
       if (!stored || stored.week !== menuBuildWeek) {
         // New/unstarted week — seed from the last finalized menu as pending (a starting point she edits).
         const prev = loadPreviousMenu();
-        const meals = prev.map(m => ({ ...m, id: menuUid(), status: "pending", swappedBy: null }));
+        const meals = prev.map(m => ({ ...m, image: mealImage(m), id: menuUid(), status: "pending", swappedBy: null }));
         stored = { week: menuBuildWeek, meals };
         saveCurrentMenu(stored);
       }
@@ -3379,7 +3391,7 @@
       el.innerHTML = `
         <div class="pill-info">
           <div class="pill-name-row">
-            ${item.image ? `<img class="pill-thumb" src="${item.image}" alt="" onerror="this.style.display='none'" />` : ""}
+            ${mealImage(item) ? `<img class="pill-thumb" src="${mealImage(item)}" alt="" onerror="this.style.display='none'" />` : ""}
             <span class="pill-name">${item.name}</span>
             ${editBtn}
           </div>
@@ -3551,7 +3563,9 @@
       document.getElementById("new-meal-upcharge").value = meal.upcharge ?? "";
       document.getElementById("new-meal-photo-input").value = "";
       document.getElementById("new-meal-photo-status").textContent = "";
-      showMealPhoto(meal.image || "");
+      // Preload the library's canonical photo when this week's copy is blank, so opening a meal to fix
+      // (e.g.) its macros can never save an empty image back over a good library photo.
+      showMealPhoto(mealImage(meal));
 
       // Restore cooking mode + batch categories before building rows (labels depend on them)
       document.querySelectorAll(".batch-cat-cb").forEach(c => {
@@ -3867,14 +3881,16 @@
         if (!stored) { showToast("Save failed — menu data missing. Please refresh."); return; }
         const idx = (stored.meals || []).findIndex(m => m.id === menuEditingId);
         if (idx === -1) { showToast("Save failed — meal not found. Please refresh."); return; }
-        stored.meals[idx] = { ...stored.meals[idx], name, macros, ingredients, upcharge, mode, batch_categories, image: menuPhotoUrl };
+        // Never blank a saved photo: if this edit didn't set one, keep the library's canonical image.
+        const imageToSave = menuPhotoUrl || libImageFor(name);
+        stored.meals[idx] = { ...stored.meals[idx], name, macros, ingredients, upcharge, mode, batch_categories, image: imageToSave };
         saveCurrentMenu(stored);
         // Keep the permanent meal library in sync (match by name) so the photo + edits stick for future
         // weeks — otherwise an edit only lived on this week's menu and was lost on the next rebuild.
         const lib = loadMealLibrary();
         const li  = lib.findIndex(x => (x.name || "").toLowerCase() === name.toLowerCase());
-        if (li >= 0) lib[li] = { ...lib[li], name, macros, ingredients, upcharge, mode, batch_categories, image: menuPhotoUrl };
-        else         lib.unshift({ id: menuUid(), name, macros, ingredients, upcharge, mode, batch_categories, image: menuPhotoUrl });
+        if (li >= 0) lib[li] = { ...lib[li], name, macros, ingredients, upcharge, mode, batch_categories, image: imageToSave };
+        else         lib.unshift({ id: menuUid(), name, macros, ingredients, upcharge, mode, batch_categories, image: imageToSave });
         saveMealLibrary(lib);
         closeMenuOverlay();
         renderMenuTab();
@@ -4043,7 +4059,7 @@
 
       // Save confirmed meals as next week's starting point (local convenience, unchanged).
       savePreviousMenu(confirmed.map(m => ({
-        id: m.id, name: m.name, macros: m.macros, ingredients: m.ingredients, upcharge: m.upcharge || 0, image: m.image || ""
+        id: m.id, name: m.name, macros: m.macros, ingredients: m.ingredients, upcharge: m.upcharge || 0, image: mealImage(m)
       })));
 
       const btn = document.querySelector(".menu-topbar-btn.finalize");
@@ -4057,7 +4073,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             week_of: wkPretty,
-            meals: confirmed.map(m => ({ name: m.name, macros: m.macros, upcharge_per_meal: m.upcharge || 0, image: m.image || "" })),
+            meals: confirmed.map(m => ({ name: m.name, macros: m.macros, upcharge_per_meal: m.upcharge || 0, image: mealImage(m) })),
           }),
         });
         const data = await res.json().catch(() => ({}));

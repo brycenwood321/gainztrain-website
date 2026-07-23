@@ -214,7 +214,8 @@
       let w = localStorage.getItem("gainztrain_week");
       if (!w) {
         const today = new Date();
-        const daysUntilSunday = (7 - today.getDay()) % 7 || 7;
+        // On Sunday, stay on today's delivery week (no `|| 7`) so labels match the dashboard's meal IDs.
+        const daysUntilSunday = (7 - today.getDay()) % 7;
         const sunday = new Date(today);
         sunday.setDate(today.getDate() + daysUntilSunday);
         w = `${sunday.getFullYear()}${String(sunday.getMonth()+1).padStart(2,"0")}${String(sunday.getDate()).padStart(2,"0")}`;
@@ -304,7 +305,7 @@
     // ── GET UPCOMING SUNDAY ──
     function upcomingSunday() {
       const today = new Date();
-      const daysUntilSunday = (7 - today.getDay()) % 7 || 7;
+      const daysUntilSunday = (7 - today.getDay()) % 7;  // Sunday → today (matches the dashboard week)
       const sunday = new Date(today);
       sunday.setDate(today.getDate() + daysUntilSunday);
       // Use local date parts — toISOString() uses UTC and can shift the date

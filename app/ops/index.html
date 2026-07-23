@@ -2381,7 +2381,10 @@
       let w = localStorage.getItem("gainztrain_week");
       if (!w) {
         const today = new Date();
-        const daysUntilSunday = (7 - today.getDay()) % 7 || 7;
+        // Days until the CURRENT delivery Sunday. On Sunday itself this is 0 (stay on today's week) — NOT
+        // next Sunday — so the packaging + scan data holds all day Sunday (until Mon 00:00 local). Do NOT
+        // add `|| 7`: that rolled the week forward Sunday morning and orphaned the day's prep data.
+        const daysUntilSunday = (7 - today.getDay()) % 7;
         const sunday = new Date(today);
         sunday.setDate(today.getDate() + daysUntilSunday);
         w = `${sunday.getFullYear()}${String(sunday.getMonth()+1).padStart(2,"0")}${String(sunday.getDate()).padStart(2,"0")}`;
@@ -2870,7 +2873,9 @@
       status.className = "pull-status";
 
       const today = new Date();
-      const daysUntilSunday = (7 - today.getDay()) % 7 || 7;
+      // On Sunday this resolves to TODAY (the delivery/packaging day), not next Sunday — so pulling on
+      // Sunday morning re-fetches the week being packaged, not an empty future week. No `|| 7` (see getWeekStr).
+      const daysUntilSunday = (7 - today.getDay()) % 7;
       const sunday = new Date(today);
       sunday.setDate(today.getDate() + daysUntilSunday);
       const weekDate = `${sunday.getFullYear()}-${String(sunday.getMonth()+1).padStart(2,"0")}-${String(sunday.getDate()).padStart(2,"0")}`;

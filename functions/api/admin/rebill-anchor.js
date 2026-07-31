@@ -103,12 +103,21 @@ export async function onRequestPost(context) {
         row.action = 'skipped'; row.reason = 'paused_will_anchor_on_resume'; results.push(row); continue;
       }
 
-      // What has this subscription actually paid for? Use the last invoice that really collected
-      // (status paid). $0 comp invoices count — a comped customer still consumes a delivery slot.
+      // What has this subscription actually paid for? Only a real BILLING CYCLE tells us which delivery
+      // was bought. $0 comp invoices still count (a comped customer consumes a delivery slot), so we
+      // filter on billing_reason rather than amount.
+      //
+      // ⚠️ WHY THIS FILTER EXISTS — RE-RUN SAFETY: setting trial_end to re-anchor makes Stripe write an
+      // immediate $0 'subscription_update' invoice. Taking "the newest paid invoice" would pick THAT up
+      // on a second run, conclude the customer had already paid for the next delivery, and push their
+      // anchor a week later — handing them a free week of meals. Found by re-running the dry run after
+      // the first live migration and seeing four subs "drift" a week. Do not loosen this filter.
       const invs = await stripe(env, 'GET', 'invoices', {
-        subscription: s.stripe_subscription_id, status: 'paid', limit: 1,
+        subscription: s.stripe_subscription_id, status: 'paid', limit: 12,
       });
-      const lastPaid = (invs.data || [])[0];
+      const CYCLE_REASONS = new Set(['subscription_cycle', 'subscription_create']);
+      const lastPaid = (invs.data || []).find((i) => CYCLE_REASONS.has(i.billing_reason));
+      if (lastPaid) row.last_paid_reason = lastPaid.billing_reason;
       if (!lastPaid) { row.action = 'skipped'; row.reason = 'no_paid_invoice_yet'; results.push(row); continue; }
 
       const paidAt = new Date(lastPaid.created * 1000);

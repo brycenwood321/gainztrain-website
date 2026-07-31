@@ -47,6 +47,10 @@ export default {
     if (event.cron === '0 17 * * *') {
       // Wednesday 17:00 UTC (~10–11am Mountain) — remind subscribers who haven't picked.
       if (day === WED) ctx.waitUntil(hit(env, '/api/admin/send-reminders'));
+      // Saturday 17:00 UTC (11am MDT) — POST-BILLING reconciliation. Billing anchors fire at 15:00 UTC,
+      // so this is the run that catches a charge that FAILED this morning, while there's still a day
+      // before Sunday delivery to fix the card or pull them from the run.
+      if (day === SAT) ctx.waitUntil(hit(env, '/api/admin/payment-order-audit'));
     } else if (event.cron === '0 23 * * *') {
       // Friday 23:00 UTC (5pm MDT / 4pm MST) — LAST CALL, hours before tonight's MIDNIGHT MT cutoff.
       if (day === FRI) ctx.waitUntil(hit(env, '/api/admin/send-reminders?final=1'));
@@ -59,6 +63,11 @@ export default {
       // Daily 13:00 UTC (~7am MDT / 6am MST) — owner morning digest + health probe. Emails the owners
       // only if OWNER_NOTIFY_ENABLED=true; escalates an SMS if a health signal trips.
       ctx.waitUntil(hit(env, '/api/admin/daily-digest'));
+      // Saturday-only: PRE-SHOP reconciliation, ~2h after the lock and ~2h before billing. This is the
+      // one that catches a paying customer the kitchen has no order for (Jameson) or an order stuck in
+      // 'pending' instead of 'locked' (Jeferson) — i.e. money in, no food out — while Jayson can still
+      // act on it. The post-billing pass at 17:00 UTC catches the money-out-no-money direction.
+      if (day === SAT) ctx.waitUntil(hit(env, '/api/admin/payment-order-audit'));
       // Monday-only:
       //   - prune the in-app feed (>120d)
       //   - MENU FAILSAFE: if no owner confirmed this week's menu, auto-publish it (a staged menu is

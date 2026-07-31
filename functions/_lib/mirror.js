@@ -127,8 +127,15 @@ export async function mirrorSubscription(env, subInput) {
   const couponCode = discount?.coupon?.id || discount?.coupon?.name || (typeof discount?.coupon === 'string' ? discount.coupon : null);
   const hasDiscount = !!discount;
   const now = nowIso();
-  const periodStart = sub.current_period_start ? new Date(sub.current_period_start * 1000).toISOString() : null;
-  const periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+  // Recent Stripe API versions moved the period fields off the subscription and onto its ITEMS. Reading
+  // only the top level left current_period_end NULL on every mirrored row — which is why the "next
+  // charge" date rendered blank in /app/manage and the ops customer view. Prefer the top-level value
+  // (older API versions still send it) and fall back to the first item.
+  const item0 = sub.items?.data?.[0] || {};
+  const rawStart = sub.current_period_start ?? item0.current_period_start;
+  const rawEnd = sub.current_period_end ?? item0.current_period_end;
+  const periodStart = rawStart ? new Date(rawStart * 1000).toISOString() : null;
+  const periodEnd = rawEnd ? new Date(rawEnd * 1000).toISOString() : null;
 
   const existing = await one(env.DB, `SELECT * FROM subscriptions WHERE stripe_subscription_id = ?`, stripeSubId);
   const { meals, unit } = deriveMealTier(sub);

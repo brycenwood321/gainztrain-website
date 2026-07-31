@@ -23,7 +23,7 @@
 import { ok, fail } from '../../_lib/respond.js';
 import { requireStaffOrAdmin } from '../../_lib/admin.js';
 import { all } from '../../_lib/db.js';
-import { upcomingSunday, isLocked } from '../../_lib/menu.js';
+import { upcomingSunday, isLocked, cutoffForWeek } from '../../_lib/menu.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
 
 // How far back an unpaid invoice still counts as "this customer owes us". Two weekly cycles.
@@ -95,6 +95,13 @@ async function audit(env, weekOf) {
 
   // The other direction: someone the kitchen has NO record of. Includes orders stuck in 'pending'
   // (never locked) — that's exactly how Jeferson's week went missing.
+  //
+  // ⚠️ created_at < cutoff IS REQUIRED, not a nicety. A subscription that started AFTER this week
+  // locked could never have had an order for it — it's ordering for the NEXT week. Without this,
+  // anyone who signs up on Saturday (post-lock, during the ordering blackout) is falsely reported as
+  // missing from a cook list they were never meant to be on. Caught by running the check against the
+  // 2026-07-26 week, which flagged Daniel and Destiny — both of whom signed up after it closed.
+  const cutoffISO = cutoffForWeek(weekOf).toISOString();
   const missing = await all(env.DB,
     `SELECT s.id AS subscription_id, s.status AS sub_status, s.meals_per_week,
             c.id AS customer_id, c.first_name, c.last_name, c.email, c.phone,
@@ -103,9 +110,10 @@ async function audit(env, weekOf) {
        JOIN customers c ON c.id = s.customer_id
       WHERE s.status IN ('active','trialing','past_due')
         AND s.origin = 'app'
+        AND s.created_at < ?
         AND NOT EXISTS (
           SELECT 1 FROM orders o WHERE o.subscription_id = s.id AND o.week_of = ? AND o.status = 'locked')`,
-    weekOf, weekOf);
+    weekOf, cutoffISO, weekOf);
 
   for (const m of missing) {
     issues.push({ type: 'paying_but_not_locked', name: `${m.first_name || '?'} ${m.last_name || ''}`.trim(),

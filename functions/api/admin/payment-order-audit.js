@@ -23,7 +23,7 @@
 import { ok, fail } from '../../_lib/respond.js';
 import { requireStaffOrAdmin } from '../../_lib/admin.js';
 import { all } from '../../_lib/db.js';
-import { upcomingSunday } from '../../_lib/menu.js';
+import { upcomingSunday, isLocked } from '../../_lib/menu.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
 
 // How far back an unpaid invoice still counts as "this customer owes us". Two weekly cycles.
@@ -34,6 +34,16 @@ const NOT_PAYING = new Set(['past_due', 'unpaid', 'incomplete']);
 
 async function audit(env, weekOf) {
   const since = new Date(Date.now() - OPEN_INVOICE_WINDOW_DAYS * 86400 * 1000).toISOString();
+
+  // ⚠️ THIS CHECK IS ONLY MEANINGFUL AFTER THE WEEK HAS LOCKED. Before the Friday-midnight cutoff
+  // nobody has a locked order yet — orders sit 'pending' by design — so running early reports EVERY
+  // subscriber as "missing from the kitchen". The cron slots (Sat 13:00 + 17:00 UTC) are both after the
+  // 07:30 UTC lock, but a human opening this mid-week would otherwise get a screen of false alarms,
+  // and an alert people learn to ignore is worse than no alert.
+  if (!isLocked(weekOf)) {
+    return { week_of: weekOf, status: 'not_locked_yet', cooking_for: 0, issue_count: 0, issues: [],
+      note: 'Ordering is still open for this week — mismatches cannot be judged until it locks.' };
+  }
 
   const locked = await all(env.DB,
     `SELECT o.subscription_id, o.total_meals, o.upcharge_total_cents, o.delivery_method,
@@ -56,6 +66,15 @@ async function audit(env, weekOf) {
   }
 
   const issues = [];
+
+  // Cutoff has passed but NOTHING is locked → the lock cron did not run. That's one loud, actionable
+  // failure, not N per-customer ones — and it's the exact shape of the day-of-week cron bug that closed
+  // ordering early in July. Report it alone; every other check would just be downstream noise.
+  if (locked.length === 0) {
+    return { week_of: weekOf, status: 'lock_never_ran', cooking_for: 0, issue_count: 1,
+      issues: [{ type: 'lock_never_ran', name: 'ALL CUSTOMERS', detail:
+        `Ordering for ${weekOf} is past cutoff but NOT ONE order is locked — the lock cron did not run. Nobody will be cooked for. Run /api/admin/lock-week.` }] };
+  }
 
   for (const o of locked) {
     const who = `${o.first_name || '?'} ${o.last_name || ''}`.trim();

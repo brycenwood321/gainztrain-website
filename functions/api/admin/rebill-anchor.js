@@ -1,63 +1,42 @@
-// POST /api/admin/rebill-anchor — move every subscription onto ONE weekly billing day: SATURDAY,
-// right after the Friday-midnight cutoff + the Saturday 07:30Z lock. Owner-gated. DRY RUN BY DEFAULT.
+// POST /api/admin/rebill-anchor — bulk-move existing subscriptions onto the Saturday billing day.
+// Owner-gated. DRY RUN BY DEFAULT.
 //
-// WHY: billing day was never a decision — it's Stripe's default (the anchor lands wherever checkout
-// happened), so customers bill Sun/Mon/Wed/Fri while the FOOD side is already synchronized (lock Friday
-// midnight, cook Saturday, deliver Sunday). Aligning money to the food week means:
-//   - we know who actually paid BEFORE Jayson shops Saturday morning ("only cook a paid week"),
-//   - pause/resume stops depending on where a random anchor fell (the decision parked since June),
-//   - specialty upcharges (invoiceitems written by lock-week) land on the very next invoice, not
-//     up to 6 days later, after the customer already ate.
+// This is the BACKFILL tool. Going forward subscriptions land on Saturday by themselves:
+//   - new signups  → stripe-webhook.js safeAlignBillingDay() on the first paid invoice
+//   - resumes      → account/resume.js
+// Both call the same _lib/billing_day.js helper this does, so the rule has exactly one definition.
+// Keep this endpoint for backfills, for anything the webhook missed, and as the audit view — the dry
+// run is the fastest way to answer "is every customer on the right day, covering the right delivery?"
 //
-// THE ONE RULE THAT PREVENTS DOUBLE-BILLING:
-//   anchor = the Saturday immediately before the first delivery this subscription has NOT paid for.
-// It is NOT a fixed date. Someone already paid through Aug 2 (Josh, Daniel) anchors to Aug 8; someone
-// whose last charge covered Jul 26 anchors to Aug 1; someone who signs up during the Saturday ordering
-// blackout has already paid for the week 8 days out, so they anchor a week later again. Hardcoding one
-// date would double-charge the first group and give the last group a free week.
-//
-// HOW WE KNOW WHAT A CHARGE PAID FOR: nothing records it, so we derive it — a charge at time T buys the
-// week that was orderable at time T, i.e. orderableWeek(T). Verified against all live customers'
-// real invoice history before this was written.
-//
-// MECHANISM: Stripe re-anchors a subscription to `trial_end`, so we set trial_end + proration_behavior
-// 'none' (the documented way to change an existing subscription's billing period without issuing a
-// prorated invoice). We deliberately do NOT use billing_cycle_anchor=now — that bills immediately.
+// THE RULE (see _lib/billing_day.js): anchor = the Saturday immediately before the first delivery this
+// subscription has NOT paid for. It is NOT a fixed date — hardcoding one double-charges anyone already
+// paid ahead and hands a free week to anyone who signed up during the Saturday ordering blackout.
 //
 //   curl -X POST https://host/api/admin/rebill-anchor -H "X-Admin-Token: $TOK"            # DRY RUN
 //   curl -X POST https://host/api/admin/rebill-anchor -H "X-Admin-Token: $TOK" \
 //        -H 'content-type: application/json' -d '{"dry_run":false}'                        # APPLY
+//
+// ⚠️ Cloudflare caps subrequests per Worker invocation — each subscription costs 3-4 Stripe calls, so an
+// apply run tops out around a dozen. Batch with "only": [...customer_ids] beyond that; the tally will
+// report ERROR rows rather than silently skipping, and the run is safe to repeat.
 import { ok, fail, readJson } from '../../_lib/respond.js';
 import { requireOwner } from '../../_lib/admin.js';
 import { all, run, nowIso } from '../../_lib/db.js';
 import { stripe } from '../../_lib/stripe.js';
 import { orderableWeek } from '../../_lib/menu.js';
 import { mirrorSubscription } from '../../_lib/mirror.js';
+import { anchorAfterPaidCycle, moveToBillingDay } from '../../_lib/billing_day.js';
 
-// Saturday 15:00 UTC = 9am MDT / 8am MST. Chosen to sit 7.5h AFTER the lock cron (Sat 07:30 UTC) so the
-// specialty-upcharge invoiceitems lock-week writes are always on the books before the invoice renders.
-// Stripe anchors are absolute UTC, so the Mountain clock time shifts an hour at DST. Harmless.
-const ANCHOR_HOUR_UTC = 15;
-
-// Never move an anchor further out than this. A subscription whose last payment is ancient (long-paused,
-// dunning-stalled) would otherwise compute a wild anchor; we skip and report it instead of guessing.
-const MAX_DAYS_AHEAD = 21;
+// Only a real billing cycle tells us which delivery a customer bought.
+//
+// ⚠️ RE-RUN SAFETY: re-anchoring writes an immediate $0 'subscription_update' invoice. Taking simply
+// "the newest paid invoice" picks THAT up on a second run, concludes the customer is paid a week
+// further ahead than they are, and pushes their anchor out another week — a free delivery. Found by
+// re-running the dry run right after the first live migration and seeing four subs drift a week.
+// Filter on billing_reason, never on amount: $0 comp renewals are real cycles and must still count.
+const CYCLE_REASONS = new Set(['subscription_cycle', 'subscription_create']);
 
 function iso(d) { return d.toISOString().slice(0, 10); }
-
-// The Saturday immediately before a given delivery Sunday, at ANCHOR_HOUR_UTC.
-function anchorForDelivery(deliverySundayISO) {
-  const sunday = new Date(`${deliverySundayISO}T00:00:00Z`);
-  const sat = new Date(sunday);
-  sat.setUTCDate(sat.getUTCDate() - 1);
-  return new Date(Date.UTC(sat.getUTCFullYear(), sat.getUTCMonth(), sat.getUTCDate(), ANCHOR_HOUR_UTC, 0, 0));
-}
-
-function addDaysISO(isoDate, days) {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return iso(d);
-}
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -67,7 +46,6 @@ export async function onRequestPost(context) {
   const body = await readJson(request).catch(() => ({}));
   const dryRun = body.dry_run !== false;              // SAFE DEFAULT: must explicitly pass false to mutate
   const only = Array.isArray(body.only) ? new Set(body.only) : null;
-  const now = new Date();
 
   const subs = await all(env.DB,
     `SELECT s.id, s.customer_id, s.stripe_subscription_id, s.status, s.meals_per_week,
@@ -79,90 +57,64 @@ export async function onRequestPost(context) {
   const results = [];
 
   for (const s of subs) {
-    const who = `${s.first_name || '?'} ${s.last_name || ''}`.trim();
-    const row = { customer_id: s.customer_id, name: who, email: s.email, sub: s.stripe_subscription_id };
+    const row = {
+      customer_id: s.customer_id, name: `${s.first_name || '?'} ${s.last_name || ''}`.trim(),
+      email: s.email, sub: s.stripe_subscription_id,
+    };
     if (only && !only.has(s.customer_id)) { row.action = 'skipped'; row.reason = 'not_in_only_list'; results.push(row); continue; }
 
     try {
       // LIVE Stripe is the source of truth, never D1 — the ops list and the customer-detail endpoint
-      // currently disagree about who is paused, so trusting the mirror could re-anchor the wrong subs.
+      // have been observed disagreeing about who is paused, and acting on a stale mirror would
+      // re-anchor the wrong subscriptions.
       const live = await stripe(env, 'GET', `subscriptions/${s.stripe_subscription_id}`);
       row.stripe_status = live.status;
       row.paused = !!live.pause_collection;
+      const itemEnd = live.items?.data?.[0]?.current_period_end || live.current_period_end;
+      row.stripe_next_charge = itemEnd ? new Date(itemEnd * 1000).toISOString() : null;
 
       if (live.status === 'canceled' || live.status === 'incomplete_expired') {
         row.action = 'skipped'; row.reason = `stripe_status_${live.status}`; results.push(row); continue;
       }
-
-      // PAUSED SUBS ARE DELIBERATELY LEFT ALONE. While pause_collection is set no money moves (invoices
-      // generate and void), so the anchor is irrelevant until they resume — and resume-time anchoring
-      // (in account/resume.js) puts them on Saturday permanently, including for every FUTURE pause.
-      // Re-anchoring a paused sub would also mean combining trial_end with pause_collection, which
-      // Stripe does not document as supported.
+      // Paused subs bill nothing, so the anchor is moot until they come back — and resume.js now sets
+      // it at that moment, which also fixes every FUTURE pause rather than just today's.
       if (live.pause_collection) {
-        row.action = 'skipped'; row.reason = 'paused_will_anchor_on_resume'; results.push(row); continue;
+        row.action = 'skipped'; row.reason = 'paused_anchored_on_resume'; results.push(row); continue;
       }
 
-      // What has this subscription actually paid for? Only a real BILLING CYCLE tells us which delivery
-      // was bought. $0 comp invoices still count (a comped customer consumes a delivery slot), so we
-      // filter on billing_reason rather than amount.
-      //
-      // ⚠️ WHY THIS FILTER EXISTS — RE-RUN SAFETY: setting trial_end to re-anchor makes Stripe write an
-      // immediate $0 'subscription_update' invoice. Taking "the newest paid invoice" would pick THAT up
-      // on a second run, conclude the customer had already paid for the next delivery, and push their
-      // anchor a week later — handing them a free week of meals. Found by re-running the dry run after
-      // the first live migration and seeing four subs "drift" a week. Do not loosen this filter.
       const invs = await stripe(env, 'GET', 'invoices', {
         subscription: s.stripe_subscription_id, status: 'paid', limit: 12,
       });
-      const CYCLE_REASONS = new Set(['subscription_cycle', 'subscription_create']);
       const lastPaid = (invs.data || []).find((i) => CYCLE_REASONS.has(i.billing_reason));
-      if (lastPaid) row.last_paid_reason = lastPaid.billing_reason;
-      if (!lastPaid) { row.action = 'skipped'; row.reason = 'no_paid_invoice_yet'; results.push(row); continue; }
+      if (!lastPaid) { row.action = 'skipped'; row.reason = 'no_paid_cycle_yet'; results.push(row); continue; }
 
       const paidAt = new Date(lastPaid.created * 1000);
-      const coveredWeek = orderableWeek(paidAt);        // the delivery that charge bought
-      const nextUnpaid = addDaysISO(coveredWeek, 7);    // the first delivery not yet paid for
-      const anchor = anchorForDelivery(nextUnpaid);
-
+      const anchor = anchorAfterPaidCycle(paidAt);
       row.last_paid_at = paidAt.toISOString();
       row.last_paid_amount = (lastPaid.amount_paid || 0) / 100;
-      row.covers_delivery = coveredWeek;
-      row.next_unpaid_delivery = nextUnpaid;
+      row.last_paid_reason = lastPaid.billing_reason;
+      row.covers_delivery = orderableWeek(paidAt);
+      row.next_unpaid_delivery = iso(new Date(anchor.getTime() + 86400 * 1000)); // the Sunday after the anchor
       row.new_anchor = anchor.toISOString();
 
-      // What Stripe plans right now (so the dry run shows exactly which charge is being superseded).
-      const itemEnd = live.items?.data?.[0]?.current_period_end || live.current_period_end;
-      row.stripe_next_charge = itemEnd ? new Date(itemEnd * 1000).toISOString() : null;
-
-      // ── SAFETY RAILS ──
-      const msAhead = anchor.getTime() - now.getTime();
-      if (msAhead <= 5 * 60 * 1000) {
-        // Anchor already passed (or is imminent) — means this sub is behind on a delivery it should
-        // have paid for. Never silently skip a charge; surface it for a human.
-        row.action = 'BLOCKED'; row.reason = 'anchor_in_past_check_this_account'; results.push(row); continue;
-      }
-      if (msAhead > MAX_DAYS_AHEAD * 86400 * 1000) {
-        row.action = 'BLOCKED'; row.reason = `anchor_more_than_${MAX_DAYS_AHEAD}d_out`; results.push(row); continue;
-      }
-      if (itemEnd && anchor.getTime() < itemEnd * 1000) {
-        // Moving the anchor EARLIER than Stripe's next charge would bill sooner than the customer
-        // expects. Every intended case moves later or stays put; anything else needs eyes on it.
-        row.action = 'BLOCKED'; row.reason = 'anchor_earlier_than_current_period_end'; results.push(row); continue;
+      if (dryRun) {
+        // Report what an apply WOULD do, using the same guard rails the helper enforces.
+        const lead = anchor.getTime() - Date.now();
+        if (lead <= 5 * 60 * 1000) row.action = 'BLOCKED', row.reason = 'anchor_in_past_check_this_account';
+        else if (itemEnd && Math.abs(anchor.getTime() - itemEnd * 1000) < 60 * 1000) row.action = 'already_correct';
+        else if (itemEnd && anchor.getTime() < itemEnd * 1000) row.action = 'BLOCKED', row.reason = 'would_bill_earlier';
+        else row.action = 'would_update';
+        results.push(row); continue;
       }
 
-      if (dryRun) { row.action = 'would_update'; results.push(row); continue; }
+      const moved = await moveToBillingDay(env, s.stripe_subscription_id, anchor);
+      if (!moved.applied) { row.action = moved.reason === 'already_correct' ? 'already_correct' : 'BLOCKED'; row.reason = moved.reason; results.push(row); continue; }
 
-      const updated = await stripe(env, 'POST', `subscriptions/${s.stripe_subscription_id}`, {
-        trial_end: Math.floor(anchor.getTime() / 1000),
-        proration_behavior: 'none',
-      }, `gt_rebill_anchor_${s.id}_${iso(anchor)}`);
-
-      await mirrorSubscription(env, updated);
+      await mirrorSubscription(env, moved.updated);
       await run(env.DB,
         `INSERT INTO audit_log (at, actor, entity, action, detail_json) VALUES (?, 'admin:rebill-anchor', ?, 'billing_anchor_moved', ?)`,
         nowIso(), `subscription:${s.id}`,
-        JSON.stringify({ from: row.stripe_next_charge, to: row.new_anchor, covers: nextUnpaid }));
+        JSON.stringify({ from: row.stripe_next_charge, to: row.new_anchor, covers: row.next_unpaid_delivery }));
       row.action = 'updated';
     } catch (e) {
       row.action = 'ERROR';
@@ -172,5 +124,5 @@ export async function onRequestPost(context) {
   }
 
   const tally = results.reduce((m, r) => { m[r.action] = (m[r.action] || 0) + 1; return m; }, {});
-  return ok({ dry_run: dryRun, anchor_hour_utc: ANCHOR_HOUR_UTC, tally, results });
+  return ok({ dry_run: dryRun, tally, results });
 }

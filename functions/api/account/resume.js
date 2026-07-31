@@ -6,6 +6,7 @@ import { stripe } from '../../_lib/stripe.js';
 import { currentSub } from '../../_lib/account.js';
 import { notify } from '../../_lib/notify.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
+import { moveToBillingDay, anchorForNextDelivery } from '../../_lib/billing_day.js';
 
 export async function onRequestPost(context) {
   const auth = await getSessionCustomer(context);
@@ -23,6 +24,16 @@ export async function onRequestPost(context) {
   } catch (e) {
     return fail(502, 'stripe_failed', String(e?.message || e).slice(0, 160));
   }
+  // Bring them back onto the SATURDAY billing day. A paused sub keeps whatever anchor it had before the
+  // pause, so without this a customer who paused on a Tuesday resumes billing on Tuesdays — permanently
+  // off-cycle from the kitchen. They've paid for nothing upcoming, so they owe the next week they can
+  // order for, charged the Saturday before it lands. Non-fatal: a Stripe hiccup here must not block the
+  // resume itself (the bulk rebill-anchor endpoint can always re-align them).
+  try {
+    const moved = await moveToBillingDay(env, sub.stripe_subscription_id, anchorForNextDelivery());
+    if (moved.applied) live = await stripe(env, 'GET', `subscriptions/${sub.stripe_subscription_id}`);
+  } catch { /* non-fatal */ }
+
   const now = nowIso();
   const status = live?.status === 'active' ? 'active' : (live?.status || 'active');
   await run(env.DB, `UPDATE subscriptions SET status=?, paused_at=NULL, updated_at=? WHERE id=?`, status, now, sub.id);

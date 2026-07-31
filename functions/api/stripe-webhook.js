@@ -19,6 +19,7 @@ import { notify } from '../_lib/notify.js';
 import { ownerNotify } from '../_lib/owner_notify.js';
 import { capiEvent } from '../_lib/capi.js';
 import { stripe } from '../_lib/stripe.js';
+import { moveToBillingDay, anchorAfterPaidCycle } from '../_lib/billing_day.js';
 
 const SIG_TOLERANCE_SECONDS = 300; // reject events whose timestamp is >5 min skewed
 
@@ -86,6 +87,9 @@ async function dispatch(env, event) {
       });
     } catch { /* tracking never fails the webhook */ }
   }
+  // Put every NEW subscription on the Saturday billing day. Runs after the mirror, self-contained and
+  // try/caught like the other post-mirror steps — this must never fail the webhook.
+  await safeAlignBillingDay(env, event);
   // Customer-facing billing notifications fire AFTER the mirror, off the webhook (the reliable,
   // idempotent truth). Fully self-contained + try/caught: a comms failure must NEVER fail the
   // webhook, or Stripe would retry and re-mirror. Dedup keys are natural Stripe ids so the
@@ -96,6 +100,38 @@ async function dispatch(env, event) {
   await safeNotifyOwner(env, event);
   // FUEL8 promo: trim the discount to EXACTLY 4 weekly applications.
   await safeFuel8Cap(env, event);
+}
+
+// EVERY NEW SUBSCRIPTION LANDS ON THE SATURDAY BILLING DAY.
+//
+// Checkout is deliberately left alone: the customer still pays a full first week up front, exactly as
+// before, so the card is validated by a real charge and we're never cooking for someone who has never
+// successfully paid. (The alternative — anchoring at checkout with proration_behavior 'none' — collects
+// $0 at signup and would put unpaid strangers into the Saturday cook.)
+//
+// So we re-anchor one step later instead: the moment their FIRST invoice is paid, that payment has
+// bought whatever week was orderable at that moment, and their next charge is the Saturday before the
+// following delivery. A Tuesday signup pays Tuesday for Sunday's food, then bills Saturdays forever.
+// Never a double charge (the first week is already paid) and never a free week (the anchor always sits
+// before the next unpaid delivery).
+//
+// billing_reason 'subscription_create' keeps weekly renewals out. $0 comps are intentionally NOT
+// excluded — a comped account still occupies a delivery slot and should read Saturday like everyone
+// else. moveToBillingDay is idempotent, so the invoice.paid / payment_succeeded twins are harmless.
+async function safeAlignBillingDay(env, event) {
+  try {
+    if (event.type !== 'invoice.paid') return;
+    const inv = event.data?.object || {};
+    if (inv.billing_reason !== 'subscription_create') return;
+    const subId = typeof inv.subscription === 'string' ? inv.subscription : inv.subscription?.id;
+    if (!subId) return;
+
+    const paidAt = new Date((inv.created || Math.floor(Date.now() / 1000)) * 1000);
+    const res = await moveToBillingDay(env, subId, anchorAfterPaidCycle(paidAt));
+    await audit(env, `subscription:${subId}`, 'billing_day_aligned', {
+      applied: res.applied, reason: res.reason || null, anchor: res.anchor || null, invoice: inv.id,
+    });
+  } catch { /* never fail the webhook — the bulk endpoint can always re-align */ }
 }
 
 // FUEL8 flyer promo (2 free meals/wk x 4 weeks): count each discounted weekly invoice for a FUEL8 sub

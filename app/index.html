@@ -284,7 +284,10 @@
           ? `<div class="row"><span class="k">Ends</span><span class="v">${fmtDate(s.current_period_end)}</span></div>`
           : (s.current_period_end ? `<div class="row"><span class="k">Renews</span><span class="v">${fmtDate(s.current_period_end)}</span></div>` : '');
         $('subStatus').innerHTML =
-          `<div style="margin-bottom:0.6rem;"><span class="badge ${s.status}">${s.status.replace('_',' ')}</span></div>` +
+          // 'trialing' is how Stripe re-anchors a subscription to the Saturday billing day (trial_end sets
+          // the new cycle date) — the plan is fully active and WILL be charged, so never show the word
+          // "trialing" to a customer or they'll reasonably believe they're on a free trial.
+          `<div style="margin-bottom:0.6rem;"><span class="badge ${s.status === 'trialing' ? 'active' : s.status}">${(s.status === 'trialing' ? 'active' : s.status).replace('_',' ')}</span></div>` +
           `<div class="stat" style="font-size:1.5rem;">${tier}</div><div class="stat-sub">${price.replace(' · ','')}</div>` +
           renews + coupon +
           `<div style="margin-top:0.75rem;"><a href="/app/manage/" style="font-weight:600;">Manage plan →</a></div>`;

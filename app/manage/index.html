@@ -149,8 +149,12 @@
       }
       $('app').classList.remove('hidden');
       const st=sub.status||'';
-      const badgeCls=sub.cancel_at_period_end?'cancel_scheduled':st;
-      const badgeTxt=sub.cancel_at_period_end?'cancel scheduled':st.replace('_',' ');
+      // Show 'trialing' as active: it's only how Stripe re-anchors the sub onto the Saturday billing
+      // day (trial_end = the new cycle date). The plan is live and will be charged — showing the word
+      // "trialing" would tell a paying customer they're on a free trial.
+      const stDisp=st==='trialing'?'active':st;
+      const badgeCls=sub.cancel_at_period_end?'cancel_scheduled':stDisp;
+      const badgeTxt=sub.cancel_at_period_end?'cancel scheduled':stDisp.replace('_',' ');
       const perMeal=perMealCents(sub.meals_per_week);const wk=sub.meals_per_week*perMeal;
       let line=`<span class="badge ${badgeCls}">${badgeTxt}</span> · ${sub.meals_per_week} meals × ${money(perMeal)} = <b>${money(wk)}/week</b>`;
       if(sub.coupon_code&&sub.discount_active)line+=` · <span style="color:var(--green)">${sub.coupon_code} applied</span>`;

@@ -3255,15 +3255,26 @@
       } catch { return; }
       if (!menuWeeksCache.length) return;
       document.getElementById("menu-week-bar").style.display = "";
-      // If the build week is outside the orderable range (e.g. its cutoff passed), snap to the first week.
-      if (!menuWeeksCache.some(w => ymdOf(w) === menuBuildWeek)) {
+      // The orderable list is FUTURE weeks only. The current delivery/cook week (getWeekStr) drops off it
+      // the moment its cutoff passes (Fri midnight) — but the kitchen is still shopping + cooking it on
+      // Sat/Sun, so we must NOT snap away from it (that was clearing the Menu + Ingredient tabs on Saturday).
+      // Only snap forward off a GENUINELY PAST week (already delivered — older than this cycle's cook week).
+      const cookWeek = getWeekStr();
+      if (!menuWeeksCache.some(w => ymdOf(w) === menuBuildWeek) && menuBuildWeek < cookWeek) {
         menuBuildWeek = ymdOf(menuWeeksCache[0]);
         seedWeekIfNeeded();
       }
-      sel.innerHTML = menuWeeksCache.map((w, i) => {
+      // If the build week is the locked cook week (not in the orderable list), prepend it so it stays
+      // selectable + visible in the dropdown (you can still pick a future week to build next week's menu).
+      let weeks = menuWeeksCache.slice();
+      if (!weeks.some(w => ymdOf(w) === menuBuildWeek)) {
+        const iso = `${menuBuildWeek.slice(0,4)}-${menuBuildWeek.slice(4,6)}-${menuBuildWeek.slice(6,8)}`;
+        weeks = [{ week_of: iso, locked: true, _cook: true }, ...weeks];
+      }
+      sel.innerHTML = weeks.map((w) => {
         const d = new Date(w.week_of + "T12:00:00");
         const nice = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-        const label = (i === 0 ? "This week · " : "Week of ") + nice;
+        const label = w._cook ? `🍳 Cooking now · ${nice}` : `Week of ${nice}`;
         const tag = w.locked ? " · 🔒 locked" : w.published ? " · ✓ published" : " · draft";
         return `<option value="${ymdOf(w)}">${label}${tag}</option>`;
       }).join("");

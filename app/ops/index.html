@@ -2048,7 +2048,7 @@
     <div class="tab" data-tab="delivery">Delivery</div>
     <div class="tab owner-only" data-tab="menu">Menu</div>
     <div class="tab" data-tab="ingredients">Ingredients</div>
-    <div class="tab owner-only" data-tab="customers">Customers</div>
+    <div class="tab" data-tab="customers">Customers</div>
     <div class="tab owner-only" data-tab="activity">Activity</div>
     <div class="tab owner-only" data-tab="marketing">Marketing</div>
     <div class="tab owner-only" data-tab="analytics">Analytics</div>
@@ -2070,7 +2070,7 @@
     <a data-goto="delivery">Delivery</a>
     <a data-goto="menu" class="owner-only">Menu</a>
     <a data-goto="ingredients">Ingredients</a>
-    <a data-goto="customers" class="owner-only">Customers</a>
+    <a data-goto="customers">Customers</a>
     <a data-goto="activity" class="owner-only">Activity</a>
     <a data-goto="marketing" class="owner-only">Marketing</a>
     <a data-goto="analytics" class="owner-only">Analytics</a>
@@ -4656,7 +4656,10 @@
           return '<div style="margin-bottom:.7rem"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.2rem"><b>Week of ' + ownFmtDate(w) + '</b><span class="stat-sub">' + total + " meals · " + badge + "</span></div>" + items.map((s) => '<div class="mealrow"><span>' + ownEsc(s.meal_name) + '</span><span class="q">×' + s.qty + "</span></div>").join("") + "</div>";
         }).join("") : '<div class="stat-sub" style="padding:.4rem 0">No meal selections on record yet.</div>') + "</div>";
         // Owner subscription controls (pause/resume/cancel/edit meals) for the most recent manageable sub.
-        const msub = (d.subscriptions || []).find((s) => ["active", "trialing", "past_due", "paused"].includes(s.status));
+        // STAFF get the read-only view of this customer (profile, subs, invoices, meal picks) but NOT these
+        // write actions — customer-sub.js / customer-edit.js stay requireOwner server-side, and we don't
+        // even render the buttons for a non-owner so staff never see a control they can't use.
+        const msub = window.GT_IS_OWNER && (d.subscriptions || []).find((s) => ["active", "trialing", "past_due", "paused"].includes(s.status));
         const manageCard = msub ? (
           '<div class="ownv-card"><h2>Manage subscription</h2>' +
           '<div class="stat-sub" style="margin-bottom:.6rem">' + msub.meals_per_week + ' meals/wk · ' + ownEsc(msub.status) +
@@ -4677,9 +4680,10 @@
           "</div>"
         ) : "";
         // Owner edit of the customer's profile (name/phone), address (Stripe-synced), and password reset.
+        // Owner-only, same reasoning as manageCard above — hidden for staff, not just server-blocked.
         const inp = (id, ph, val, w) => '<span style="display:inline-flex;flex-direction:column;gap:.15rem;"><label class="stat-sub">' + ph + '</label><input id="' + id + '" type="text" value="' + ownEsc(val || "") + '" style="padding:.4rem;width:' + (w || "9rem") + ';"></span>';
         const isDel = c.delivery_method === "delivery";
-        const editCard =
+        const editCard = !window.GT_IS_OWNER ? "" : (
           '<div class="ownv-card"><h2>Edit details</h2>' +
           '<div class="ownv-ctl" style="flex-wrap:wrap;gap:.6rem;align-items:flex-end;">' + inp("own-edFirst", "First name", c.first_name) + inp("own-edLast", "Last name", c.last_name) + inp("own-edPhone", "Phone", c.phone, "10rem") + '<button class="ownv-btn" data-ed="profile">Save name/phone</button></div>' +
           '<div style="margin-top:1rem;border-top:1px solid #efe9e5;padding-top:.9rem;"><div class="stat-sub" style="font-weight:700;color:#4a4440;margin-bottom:.4rem;">Address</div>' +
@@ -4691,7 +4695,7 @@
           '<div style="margin-top:1rem;border-top:1px solid #efe9e5;padding-top:.9rem;"><div class="stat-sub" style="font-weight:700;color:#4a4440;margin-bottom:.4rem;">Reset password</div>' +
             '<div class="ownv-ctl" style="gap:.6rem;align-items:flex-end;"><input id="own-edPw" type="text" placeholder="New password (min 8)" style="padding:.4rem;width:14rem;"><button class="ownv-btn" data-ed="password">Reset</button></div></div>' +
           '<div class="stat-sub" id="own-edMsg" style="margin-top:.6rem;"></div>' +
-          "</div>";
+          "</div>");
         el.innerHTML =
           '<div class="ownv-ctl"><span class="link" id="own-backCust">← All customers</span></div>' +
           '<div class="ownv-card"><h2 style="font-size:1.1rem;color:#1a1614;">' + ownEsc((c.first_name || "") + " " + (c.last_name || "")) + "</h2>" +

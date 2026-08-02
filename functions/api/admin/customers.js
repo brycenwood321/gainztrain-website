@@ -1,12 +1,16 @@
 // GET /api/admin/customers — list customers (with latest sub status + lifetime spend), or
-// ?id=<customer> for one customer's full billing view (subscriptions + invoices + payments). Admin-gated.
+// ?id=<customer> for one customer's full billing view (subscriptions + invoices + payments). This is a
+// READ-ONLY view (customer list, meal picks, sub status, invoices/payments) so it's staff-or-owner gated,
+// same as kitchen-prep/overview-adjacent reads. The WRITE actions on a customer's account (subscription
+// pause/resume/cancel/tier via customer-sub.js, profile/address/password edits via customer-edit.js) stay
+// requireOwner — do not loosen those.
 import { ok, fail } from '../../_lib/respond.js';
-import { requireOwner } from '../../_lib/admin.js';
+import { requireStaffOrAdmin } from '../../_lib/admin.js';
 import { one, all } from '../../_lib/db.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
-  const denied = await requireOwner(context);
+  const denied = await requireStaffOrAdmin(context);
   if (denied) return denied;
 
   const id = new URL(request.url).searchParams.get('id') || '';

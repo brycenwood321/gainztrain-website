@@ -15,7 +15,10 @@ const OWNER_WRITE = new Set(['ingredient_library']);
 // Per-week menu drafts (menu_week_YYYYMMDD) also sync here so the Menu + Ingredients tabs populate on any
 // device (phone), not just the laptop the menu was built on.
 const MENU_DRAFT_RE = /^menu_week_\d{8}$/;
-const keyAllowed = (k) => ALLOWED.has(k) || MENU_DRAFT_RE.test(k);
+// The kitchen's shared working order list for a week (pulled + manually-added + meal-swap edits), so
+// every staff device sees the same orders — not just the phone that pulled/added them. Staff-writable.
+const PREP_ORDERS_RE = /^prep_orders_\d{8}$/;
+const keyAllowed = (k) => ALLOWED.has(k) || MENU_DRAFT_RE.test(k) || PREP_ORDERS_RE.test(k);
 const MAX_BYTES = 800000; // generous ceiling; the meal catalog is small JSON
 
 export async function onRequestGet(context) {

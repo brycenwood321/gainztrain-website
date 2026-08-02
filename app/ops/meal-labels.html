@@ -178,12 +178,27 @@
         break-after: avoid;
       }
 
+      /* ── DK-2251 62mm CONTINUOUS tape mode (toggled on via the "Label stock" picker) ──
+         The tape IS 62mm wide, so the label is printed in its NATIVE landscape orientation — no 90°
+         rotation. Short 35mm height keeps each label economical on continuous tape. */
+      html.tape62, html.tape62 body { width: 62mm; }
+      html.tape62 .label-grid { width: 62mm; max-width: 62mm; }
+      html.tape62 .label { width: 62mm; height: 35mm; }
+      html.tape62 .label-rot {
+        inset: 0; top: auto; left: auto;
+        width: 62mm; height: 35mm;
+        transform: none;
+        padding: 2mm 3mm;
+      }
+
       @page {
         size: 29mm 90mm;
         margin: 0;
       }
     }
   </style>
+  <!-- JS sets the @page size here to match the chosen label stock (later @page wins the cascade). -->
+  <style id="pageSize">@media print { @page { size: 29mm 90mm; margin: 0; } }</style>
 </head>
 <body>
 
@@ -202,6 +217,14 @@
         Prepped on:
         <input type="date" id="prep-date"
           style="padding:8px 10px;border:1px solid #d4d4d8;border-radius:8px;font-size:0.9rem;background:#fafafa;" />
+      </label>
+      <label style="font-size:0.85rem;font-weight:600;color:#3f3f46;display:flex;align-items:center;gap:8px;">
+        Label stock:
+        <select id="label-stock" onchange="applyStock(this.value)"
+          style="padding:8px 10px;border:1px solid #d4d4d8;border-radius:8px;font-size:0.9rem;background:#fafafa;">
+          <option value="29">DK-1201 · 29mm die-cut</option>
+          <option value="62">DK-2251 · 62mm continuous</option>
+        </select>
       </label>
     </div>
   </div>
@@ -381,10 +404,27 @@
       });
     }
 
+    // ── LABEL STOCK: DK-1201 (29mm die-cut, default) vs DK-2251 (62mm continuous tape) ──
+    // Switches the print layout + @page size. Choice is remembered per device. ?tape=62 also selects it.
+    function applyStock(stock) {
+      const is62 = String(stock) === "62";
+      document.documentElement.classList.toggle("tape62", is62);
+      document.getElementById("pageSize").textContent = is62
+        ? "@media print { @page { size: 62mm 35mm; margin: 0; } }"
+        : "@media print { @page { size: 29mm 90mm; margin: 0; } }";
+      const sel = document.getElementById("label-stock");
+      if (sel) sel.value = is62 ? "62" : "29";
+      localStorage.setItem("gt_label_stock", is62 ? "62" : "29");
+    }
+
     // Set date picker default to upcoming Sunday, then render
     const dateInput = document.getElementById("prep-date");
     dateInput.value = upcomingSunday();
     dateInput.addEventListener("change", renderAll);
+
+    // Restore saved label stock (or ?tape=62), default die-cut.
+    const _tapeParam = new URLSearchParams(location.search).get("tape");
+    applyStock(_tapeParam === "62" ? "62" : (localStorage.getItem("gt_label_stock") || "29"));
 
     renderAll();
   </script>

@@ -411,10 +411,11 @@
 
         // Generate the QR after the element is in the DOM. Wrapped so one bad QR can't throw out of the
         // forEach and halt the whole sheet. Encodes just the mealId — the Assembly tab decodes it and
-        // looks the meal up locally (a customer scanning it gets a meaningless string, nothing actionable).
+        // The QR now encodes a URL (…/m/<mealId>): the Assembly scanner pulls the mealId back out (works
+        // as before), but a CUSTOMER who scans it lands on a macros page instead of a meaningless code.
         try {
           new QRCode(document.getElementById(`qr-${idx}`), {
-            text: label.mealId,
+            text: "https://gainztrainprep.com/m/" + encodeURIComponent(label.mealId),
             width: 150,
             height: 150,
             correctLevel: QRCode.CorrectLevel.M

@@ -2647,8 +2647,16 @@
     }
 
     // ── HANDLE A SCAN ──
+    // New labels encode a URL (…/m/<mealId>) so a customer scan opens the macros page; the assembly
+    // scanner pulls the mealId back out. Old labels encode the bare mealId — still handled (no "/m/").
+    function extractMealId(raw) {
+      let v = String(raw || "").trim();
+      if (v.includes("/m/")) v = decodeURIComponent(v.split("/m/").pop().split(/[?#]/)[0]);
+      return v;
+    }
+
     function handleScan(rawValue) {
-      const mealId = rawValue.trim();
+      const mealId = extractMealId(rawValue);
       const errorEl = document.getElementById("scan-error");
 
       if (!mealId) return;
@@ -2800,7 +2808,7 @@
         const img = camCtx.getImageData(0, 0, camCanvas.width, camCanvas.height);
         code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
       } catch { return; }
-      if (code && code.data) onDetected(code.data.trim());
+      if (code && code.data) onDetected(extractMealId(code.data));
     }
 
     // On a detection: freeze (pause the loop), give a big visual + beep/vibrate, then fade + resume after a

@@ -30,7 +30,7 @@ import { all } from '../../_lib/db.js';
 import { upcomingSunday, isLocked, cutoffForWeek } from '../../_lib/menu.js';
 import { stripe } from '../../_lib/stripe.js';
 import { invoiceSubscriptionId } from '../../_lib/mirror.js';
-import { deliveryBoughtBy } from '../../_lib/billing_day.js';
+import { deliveryBoughtBy, anchorForDelivery } from '../../_lib/billing_day.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
 
 const LOOKBACK_DAYS = 45;   // far enough back to cover any prepaid week still in play
@@ -92,11 +92,21 @@ async function audit(env, weekOf) {
         `Ordering for ${weekOf} is past cutoff but NOT ONE order is locked — the lock cron did not run. Nobody will be cooked for. Run /api/admin/lock-week.` }] };
   }
 
-  const { map: paidWeeks, counted, truncated } = await paidWeeksBySubscription(env);
+  // ⚠️ THE PAYMENT CHECK CANNOT RUN BEFORE BILLING DOES. The lock fires Sat 07:30 UTC, the pre-shop
+  // audit runs 13:00 UTC, but billing anchors fire at 15:00 UTC — so at 7am Mountain almost nobody has
+  // paid for tomorrow's delivery yet and a naive run would flag the ENTIRE roster. The 17:00 UTC pass
+  // is the one that judges payment; the early pass still earns its slot by catching the other
+  // direction (an active subscriber the kitchen has no order for) while Jayson can still act on it.
+  const billingAt = anchorForDelivery(weekOf);
+  const billingSettled = Date.now() >= billingAt.getTime() + 20 * 60 * 1000; // 20 min for Stripe to settle
+
+  const { map: paidWeeks, counted, truncated } = billingSettled
+    ? await paidWeeksBySubscription(env)
+    : { map: new Map(), counted: 0, truncated: false };
   const issues = [];
   let paidCount = 0;
 
-  for (const o of locked) {
+  for (const o of billingSettled ? locked : []) {
     const who = `${o.first_name || '?'} ${o.last_name || ''}`.trim();
     const cover = o.stripe_subscription_id ? paidWeeks.get(o.stripe_subscription_id)?.get(weekOf) : null;
 
@@ -138,7 +148,12 @@ async function audit(env, weekOf) {
   }
 
   const report = { week_of: weekOf, cooking_for: locked.length, paid_and_cooked: paidCount,
-    invoices_examined: counted, issue_count: issues.length, issues };
+    invoices_examined: counted, payment_check_ran: billingSettled, issue_count: issues.length, issues };
+  // A skipped payment check must be visible. "0 issues" because we did not look is not the same as
+  // "0 issues" because everything is paid, and nobody should have to guess which one they're reading.
+  if (!billingSettled) {
+    report.note = `Billing for ${weekOf} fires ${billingAt.toISOString()} — payment coverage not judged yet. Order-side checks still ran.`;
+  }
   // Never let a silent cap masquerade as a clean report.
   if (truncated) report.warning = `Invoice scan hit the ${MAX_PAGES}-page cap — coverage may be incomplete.`;
   return report;

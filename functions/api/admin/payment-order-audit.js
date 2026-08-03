@@ -1,109 +1,122 @@
 // GET|POST /api/admin/payment-order-audit — reconcile MONEY against FOOD for a delivery week.
 // Owner-or-admin-token gated (the cron uses the token). Read-only: it never mutates, only reports.
 //
-// WHY THIS EXISTS: the kitchen and the bank read different sources. `lock-week` decides who gets cooked
-// for from D1 `orders`/`subscriptions`; billing happens in Stripe. When those two drift, nobody notices
-// until a customer complains — and it has already happened twice:
-//   - Jameson (2026-07-10): paid, but the lock cron had already run a day early (the DOW bug), so no
-//     order row was ever created. He paid for a week the kitchen never saw.
-//   - Jeferson (2026-07-23): paid $119, order sat 'pending' and never locked; meals were made by hand
-//     off-system, so every dashboard showed him as un-served.
-// Both were caught by accident, weeks later. This is the check that catches the next one on the day.
+// WHY THIS EXISTS: the kitchen and the bank read different sources. `lock-week` builds the cook list
+// from D1; billing lives in Stripe. When they drift, food goes out unpaid and nobody finds out for
+// weeks. It has happened three times:
+//   - Jameson  (2026-07-10) paid, but the lock cron had run a day early so no order row existed.
+//   - Jeferson (2026-07-23) paid, order stuck 'pending', meals made by hand off-system.
+//   - Jeferson (2026-08-02) picked up 14 meals with NO payment: his 07-30 renewal invoice was VOIDED.
 //
-// THREE FAILURES IT LOOKS FOR:
-//   locked_but_unpaid    — in the cook list, but the subscription is past_due/unpaid or is carrying an
-//                          open (uncollected) invoice. We're about to buy food for someone not paying.
-//   paying_but_not_locked— an active, un-paused, app-origin subscriber with NO locked order for the
-//                          week. They expect meals; the kitchen has no idea they exist. (The Jameson
-//                          shape.) Also catches orders stuck in 'pending' like Jeferson's.
-//   locked_while_paused  — a paused subscription that somehow has a locked order: cooking for free.
+// ⚠️ THE LESSON FROM THAT THIRD ONE — READ BEFORE CHANGING THIS FILE. The original version of this
+// check asked "does this customer look unhealthy?" (subscription past_due/unpaid, or carrying an OPEN
+// invoice). Jeferson passed every one of those: his subscription was 'active' and he had no open
+// invoice, because the unpaid week had been VOIDED rather than left outstanding. The check reported
+// "0 mismatches" on the very morning he collected $119 of unpaid food.
 //
-// Deliberately D1-only, ZERO Stripe calls: Cloudflare caps subrequests per invocation, and this has to
-// keep working when there are 200 customers, not 12.
+// So it no longer infers health. It answers the only question that matters, directly:
+//     for THIS delivery week, does a PAID invoice exist that covers it?
+// Health signals are proxies; a payment is the fact. Never regress this to a status check.
+//
+// HOW A PAYMENT MAPS TO A DELIVERY: see _lib/billing_day.js deliveryBoughtBy() — a signup buys the week
+// that was orderable at checkout, a renewal (which now fires Saturday, AFTER the Friday cutoff) buys the
+// imminent Sunday. That single helper is shared with the anchor logic so the two can never disagree.
+//
+// SCALING: one Stripe invoice-list call covers the WHOLE roster (paginated, capped), not one call per
+// customer — Cloudflare caps subrequests per invocation and this must still work at 200 customers.
 import { ok, fail } from '../../_lib/respond.js';
 import { requireStaffOrAdmin } from '../../_lib/admin.js';
 import { all } from '../../_lib/db.js';
 import { upcomingSunday, isLocked, cutoffForWeek } from '../../_lib/menu.js';
+import { stripe } from '../../_lib/stripe.js';
+import { invoiceSubscriptionId } from '../../_lib/mirror.js';
+import { deliveryBoughtBy } from '../../_lib/billing_day.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
 
-// How far back an unpaid invoice still counts as "this customer owes us". Two weekly cycles.
-const OPEN_INVOICE_WINDOW_DAYS = 15;
+const LOOKBACK_DAYS = 45;   // far enough back to cover any prepaid week still in play
+const MAX_PAGES = 5;        // 500 invoices — a hard stop so a bad filter can't spin
 
-// Subscription states that mean money is NOT flowing even though meals might be.
-const NOT_PAYING = new Set(['past_due', 'unpaid', 'incomplete']);
+// Pull every PAID invoice in the window and map stripe_subscription_id → Set(delivery weeks it paid for).
+// Only 'paid' counts. A voided invoice (the pause_collection behaviour, and exactly what happened to
+// Jeferson) collected nothing and must never be read as coverage.
+async function paidWeeksBySubscription(env) {
+  const sinceTs = Math.floor((Date.now() - LOOKBACK_DAYS * 86400 * 1000) / 1000);
+  const map = new Map();
+  let startingAfter = null, pages = 0, counted = 0, truncated = false;
+
+  while (pages < MAX_PAGES) {
+    const params = { status: 'paid', limit: 100, created: { gte: sinceTs } };
+    if (startingAfter) params.starting_after = startingAfter;
+    const page = await stripe(env, 'GET', 'invoices', params);
+    const rows = page.data || [];
+    for (const inv of rows) {
+      const subId = invoiceSubscriptionId(inv);
+      if (!subId) continue;
+      const week = deliveryBoughtBy(new Date(inv.created * 1000), inv.billing_reason);
+      if (!map.has(subId)) map.set(subId, new Map());
+      // Keep the invoice that covered it, so the report can cite real money.
+      map.get(subId).set(week, { id: inv.id, amount: (inv.amount_paid || 0) / 100, reason: inv.billing_reason });
+      counted++;
+    }
+    pages++;
+    if (!page.has_more || !rows.length) break;
+    startingAfter = rows[rows.length - 1].id;
+    if (pages === MAX_PAGES && page.has_more) truncated = true;
+  }
+  return { map, counted, truncated };
+}
 
 async function audit(env, weekOf) {
-  const since = new Date(Date.now() - OPEN_INVOICE_WINDOW_DAYS * 86400 * 1000).toISOString();
-
-  // ⚠️ THIS CHECK IS ONLY MEANINGFUL AFTER THE WEEK HAS LOCKED. Before the Friday-midnight cutoff
-  // nobody has a locked order yet — orders sit 'pending' by design — so running early reports EVERY
-  // subscriber as "missing from the kitchen". The cron slots (Sat 13:00 + 17:00 UTC) are both after the
-  // 07:30 UTC lock, but a human opening this mid-week would otherwise get a screen of false alarms,
-  // and an alert people learn to ignore is worse than no alert.
+  // ⚠️ ONLY MEANINGFUL AFTER THE WEEK LOCKS. Before the Friday-midnight cutoff orders sit 'pending' by
+  // design, so running early reports every subscriber as missing. An alert people learn to ignore is
+  // worse than no alert.
   if (!isLocked(weekOf)) {
     return { week_of: weekOf, status: 'not_locked_yet', cooking_for: 0, issue_count: 0, issues: [],
       note: 'Ordering is still open for this week — mismatches cannot be judged until it locks.' };
   }
 
   const locked = await all(env.DB,
-    `SELECT o.subscription_id, o.total_meals, o.upcharge_total_cents, o.delivery_method,
-            s.status AS sub_status, s.meals_per_week,
+    `SELECT o.subscription_id, o.total_meals, o.delivery_method,
+            s.status AS sub_status, s.stripe_subscription_id,
             c.id AS customer_id, c.first_name, c.last_name, c.email, c.phone
        FROM orders o
        JOIN subscriptions s ON s.id = o.subscription_id
        JOIN customers c ON c.id = o.customer_id
       WHERE o.week_of = ? AND o.status = 'locked'`, weekOf);
 
-  // Every invoice still awaiting money. 'open' = finalized but uncollected; 'uncollectible' = given up.
-  const unpaidRows = await all(env.DB,
-    `SELECT subscription_id, id, status, amount_due_cents, created_at
-       FROM invoices
-      WHERE status IN ('open','uncollectible') AND created_at >= ? AND subscription_id IS NOT NULL`, since);
-  const unpaidBySub = new Map();
-  for (const i of unpaidRows) {
-    if (!unpaidBySub.has(i.subscription_id)) unpaidBySub.set(i.subscription_id, []);
-    unpaidBySub.get(i.subscription_id).push(i);
-  }
-
-  const issues = [];
-
-  // Cutoff has passed but NOTHING is locked → the lock cron did not run. That's one loud, actionable
-  // failure, not N per-customer ones — and it's the exact shape of the day-of-week cron bug that closed
-  // ordering early in July. Report it alone; every other check would just be downstream noise.
+  // Cutoff passed but NOTHING locked → the lock cron didn't run. One loud failure, not N noisy ones.
+  // This is the shape of the day-of-week cron bug that closed ordering early in July.
   if (locked.length === 0) {
     return { week_of: weekOf, status: 'lock_never_ran', cooking_for: 0, issue_count: 1,
       issues: [{ type: 'lock_never_ran', name: 'ALL CUSTOMERS', detail:
         `Ordering for ${weekOf} is past cutoff but NOT ONE order is locked — the lock cron did not run. Nobody will be cooked for. Run /api/admin/lock-week.` }] };
   }
 
+  const { map: paidWeeks, counted, truncated } = await paidWeeksBySubscription(env);
+  const issues = [];
+  let paidCount = 0;
+
   for (const o of locked) {
     const who = `${o.first_name || '?'} ${o.last_name || ''}`.trim();
-    if (o.sub_status === 'paused') {
-      issues.push({ type: 'locked_while_paused', name: who, email: o.email, customer_id: o.customer_id,
-        meals: o.total_meals, detail: 'Paused subscription has a locked order — meals would be cooked with no billing.' });
-      continue;
-    }
-    const owed = unpaidBySub.get(o.subscription_id) || [];
-    const owedCents = owed.reduce((s, i) => s + (i.amount_due_cents || 0), 0);
-    if (NOT_PAYING.has(o.sub_status) || owed.length) {
-      issues.push({ type: 'locked_but_unpaid', name: who, email: o.email, phone: o.phone,
-        customer_id: o.customer_id, meals: o.total_meals, sub_status: o.sub_status,
-        open_invoices: owed.length, amount_owed: owedCents / 100,
-        detail: `In the cook list for ${o.total_meals} meals but ${NOT_PAYING.has(o.sub_status) ? `subscription is ${o.sub_status}` : `carrying ${owed.length} unpaid invoice(s) totalling $${(owedCents / 100).toFixed(2)}`}.` });
-    }
+    const cover = o.stripe_subscription_id ? paidWeeks.get(o.stripe_subscription_id)?.get(weekOf) : null;
+
+    if (cover) { paidCount++; continue; }
+
+    // THE CORE FINDING: food is going out for a delivery week no payment covers.
+    issues.push({
+      type: 'locked_but_not_paid', name: who, email: o.email, phone: o.phone,
+      customer_id: o.customer_id, meals: o.total_meals, sub_status: o.sub_status,
+      delivery_method: o.delivery_method,
+      detail: `Cooked ${o.total_meals} meals for the ${weekOf} ${o.delivery_method === 'delivery' ? 'delivery' : 'pickup'}, but NO paid invoice covers that week. Subscription reads '${o.sub_status}' — check for a voided or failed renewal.`,
+    });
   }
 
-  // The other direction: someone the kitchen has NO record of. Includes orders stuck in 'pending'
-  // (never locked) — that's exactly how Jeferson's week went missing.
-  //
-  // ⚠️ created_at < cutoff IS REQUIRED, not a nicety. A subscription that started AFTER this week
-  // locked could never have had an order for it — it's ordering for the NEXT week. Without this,
-  // anyone who signs up on Saturday (post-lock, during the ordering blackout) is falsely reported as
-  // missing from a cook list they were never meant to be on. Caught by running the check against the
-  // 2026-07-26 week, which flagged Daniel and Destiny — both of whom signed up after it closed.
+  // The other direction: an active subscriber the kitchen has no locked order for. created_at < cutoff
+  // is REQUIRED — a subscription that started after this week locked is ordering for the NEXT week and
+  // was never meant to be on this cook list.
   const cutoffISO = cutoffForWeek(weekOf).toISOString();
   const missing = await all(env.DB,
-    `SELECT s.id AS subscription_id, s.status AS sub_status, s.meals_per_week,
+    `SELECT s.status AS sub_status, s.meals_per_week,
             c.id AS customer_id, c.first_name, c.last_name, c.email, c.phone,
             (SELECT o.status FROM orders o WHERE o.subscription_id = s.id AND o.week_of = ?) AS order_status
        FROM subscriptions s
@@ -124,7 +137,11 @@ async function audit(env, weekOf) {
         : 'Active subscriber with no order at all for this week.' });
   }
 
-  return { week_of: weekOf, cooking_for: locked.length, issue_count: issues.length, issues };
+  const report = { week_of: weekOf, cooking_for: locked.length, paid_and_cooked: paidCount,
+    invoices_examined: counted, issue_count: issues.length, issues };
+  // Never let a silent cap masquerade as a clean report.
+  if (truncated) report.warning = `Invoice scan hit the ${MAX_PAGES}-page cap — coverage may be incomplete.`;
+  return report;
 }
 
 export async function onRequest(context) {
@@ -137,8 +154,8 @@ export async function onRequest(context) {
 
   const report = await audit(env, weekOf);
 
-  // Alert the owners only when something is actually wrong, and only on the cron (POST) path — a human
-  // opening this in the dashboard shouldn't fire a text at everyone.
+  // Alert owners only on the cron (POST) path and only when something is wrong — a human opening this
+  // in the dashboard should never fire a text at everyone.
   if (request.method === 'POST' && report.issue_count > 0) {
     const lines = report.issues.slice(0, 12).map((i) => `• ${i.name}: ${i.detail}`).join('\n');
     try {

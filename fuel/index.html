@@ -55,6 +55,14 @@
     .lp-mid-cta{text-align:center;margin-top:1.8rem;}
     .lp-proof{background:#fff8ec;border-radius:16px;text-align:center;padding:2.2rem 1.4rem;}
     .lp-proof p{max-width:620px;margin:0 auto;font-size:1.05rem;line-height:1.6;}
+    /* Full Week Guarantee. Named offer element -- the ad promises it verbatim, so this block and the
+       ad script must stay word-for-word identical. Terms live on /terms-of-service/#guarantee. */
+    .lp-guarantee{background:#141414;color:#fff;border-radius:16px;text-align:center;padding:2.4rem 1.4rem;
+      border:2px solid var(--orange);}
+    .lp-guarantee h2{color:#fff;margin:0 0 .3rem;}
+    .lp-guarantee .lp-guarantee-lead{max-width:640px;margin:0 auto;font-size:1.15rem;line-height:1.6;color:#f2f2f2;}
+    .lp-guarantee .lp-guarantee-lead b{color:var(--orange);}
+    .lp-guarantee .lp-guarantee-terms{font-size:.82rem;color:#9a9a9a;margin:1.1rem auto 0;max-width:520px;}
     .lp-final{text-align:center;padding:3rem 1.25rem 4rem;}
     .lp-fineprint{font-size:.78rem;color:#999;margin-top:1rem;}
     #menuLoading{text-align:center;color:#888;padding:2rem 0;}
@@ -83,17 +91,27 @@
 
   <section class="lp-hero">
     <div>
-      <span class="lp-offer-badge" id="offerBadge">This Week's Menu Is Live</span>
+      <span class="lp-offer-badge" id="offerBadge">Eat The Week Free If It's Not Worth It</span>
       <h1 id="heroH1">Hop On The<br/>Gainz Train.</h1>
-      <p class="lp-sub" id="offerSub">Fresh, high-protein meals cooked in our Orem kitchen every week — <b>40g+ protein</b>, macros on every label, ready every Sunday. You pick the meals. We handle everything else.<b id="offerLine"></b></p>
-      <a class="lp-cta" id="ctaTop" href="/menu/">See This Week's Menu →</a>
+      <!-- Kept deliberately short. 80% of paid visitors never scrolled past 10% of this page and
+           averaged 21 seconds (2026-08-01), so the CTA and the guarantee have to clear the fold on a
+           phone. Do not grow this paragraph back without re-checking scroll depth in page_views. -->
+      <p class="lp-sub" id="offerSub">Fresh, high-protein meals from our Orem kitchen — <b>40g+ protein</b>, macros on every label, ready every Sunday.<b id="offerLine"></b></p>
+      <a class="lp-cta" id="ctaTop" href="/menu/">Start My First Week →</a>
+      <!-- Shown ONLY on the 'guarantee' variant. Terms §5: the guarantee does not stack with a code
+           that discounts the first order, so a FUEL8/GAINZ50 visitor must never see both. -->
+      <div class="lp-anchor" id="guaranteeLine" hidden><b>Full Week Guarantee:</b> eat every meal in your first week. If it wasn't worth it, we refund you and you keep the food. <a href="#guaranteeBlock" style="color:inherit;">How it works</a></div>
       <div class="lp-anchor">From <b>$9.50/meal</b> · pause or cancel anytime · Orem pickup or local delivery</div>
     </div>
     <div class="lp-collage" aria-hidden="true">
-      <img src="../assets/images/meals/chicken-bro-tato-bowl.jpg" alt="" width="600" height="600" fetchpriority="high" />
-      <img src="../assets/images/meals/beef-fajita-bowl.jpg" alt="" width="600" height="600" />
-      <img src="../assets/images/meals/teriyaki-turkey-bowl.jpg" alt="" width="600" height="600" />
-      <img src="../assets/images/meals/chicken-broccoli-rice.jpg" alt="" width="600" height="600" />
+      <!-- Square 600x600 WebP crops, not the 800x1200 portrait originals. The collage renders these
+           at aspect-ratio 1/1 with object-fit:cover, so shipping the full portrait JPGs meant ~983KB
+           of above-the-fold payload on a phone (32% of paid clicks bounced before load, 2026-08-01).
+           Same four shots, 238KB total. Regenerate with sips --resampleWidth 600 -> -c 600 600 -> cwebp -q 78. -->
+      <img src="../assets/images/meals/chicken-bro-tato-bowl-sq600.webp" alt="" width="600" height="600" fetchpriority="high" decoding="async" />
+      <img src="../assets/images/meals/beef-fajita-bowl-sq600.webp" alt="" width="600" height="600" loading="lazy" decoding="async" />
+      <img src="../assets/images/meals/teriyaki-turkey-bowl-sq600.webp" alt="" width="600" height="600" loading="lazy" decoding="async" />
+      <img src="../assets/images/meals/chicken-broccoli-rice-sq600.webp" alt="" width="600" height="600" loading="lazy" decoding="async" />
     </div>
   </section>
 
@@ -128,11 +146,19 @@
     </div>
   </section>
 
+  <section class="lp-section">
+    <div class="lp-guarantee" id="guaranteeBlock">
+      <h2>The Full Week Guarantee</h2>
+      <p class="lp-guarantee-lead">Eat every meal in your first week. <b>If it wasn't worth it, we refund you. Keep the food.</b></p>
+      <p class="lp-guarantee-terms">First order only, one per customer. Tell us within 7 days of your first delivery and we refund that week in full, meals and delivery fee. Nothing to send back, no questions asked. <a href="/terms-of-service/#guarantee" style="color:#c9c9c9;text-decoration:underline;">Full terms</a>.</p>
+    </div>
+  </section>
+
   <section class="lp-final">
     <span class="lp-offer-badge" id="offerBadge2">This Week's Menu Is Live</span>
     <h2 style="margin:1rem 0;">Your macros, handled. Every week.</h2>
     <a class="lp-cta" id="ctaBottom" href="/menu/">Hop On The Gainz Train →</a>
-    <p class="lp-fineprint">Weekly subscription · pause or cancel anytime · love your first week or we make it right.</p>
+    <p class="lp-fineprint">Weekly subscription · pause or cancel anytime · Full Week Guarantee on your first order.</p>
   </section>
 
   <footer class="footer">
@@ -178,25 +204,40 @@
 
   <script src="../assets/js/main.js"></script>
   <script>
-    // Offer variants. DEFAULT (?v absent) = 'menu' = NO discount — matches the founders ad (no offer
-    // promised) and the Ad Library teardown finding (79% of long-running winners lead with product, not
-    // price). '2free' maps to the REAL FUEL8 promo (2 free meals/wk x 4 weeks, ends 2026-09-01) and now
-    // names the code, since checkout only applies it when the customer enters FUEL8 at /start.
-    // '20off' has NO working coupon behind it yet — build the code before pointing any ad at ?v=20off.
+    // Offer variants. DEFAULT (?v absent) = 'guarantee' = risk reversal, NOT a discount. This keeps the
+    // Ad Library teardown finding intact (79% of long-running winners lead with product, not price) while
+    // still giving a cold visitor a reason to act, and it costs nothing unless a refund is actually
+    // claimed. Section 5 of /terms-of-service/ is the binding version — copy here must not exceed it.
+    //
+    // ⚠️ EVERY VARIANT BELOW MUST RESOLVE TO SOMETHING THAT ACTUALLY DISCOUNTS AT CHECKOUT. Verified
+    // 2026-08-01: '2free' -> FUEL8 is REAL (dynamic per-tier Stripe coupon in _lib/plans.js, special-
+    // cased in api/coupons/validate.js through 2026-09-01, trimmed to exactly 4 weekly applications in
+    // stripe-webhook.js — it is deliberately NOT a row in D1 `coupons`, so don't "fix" that).
+    // 'gainz50' -> GAINZ50 is REAL (D1 + Stripe, 50% off first invoice, expires 2026-08-25).
+    // '20off' was REMOVED — it had no coupon behind it in D1, Stripe, or validate.js. The old default
+    // ("2 free meals" with no code) was removed for the same reason on 2026-07-15. Don't add a variant
+    // here until its code validates.
+    //
+    // ⚠️ The Full Week Guarantee does NOT stack with a code that discounts the first order (terms §5),
+    // so 'guarantee' deliberately carries no promo href. Pick ONE per ad — never promise both.
     (function(){
-      var v=new URLSearchParams(location.search).get('v')||'menu';
+      var v=new URLSearchParams(location.search).get('v')||'guarantee';
       var offers={
+        'guarantee':{badge:"Eat The Week Free If It's Not Worth It",line:'',cta:'Start My First Week →'},
         'menu':{badge:"This Week's Menu Is Live",line:'',cta:"See This Week's Menu →"},
-        '2free':{badge:'2 Free Meals Every Week, Your First Month',line:' 2 free meals added to every box for your first 4 weeks — applied automatically at checkout.',cta:'Claim My Free Meals →',href:'/menu/?promo=FUEL8'},
-        '20off':{badge:'$20 Off Your First Week',line:' Start this week and take $20 off your first box.',cta:'Get $20 Off →'}
+        '2free':{badge:'2 Free Meals Every Week, Your First Month',line:' 2 free meals added to every box for your first 4 weeks — enter FUEL8 at checkout.',cta:'Claim My Free Meals →',href:'/menu/?promo=FUEL8'},
+        'gainz50':{badge:'50% Off Your First Week',line:' Code GAINZ50 is applied for you at checkout. Ends Aug 25.',cta:'Get 50% Off →',href:'/menu/?promo=GAINZ50'}
       };
-      var o=offers[v]||offers['menu'];
+      var o=offers[v]||offers['guarantee'];
       if(o.href){['ctaTop','ctaMid','ctaBottom'].forEach(function(id){var el=document.getElementById(id);if(el)el.href=o.href;});}
       document.getElementById('offerBadge').textContent=o.badge;
       document.getElementById('offerBadge2').textContent=o.badge;
       document.getElementById('offerLine').textContent=o.line;
       document.getElementById('ctaTop').textContent=o.cta;
       document.getElementById('ctaBottom').textContent=o.cta;
+      // Guarantee copy is mutually exclusive with any first-order discount (terms §5).
+      var gl=document.getElementById('guaranteeLine'); if(gl) gl.hidden = !!o.href;
+      var gb=document.getElementById('guaranteeBlock'); if(gb) gb.closest('section').hidden = !!o.href;
     })();
 
     window.mealImgErr=function(img,emoji){var d=document.createElement('div');d.className='meal-card-img meal-emoji-fallback';d.textContent=emoji||'🍽️';img.replaceWith(d);};

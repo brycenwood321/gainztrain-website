@@ -14,7 +14,7 @@
 
 import { one, run, nowIso } from '../_lib/db.js';
 import { hmacSign, constantTimeEqual } from '../_lib/crypto.js';
-import { ensureCustomer, mirrorSubscription, mirrorInvoice, mirrorPayment, audit } from '../_lib/mirror.js';
+import { ensureCustomer, mirrorSubscription, mirrorInvoice, mirrorPayment, audit, invoiceSubscriptionId } from '../_lib/mirror.js';
 import { notify } from '../_lib/notify.js';
 import { ownerNotify } from '../_lib/owner_notify.js';
 import { capiEvent } from '../_lib/capi.js';
@@ -123,7 +123,7 @@ async function safeAlignBillingDay(env, event) {
     if (event.type !== 'invoice.paid') return;
     const inv = event.data?.object || {};
     if (inv.billing_reason !== 'subscription_create') return;
-    const subId = typeof inv.subscription === 'string' ? inv.subscription : inv.subscription?.id;
+    const subId = invoiceSubscriptionId(inv);   // flat inv.subscription is gone in current API versions
     if (!subId) return;
 
     const paidAt = new Date((inv.created || Math.floor(Date.now() / 1000)) * 1000);
@@ -142,7 +142,7 @@ async function safeFuel8Cap(env, event) {
   try {
     if (event.type !== 'invoice.paid') return;
     const inv = event.data?.object || {};
-    const subId = inv.subscription;
+    const subId = invoiceSubscriptionId(inv);   // see mirror.js — the flat field moved under parent
     if (!subId || !inv.id) return;
     const hadDiscount = (Array.isArray(inv.total_discount_amounts) && inv.total_discount_amounts.length > 0)
       || !!inv.discount || (Array.isArray(inv.discounts) && inv.discounts.length > 0);

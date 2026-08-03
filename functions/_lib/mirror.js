@@ -176,6 +176,23 @@ export async function mirrorSubscription(env, subInput) {
     { stripeSubId, status, paused: isPaused, cancel_at_period_end: !!sub.cancel_at_period_end, couponCode: finalCoupon });
 }
 
+// The invoice → subscription link. Recent Stripe API versions REMOVED the flat `invoice.subscription`
+// field and moved it under `invoice.parent.subscription_details.subscription`. Reading only the flat
+// field silently yields null, which is not a loud failure — it just quietly unlinks things:
+//   - mirrorInvoice wrote every invoice row with subscription_id NULL,
+//   - the new-signup billing-day alignment never fired (found 2026-08-02: two new customers, Jaime and
+//     Stephen, both stayed on their signup weekday with zero audit entries),
+//   - the FUEL8 4-week discount cap could never find its subscription to trim.
+// Read BOTH shapes so this works across API versions. Same class of bug as current_period_end moving
+// onto subscription items — assume any flat Stripe field may have relocated.
+export function invoiceSubscriptionId(inv) {
+  const direct = inv?.subscription;
+  if (direct) return typeof direct === 'string' ? direct : direct.id || null;
+  const nested = inv?.parent?.subscription_details?.subscription;
+  if (nested) return typeof nested === 'string' ? nested : nested.id || null;
+  return null;
+}
+
 export async function mirrorInvoice(env, inv) {
   // Re-fetch the LIVE invoice so an out-of-order retry (e.g. a delayed invoice.created/finalized
   // landing AFTER invoice.paid) can't revert a paid invoice back to 'open' / amount_paid to 0.
@@ -183,8 +200,9 @@ export async function mirrorInvoice(env, inv) {
     try { inv = await stripe(env, 'GET', `invoices/${inv.id}`); } catch { /* unreachable — use the delivered payload */ }
   }
   const customer = await ensureCustomer(env, inv.customer);
-  const sub = inv.subscription
-    ? await one(env.DB, `SELECT id FROM subscriptions WHERE stripe_subscription_id = ?`, inv.subscription)
+  const invSubId = invoiceSubscriptionId(inv);
+  const sub = invSubId
+    ? await one(env.DB, `SELECT id FROM subscriptions WHERE stripe_subscription_id = ?`, invSubId)
     : null;
   const discountCents = (inv.total_discount_amounts || []).reduce((s, d) => s + (d.amount || 0), 0);
 

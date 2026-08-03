@@ -23,9 +23,8 @@ import { ok, fail, readJson } from '../../_lib/respond.js';
 import { requireOwner } from '../../_lib/admin.js';
 import { all, run, nowIso } from '../../_lib/db.js';
 import { stripe } from '../../_lib/stripe.js';
-import { orderableWeek } from '../../_lib/menu.js';
 import { mirrorSubscription } from '../../_lib/mirror.js';
-import { anchorAfterPaidCycle, moveToBillingDay } from '../../_lib/billing_day.js';
+import { anchorAfterPaidCycle, deliveryBoughtBy, moveToBillingDay } from '../../_lib/billing_day.js';
 
 // Only a real billing cycle tells us which delivery a customer bought.
 //
@@ -89,11 +88,11 @@ export async function onRequestPost(context) {
       if (!lastPaid) { row.action = 'skipped'; row.reason = 'no_paid_cycle_yet'; results.push(row); continue; }
 
       const paidAt = new Date(lastPaid.created * 1000);
-      const anchor = anchorAfterPaidCycle(paidAt);
+      const anchor = anchorAfterPaidCycle(paidAt, lastPaid.billing_reason);
       row.last_paid_at = paidAt.toISOString();
       row.last_paid_amount = (lastPaid.amount_paid || 0) / 100;
       row.last_paid_reason = lastPaid.billing_reason;
-      row.covers_delivery = orderableWeek(paidAt);
+      row.covers_delivery = deliveryBoughtBy(paidAt, lastPaid.billing_reason);
       row.next_unpaid_delivery = iso(new Date(anchor.getTime() + 86400 * 1000)); // the Sunday after the anchor
       row.new_anchor = anchor.toISOString();
 

@@ -12,7 +12,7 @@
 // without charging. Side effect: the sub sits in status 'trialing' until that date — every live status
 // gate already includes 'trialing', and both customer surfaces map it to "active" for display.
 import { stripe } from './stripe.js';
-import { orderableWeek } from './menu.js';
+import { orderableWeek, upcomingSunday } from './menu.js';
 
 export const ANCHOR_HOUR_UTC = 15;
 const MIN_LEAD_MS = 5 * 60 * 1000;        // never anchor into the past / the next few minutes
@@ -34,10 +34,25 @@ export function anchorForDelivery(deliverySundayISO) {
   return new Date(Date.UTC(sat.getUTCFullYear(), sat.getUTCMonth(), sat.getUTCDate(), ANCHOR_HOUR_UTC, 0, 0));
 }
 
-// AFTER A PAID CYCLE (new signup's first invoice, or the bulk migration): that payment bought the week
-// that was orderable when it was made, so the next charge covers the week after it.
-export function anchorAfterPaidCycle(paidAt) {
-  return anchorForDelivery(addDaysISO(orderableWeek(paidAt), 7));
+// Which delivery did a given payment buy? This differs by WHY the invoice was raised, and getting it
+// wrong by one week either double-charges someone or hands them free food.
+//
+//   subscription_create (a SIGNUP) — they paid at checkout and picked meals for whatever week was
+//   orderable at that moment. So: orderableWeek(paidAt).
+//
+//   subscription_cycle (a RENEWAL) — ⚠️ renewals now fire SATURDAY 15:00 UTC, which is AFTER the
+//   Friday-midnight cutoff. orderableWeek() therefore reports the NEXT week, not the one the charge
+//   actually pays for: a Saturday charge buys tomorrow's Sunday delivery. Moving billing past the
+//   cutoff is exactly what broke this assumption — the derivation was written when charges landed
+//   mid-week, before cutoff. Caught 2026-08-02 when the dry run wanted to push Luis, Zac, Jameson and
+//   Alyssa a week late, which would have given all four the Aug 9 delivery for free.
+export function deliveryBoughtBy(paidAt, billingReason) {
+  return billingReason === 'subscription_cycle' ? upcomingSunday(paidAt) : orderableWeek(paidAt);
+}
+
+// The anchor after a paid invoice: the Saturday before the FOLLOWING delivery.
+export function anchorAfterPaidCycle(paidAt, billingReason) {
+  return anchorForDelivery(addDaysISO(deliveryBoughtBy(paidAt, billingReason), 7));
 }
 
 // ON RESUME: they've paid for nothing upcoming, so they owe the very next week they can order for.

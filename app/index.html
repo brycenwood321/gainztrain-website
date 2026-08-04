@@ -132,6 +132,10 @@
         <div id="nameFields" class="hidden">
           <label for="firstName">First name</label>
           <input id="firstName" type="text" autocomplete="given-name" />
+          <label for="regPhone">Phone</label>
+          <input id="regPhone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(801) 555-1234" />
+          <label for="regCity">City</label>
+          <input id="regCity" type="text" autocomplete="address-level2" placeholder="Provo" />
         </div>
         <label for="email">Email</label>
         <input id="email" type="email" autocomplete="email" required />
@@ -238,8 +242,14 @@
       const email = $('email').value.trim();
       const password = $('password').value;
       const path = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
+      if (mode === 'register') {
+        // Phone + city are required at account creation everywhere, not just /start — this is a secondary
+        // signup surface (someone landing directly on /app instead of the meals-first /menu → /start door).
+        if (!$('regPhone').value.trim()) { showMsg('Enter your phone number.', 'err'); return; }
+        if (!$('regCity').value.trim()) { showMsg('Enter your city.', 'err'); return; }
+      }
       const payload = mode === 'register'
-        ? { email, password, first_name: $('firstName').value.trim() }
+        ? { email, password, first_name: $('firstName').value.trim(), phone: $('regPhone').value.trim(), city: $('regCity').value.trim() }
         : { email, password };
       $('pwSubmit').disabled = true;
       const { status, body } = await api(path, { method:'POST', body: JSON.stringify(payload) });

@@ -1,4 +1,8 @@
 // POST /api/auth/register — create a customer account (password optional; they can use magic-link).
+// Phone + city are REQUIRED for every account (Brycen: needs a phone to coordinate delivery/pickup on
+// every customer, and wants to know what city every customer is in regardless of delivery vs pickup).
+// Validated here server-side — the /start form also gates client-side, but this is the real wall; a
+// direct API call cannot create an account without both.
 import { ok, fail, readJson } from '../../_lib/respond.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 import { randomToken, hashPassword } from '../../_lib/crypto.js';
@@ -18,13 +22,18 @@ export async function onRequestPost(context) {
   const firstName = str(body.first_name).trim();
   const lastName = str(body.last_name).trim();
   const phoneRaw = str(body.phone).trim();
+  const city = str(body.city).trim().slice(0, 80);
 
   if (!email || !email.includes('@')) return fail(400, 'invalid_email', 'Enter a valid email address.');
   if (!(await rateLimit(env, `register:ip:${clientIp(request)}`, 6, 3600))) return fail(429, 'rate_limited', 'Too many signups from your network. Please try again later.');
   if (password && password.length < 8) return fail(400, 'weak_password', 'Password must be at least 8 characters.');
-  // Normalize phone to E.164 so it matches the OTP-login lookup; reject garbage rather than store it.
-  const phone = phoneRaw ? toE164(phoneRaw) : '';
-  if (phoneRaw && !phone) return fail(400, 'invalid_phone', 'Enter a valid phone number.');
+  // Phone is required for every new account. Normalize to E.164 so it matches the OTP-login lookup;
+  // reject missing/garbage rather than store an empty or bad value.
+  if (!phoneRaw) return fail(400, 'phone_required', 'Enter your phone number.');
+  const phone = toE164(phoneRaw);
+  if (!phone) return fail(400, 'invalid_phone', 'Enter a valid phone number.');
+  // City is required for every new account, pickup or delivery.
+  if (!city) return fail(400, 'city_required', 'Enter your city.');
 
   const existing = await one(env.DB, `SELECT id FROM customers WHERE email = ?`, email);
   if (existing) return fail(409, 'email_exists', 'An account with that email already exists — try logging in.');
@@ -37,9 +46,9 @@ export async function onRequestPost(context) {
   try {
     await run(
       env.DB,
-      `INSERT INTO customers (id, email, first_name, last_name, phone, role, sms_marketing_consent, sms_consent_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'customer', ?, ?, ?, ?)`,
-      id, email, firstName, lastName, phone || null, smsOptIn ? 1 : 0, smsOptIn ? now : null, now, now,
+      `INSERT INTO customers (id, email, first_name, last_name, phone, city, role, sms_marketing_consent, sms_consent_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'customer', ?, ?, ?, ?)`,
+      id, email, firstName, lastName, phone, city, smsOptIn ? 1 : 0, smsOptIn ? now : null, now, now,
     );
   } catch {
     // UNIQUE(email) race: another request registered the same email between our check + insert.

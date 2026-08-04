@@ -71,14 +71,19 @@ export async function onRequestPost(context) {
 
   // SERVICE-AREA GATE: Gainz Train only serves specific Utah zips (zip_zone_map). Require a SERVED zip
   // for BOTH pickup and delivery — this is what stops out-of-area / out-of-state people from signing up.
-  let zone = 0, feeCents = 0, address = '', city = '';
+  let zone = 0, feeCents = 0, address = '';
   const zip = str(body.zip).replace(/[^0-9]/g, '').slice(0, 5);
   if (zip.length !== 5) return fail(400, 'zip_required', 'Enter your 5-digit zip code.');
   const z = await one(env.DB, `SELECT zone FROM zip_zone_map WHERE zip = ?`, zip);
   if (!z) return fail(400, 'out_of_area', "Sorry — we don't serve your area yet. Gainz Train is Utah-only for now.");
+  // City is required for EVERYONE (pickup + delivery) — defense in depth behind /start's own required-city
+  // gate and the required-city gate at account creation (register.js). A raw API caller with an existing
+  // account that predates this requirement (or with city missing for any reason) still can't check out
+  // without supplying one, so it stays queryable for every customer, not just delivery ones.
+  const city = str(body.city).trim().slice(0, 80);
+  if (!city) return fail(400, 'city_required', 'Enter your city.');
   if (deliveryMethod === 'delivery') {
     address = str(body.address).trim().slice(0, 200);
-    city = str(body.city).trim().slice(0, 80);
     if (!address) return fail(400, 'address_required', 'Enter your delivery address.');
     zone = z.zone;
     const dz = await one(env.DB, `SELECT fee_cents FROM delivery_zones WHERE zone = ?`, zone);

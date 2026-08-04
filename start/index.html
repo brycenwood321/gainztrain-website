@@ -104,10 +104,12 @@
         <input id="zip" type="text" inputmode="numeric" maxlength="5" autocomplete="postal-code" placeholder="84601" />
         <p class="note">We'll confirm we serve your area before checkout. Delivery fee (if any) is added based on your zip.</p>
         <div id="zipMsg" class="zipmsg"></div>
+        <!-- City is collected for EVERYONE (pickup + delivery) so Brycen can see what city every customer is
+             in. Street address is delivery-only — pickup customers just need city + zip. -->
+        <label for="city">City</label><input id="city" type="text" autocomplete="address-level2" placeholder="Provo" />
         <div id="addrFields" class="hidden">
           <label for="address">Street address</label>
           <input id="address" type="text" autocomplete="street-address" placeholder="123 Center St" />
-          <label for="city">City</label><input id="city" type="text" autocomplete="address-level2" placeholder="Provo" />
         </div>
       </div>
 
@@ -125,8 +127,8 @@
           <label for="email">Email</label>
           <input id="email" type="email" autocomplete="email" />
           <div id="phoneRow">
-            <label for="phone">Phone</label>
-            <input id="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(801) 555-1234" />
+            <label for="phone">Phone <span style="font-weight:400;color:var(--muted);">(required — so we can reach you about your order)</span></label>
+            <input id="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(801) 555-1234" required />
             <div style="display:flex;gap:.55rem;align-items:flex-start;margin-top:.5rem;">
               <input id="smsOptIn" type="checkbox" style="width:auto;margin-top:.2rem;flex-shrink:0;" />
               <label for="smsOptIn" style="font-size:.78rem;color:var(--gray);font-weight:400;line-height:1.45;">I agree to receive order &amp; delivery updates and occasional promotional texts from <b>Gainz Train</b> at this number. Consent is not a condition of purchase. Msg frequency varies. Msg &amp; data rates may apply. Reply <b>STOP</b> to cancel, <b>HELP</b> for help. <a href="/privacy-policy/" target="_blank" style="text-decoration:underline;">Privacy Policy</a></label>
@@ -285,17 +287,22 @@
       btn.disabled=true;btn.textContent='Processing…';
       try{
         // Service-area gate: every signup needs a served zip (pickup OR delivery).
-        let address='',city='',zip=$('zip').value.replace(/[^0-9]/g,'').slice(0,5);
+        let address='',city=$('city').value.trim(),zip=$('zip').value.replace(/[^0-9]/g,'').slice(0,5);
         if(zip.length!==5){showMsg('Enter your 5-digit zip so we can check we serve your area.');reset();return;}
         if(deliveryServed===false){showMsg("We don't serve that zip yet — Gainz Train is Utah-only for now.");reset();return;}
+        // City is required for everyone (pickup + delivery) so Brycen can see what city every customer is in.
+        if(!city){showMsg('Enter your city.');reset();return;}
         if(method==='delivery'){
-          address=$('address').value.trim();city=$('city').value.trim();
+          address=$('address').value.trim();
           if(!address){showMsg('Enter your delivery address.');reset();return;}
         }
         // account gate
         if(!loggedIn){
           const email=$('email').value.trim(),password=$('password').value,firstName=$('firstName').value.trim(),lastName=$('lastName').value.trim(),phone=$('phone').value.trim();
           if(!email||!email.includes('@')){showMsg('Enter your email.');reset();return;}
+          // Phone is required for every NEW account (returning customers already have one on file, and the
+          // phone field is hidden for them). Server-side, register.js re-validates this — never trust client only.
+          if(!returning&&!phone){showMsg('Enter your phone number.');reset();return;}
           // Magic-link emails currently land in spam, so PASSWORD is the primary path; we never auto-send
           // a link that dead-ends the cart in a new tab — we offer it only as an explicit fallback.
           if(returning){
@@ -312,7 +319,7 @@
             if(password.length<8){showMsg('Choose a password of at least 8 characters.');reset();return;}
             const heard=$('heard').value;
             if(!heard){showMsg('One last thing — tell us how you heard about us.');reset();return;}
-            const reg=await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password,first_name:firstName,last_name:lastName,phone,
+            const reg=await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password,first_name:firstName,last_name:lastName,phone,city,
               sms_opt_in:!!phone&&$('smsOptIn').checked,
               heard_about:heard,heard_detail:$('heardDetail').value.trim(),attribution:readAttr()})});
             if(reg.status===409){

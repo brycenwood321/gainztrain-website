@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Marketing — Gainz Train Ops</title>
+  <style>
+    :root{--bg:#0f0f10;--card:#18181b;--line:#2a2a2e;--ink:#f4f4f5;--muted:#a1a1aa;--dim:#71717a;
+          --orange:#ff8a3d;--green:#4ade80;--red:#f87171;--yellow:#fbbf24;}
+    *{box-sizing:border-box;}
+    body{margin:0;background:var(--bg);color:var(--ink);
+         font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         -webkit-text-size-adjust:100%;}
+    a{color:var(--orange);}
+    .wrap{max-width:1200px;margin:0 auto;padding:1rem 1rem 4rem;}
+    header{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;
+           padding:1rem 0 .5rem;border-bottom:1px solid var(--line);margin-bottom:1rem;}
+    h1{font-size:1.4rem;margin:0;}
+    h2{font-size:1rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+       margin:2rem 0 .6rem;}
+    .controls{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1rem;}
+    .chip{background:var(--card);border:1px solid var(--line);color:var(--muted);border-radius:999px;
+          padding:.4rem .85rem;font-size:.85rem;cursor:pointer;}
+    .chip.on{background:var(--orange);border-color:var(--orange);color:#1a1a1a;font-weight:700;}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1rem;margin-bottom:1rem;}
+    .note{font-size:.82rem;color:var(--dim);line-height:1.5;}
+    .banner{border-left:3px solid var(--yellow);padding:.7rem .9rem;background:#1c1a12;border-radius:8px;
+            font-size:.85rem;color:#e5d9b6;margin-bottom:1rem;}
+    .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    table{border-collapse:collapse;width:100%;min-width:820px;font-size:.87rem;}
+    th,td{padding:.55rem .6rem;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap;}
+    th{color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;
+       position:sticky;top:0;background:var(--card);}
+    td:first-child,th:first-child{text-align:left;position:sticky;left:0;background:var(--card);}
+    .num{font-variant-numeric:tabular-nums;}
+    .primary{color:var(--orange);font-weight:700;}
+    .faded{color:var(--dim);}
+    .pill{font-size:.7rem;padding:.12rem .45rem;border-radius:999px;border:1px solid var(--line);color:var(--dim);}
+    .change{display:flex;gap:.7rem;padding:.55rem 0;border-bottom:1px solid var(--line);font-size:.85rem;}
+    .change b{color:var(--orange);font-variant-numeric:tabular-nums;white-space:nowrap;}
+    #gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;
+          padding:1rem;z-index:50;}
+    #gate .card{max-width:340px;width:100%;}
+    input{width:100%;padding:.6rem;margin:.3rem 0 .6rem;background:#0f0f10;border:1px solid var(--line);
+          color:var(--ink);border-radius:8px;font-size:16px;}
+    button.go{width:100%;padding:.65rem;background:var(--orange);color:#1a1a1a;border:0;border-radius:8px;
+              font-weight:800;font-size:1rem;cursor:pointer;}
+    .err{color:var(--red);font-size:.85rem;min-height:1.2em;}
+  </style>
+</head>
+<body>
+  <div id="gate">
+    <div class="card">
+      <div id="gate-checking" class="note">Checking access…</div>
+      <div id="gate-form" style="display:none">
+        <h1 style="margin-bottom:.6rem">Marketing</h1>
+        <p class="note" style="margin-top:0">Owner sign-in required.</p>
+        <input id="gate-email" type="email" placeholder="Email" autocomplete="username" />
+        <input id="gate-pass" type="password" placeholder="Password" autocomplete="current-password" />
+        <div class="err" id="gate-err"></div>
+        <button class="go" id="gate-btn">Sign in</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap" id="app" style="display:none">
+    <header>
+      <h1>Marketing</h1>
+      <div class="note"><a href="/app/ops/">← Ops dashboard</a></div>
+    </header>
+
+    <div class="controls" id="dims"></div>
+    <div class="controls" id="ranges"></div>
+
+    <div id="guards"></div>
+
+    <div class="card">
+      <div class="tablewrap"><table id="tbl">
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table></div>
+      <p class="note" id="metricNote" style="margin-bottom:0"></p>
+    </div>
+
+    <h2>What changed, and when</h2>
+    <div class="card" id="changes"></div>
+
+    <h2>Ad registry</h2>
+    <div class="card">
+      <div class="tablewrap"><table id="regtbl" style="min-width:640px">
+        <thead><tr><th>Ad</th><th>Offer</th><th>Hook</th><th>Audience</th><th>Geo</th><th>Status</th></tr></thead>
+        <tbody id="regbody"></tbody>
+      </table></div>
+      <p class="note" style="margin-bottom:0">
+        Dimensions come from this registry, keyed on Meta ad_id. Every ad needs a row here or its
+        traffic cannot be sliced by hook or audience.
+        Drift check: <code>python3 gainz-train/scripts/meta_spend_sync.py --audit-only</code>
+      </p>
+    </div>
+  </div>
+
+<script>
+(function () {
+  var DIMS = [['offer','Offer'],['placement','Placement'],['hook','Hook'],['audience','Audience'],
+              ['creative_type','Creative'],['campaign','Campaign'],['ad','Ad']];
+  var RANGES = [[7,'7 days'],[30,'30 days'],[90,'90 days'],[365,'All time']];
+  var by = 'offer', days = 30;
+  var esc = function (s) { return String(s == null ? '' : s)
+    .replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); };
+  var n = function (v) { return v == null ? '—' : Number(v).toLocaleString(); };
+  var money = function (v) { return v == null ? '—' : '$' + Number(v).toLocaleString(undefined,
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  var rate = function (v) { return v == null ? '—' : v + '%'; };
+
+  function chips(el, items, cur, cb) {
+    el.innerHTML = '';
+    items.forEach(function (it) {
+      var b = document.createElement('button');
+      b.className = 'chip' + (String(it[0]) === String(cur) ? ' on' : '');
+      b.textContent = it[1];
+      b.onclick = function () { cb(it[0]); };
+      el.appendChild(b);
+    });
+  }
+
+  function render(d) {
+    // Guards up top, never buried — these are the reasons a number might mislead.
+    var g = '';
+    if (d.excluded_out_of_region && d.excluded_out_of_region.sessions > 0) {
+      g += '<div class="banner"><b>' + n(d.excluded_out_of_region.sessions) + ' paid session(s) excluded</b> '
+         + 'as out-of-target-region. ' + esc(d.excluded_note) + '</div>';
+    }
+    if (!d.spend_available) {
+      g += '<div class="banner"><b>No spend for this view.</b> ' + esc(d.spend_note) + '</div>';
+    }
+    document.getElementById('guards').innerHTML = g;
+
+    var cols = [['dim', d.by], ['spend_usd','Spend'], ['impressions','Impr'], ['link_clicks','Clicks'],
+      ['preload_bounce_pct','Pre-load bounce'], ['sessions','Sessions'], ['engaged','Engaged'],
+      ['engaged_rate_pct','Engaged %'], ['reached_checkout','Checkout'], ['checkout_rate_pct','Checkout %'],
+      ['signups','Signups'], ['paying','Paying'], ['revenue_usd','Revenue'], ['cac_usd','CAC'], ['roas','ROAS']];
+    document.getElementById('thead').innerHTML =
+      cols.map(function (c) { return '<th>' + esc(c[1]) + '</th>'; }).join('');
+
+    if (!d.rows.length) {
+      document.getElementById('tbody').innerHTML =
+        '<tr><td colspan="' + cols.length + '" class="faded">No data in this window yet.</td></tr>';
+    } else {
+      document.getElementById('tbody').innerHTML = d.rows.map(function (r) {
+        var unreadable = !r.readable.primary;
+        var td = function (v, cls) { return '<td class="num ' + (cls || '') + '">' + v + '</td>'; };
+        return '<tr>'
+          + '<td><b>' + esc(r.dim) + '</b>'
+            + (unreadable ? ' <span class="pill" title="' + esc(r.readable.note || '') + '">thin data</span>' : '')
+          + '</td>'
+          + td(money(r.spend_usd)) + td(n(r.impressions)) + td(n(r.link_clicks))
+          + td(rate(r.preload_bounce_pct))
+          + td(n(r.sessions)) + td(n(r.engaged)) + td(rate(r.engaged_rate_pct))
+          + td(n(r.reached_checkout))
+          + td(rate(r.checkout_rate_pct), 'primary')          // the metric to actually compare on
+          + td(n(r.signups))
+          // Purchase-side numbers are faded until there are enough of them to mean anything.
+          + td(n(r.paying), r.readable.purchases ? '' : 'faded')
+          + td(money(r.revenue_usd), r.readable.purchases ? '' : 'faded')
+          + td(money(r.cac_usd), r.readable.purchases ? '' : 'faded')
+          + td(r.roas == null ? '—' : r.roas + 'x', r.readable.purchases ? '' : 'faded')
+          + '</tr>';
+      }).join('');
+    }
+    document.getElementById('metricNote').textContent = d.primary_metric_note;
+
+    document.getElementById('changes').innerHTML = d.changes && d.changes.length
+      ? d.changes.map(function (c) {
+          return '<div class="change"><b>' + esc(c.cut_at.slice(0, 10)) + '</b><span>'
+               + esc(c.summary) + ' <span class="faded">(' + esc(c.surface || '') + ')</span></span></div>';
+        }).join('')
+      : '<p class="note" style="margin:0">No logged changes in this window.</p>';
+  }
+
+  function load() {
+    chips(document.getElementById('dims'), DIMS, by, function (v) { by = v; load(); });
+    chips(document.getElementById('ranges'), RANGES, days, function (v) { days = v; load(); });
+    fetch('/api/admin/marketing-report?by=' + encodeURIComponent(by) + '&days=' + days,
+          { credentials: 'include' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.rows) render(d); })
+      .catch(function () {});
+    fetch('/api/admin/marketing-variants', { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.variants) return;
+        document.getElementById('regbody').innerHTML = d.variants.map(function (v) {
+          return '<tr><td><b>' + esc(v.ad_name || v.key) + '</b></td><td>' + esc(v.offer || '—')
+            + '</td><td>' + esc(v.hook || '—') + '</td><td>' + esc(v.audience || '—')
+            + '</td><td>' + esc(v.target_region || 'any') + '</td><td>' + esc(v.status) + '</td></tr>';
+        }).join('');
+      })
+      .catch(function () {});
+  }
+
+  // Owner gate. Server-side requireOwner is the real enforcement; this only decides what to show.
+  var gate = document.getElementById('gate');
+  function isOwner(d) { return !!(d && d.customer && d.customer.is_owner); }
+  function showApp() { gate.style.display = 'none'; document.getElementById('app').style.display = ''; load(); }
+  function showForm() {
+    document.getElementById('gate-checking').style.display = 'none';
+    document.getElementById('gate-form').style.display = '';
+    document.getElementById('gate-email').focus();
+  }
+  fetch('/api/me', { credentials: 'include' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) { if (isOwner(d)) showApp(); else showForm(); })
+    .catch(showForm);
+
+  document.getElementById('gate-btn').onclick = function () {
+    var btn = this, err = document.getElementById('gate-err');
+    var email = document.getElementById('gate-email').value.trim();
+    var pass = document.getElementById('gate-pass').value;
+    if (!email || !pass) { err.textContent = 'Enter your email and password.'; return; }
+    btn.disabled = true; btn.textContent = 'Signing in…'; err.textContent = '';
+    fetch('/api/auth/login', { method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email, password: pass }) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.d.detail || 'Sign in failed.');
+        return fetch('/api/me', { credentials: 'include' }).then(function (r) { return r.json(); });
+      })
+      .then(function (me) {
+        if (isOwner(me)) { location.reload(); return; }
+        throw new Error("That account isn't an owner account.");
+      })
+      .catch(function (e) {
+        err.textContent = e.message || 'Network error — try again.';
+        btn.disabled = false; btn.textContent = 'Sign in';
+      });
+  };
+  document.getElementById('gate-pass').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('gate-btn').click();
+  });
+})();
+</script>
+</body>
+</html>

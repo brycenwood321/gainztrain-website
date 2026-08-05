@@ -61,18 +61,24 @@ export async function onRequestPost(context) {
     const attr = (body.attribution && typeof body.attribution === 'object') ? body.attribution : {};
     const clip = (v, n) => (typeof v === 'string' ? v.slice(0, n) : null) || null;
     const selfReported = clip(str(body.heard_about).trim().toLowerCase(), 40);
-    const hasUtm = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid', 'referrer']
+    // `offer` and `ad_id` (migration 0025) are what tie a paying customer back to a marketing
+    // DECISION rather than just a UTM string — offer is the landing variant they saw, ad_id joins to
+    // marketing_variants for hook/audience/creative. Both count as attribution signals in their own
+    // right, so a visitor who arrived on an offer link with no UTMs still gets a row.
+    const hasUtm = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid', 'referrer', 'offer', 'ad_id']
       .some((k) => typeof attr[k] === 'string' && attr[k]);
     if (selfReported || hasUtm) {
       await run(
         env.DB,
         `INSERT INTO attribution (customer_id, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
-           gclid, fbclid, landing_path, referrer, self_reported, self_reported_detail, first_touch_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           gclid, fbclid, landing_path, referrer, self_reported, self_reported_detail, first_touch_at,
+           offer, ad_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id, clip(attr.utm_source, 120), clip(attr.utm_medium, 120), clip(attr.utm_campaign, 120),
         clip(attr.utm_content, 120), clip(attr.utm_term, 120), clip(attr.gclid, 120), clip(attr.fbclid, 120),
         clip(attr.landing_path, 300), clip(attr.referrer, 300),
-        selfReported, clip(str(body.heard_detail).trim(), 200), clip(attr.first_touch_at, 40), now,
+        selfReported, clip(str(body.heard_detail).trim(), 200), clip(attr.first_touch_at, 40),
+        clip(attr.offer, 60), clip(attr.ad_id, 120), now,
       );
     }
   } catch { /* non-fatal */ }

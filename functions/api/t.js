@@ -91,6 +91,12 @@ export async function onRequestPost(context) {
       content: clip(b.utm_content, 120), term: clip(b.utm_term, 120),
       fbclid: clip(b.fbclid, 200), gclid: clip(b.gclid, 200),
     };
+    // Marketing dimensions (migration 0025). `offer` = the landing variant the visitor actually saw;
+    // `ad_id` = Meta {{ad.id}}, the stable key into marketing_variants where hook/audience/creative
+    // live. Session-level only — page_views inherits via session_id, so nothing is added to the
+    // per-pageview insert. utm_term already carries {{placement}}.
+    const offer = clip(b.offer, 60);
+    const adId = clip(b.ad_id, 120);
 
     // Session upsert: first pageview of a session writes the entry source ONCE; later pageviews only
     // touch last_seen + pageviews. INSERT OR IGNORE keeps the first-touch entry immutable.
@@ -102,11 +108,11 @@ export async function onRequestPost(context) {
         await run(env.DB,
           `INSERT OR IGNORE INTO analytics_sessions (id, visitor_id, started_at, last_seen_at, entry_path, entry_referrer_host,
              utm_source, utm_medium, utm_campaign, utm_content, utm_term, fbclid, gclid,
-             country, region, city, device, browser, os, is_returning, pageviews)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+             country, region, city, device, browser, os, is_returning, offer, ad_id, pageviews)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
           sid, vid, now, now, path, clip(b.referrer_host, 120),
           utm.source, utm.medium, utm.campaign, utm.content, utm.term, utm.fbclid, utm.gclid,
-          geo.country, geo.region, geo.city, d.device, d.browser, d.os, returning);
+          geo.country, geo.region, geo.city, d.device, d.browser, d.os, returning, offer, adId);
       } else {
         await run(env.DB, `UPDATE analytics_sessions SET last_seen_at = ?, pageviews = pageviews + 1 WHERE id = ?`, now, sid);
       }

@@ -229,6 +229,11 @@
         'gainz50':{badge:'50% Off Your First Week',line:' Code GAINZ50 is applied for you at checkout. Ends Aug 25.',cta:'Get 50% Off →',href:'/menu/?promo=GAINZ50'}
       };
       var o=offers[v]||offers['guarantee'];
+      // Tell attribution.js which offer this visitor ACTUALLY saw, including when they arrived with
+      // no ?v= and fell through to the default. attribution.js is deferred in <head> and this script
+      // is inline in <body>, so this always runs first. Without it, every default-variant visitor
+      // would be recorded with a NULL offer and the whole comparison would be blind.
+      window.GT_OFFER = offers[v] ? v : 'guarantee';
       if(o.href){['ctaTop','ctaMid','ctaBottom'].forEach(function(id){var el=document.getElementById(id);if(el)el.href=o.href;});}
       document.getElementById('offerBadge').textContent=o.badge;
       document.getElementById('offerBadge2').textContent=o.badge;

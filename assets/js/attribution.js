@@ -13,8 +13,14 @@
     var KEY = 'gt_attr';
     var q = new URLSearchParams(location.search);
     var a = {};
-    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid']
+    // ad_id comes from Meta's {{ad.id}} macro — the stable join key into marketing_variants, which
+    // is where offer/hook/audience/creative actually live. utm_term carries {{placement}}.
+    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid', 'ad_id']
       .forEach(function (k) { var v = q.get(k); if (v) a[k] = String(v).slice(0, 120); });
+    // ?v= is the landing OFFER variant. An explicit ?v= is a campaign marker in its own right, so it
+    // counts toward triggering a first touch.
+    var vParam = q.get('v');
+    if (vParam) a.offer = String(vParam).slice(0, 60);
     var ref = document.referrer || '';
     var external = ref && ref.indexOf('//' + location.host) === -1;
     var had = false;
@@ -22,6 +28,13 @@
     if (!had && (Object.keys(a).length || external)) {
       var ft = {};
       for (var k in a) ft[k] = a[k];
+      // A page may expose the offer it RESOLVED to (including its default) as window.GT_OFFER, so a
+      // visitor who arrives without ?v= is still tied to what they actually saw. Deliberately only
+      // decorates a first touch that some other signal already triggered — it must never make every
+      // ordinary page view look like a campaign landing.
+      if (!ft.offer && typeof window.GT_OFFER === 'string' && window.GT_OFFER) {
+        ft.offer = window.GT_OFFER.slice(0, 60);
+      }
       ft.landing_path = (location.pathname + location.search).slice(0, 300);
       if (external) ft.referrer = ref.slice(0, 300);
       ft.first_touch_at = new Date().toISOString();
@@ -102,6 +115,10 @@
       referrer_host: refHost, returning: isReturning ? 1 : 0,
       utm_source: uget('utm_source'), utm_medium: uget('utm_medium'), utm_campaign: uget('utm_campaign'),
       utm_content: uget('utm_content'), utm_term: uget('utm_term'), fbclid: uget('fbclid'), gclid: uget('gclid'),
+      // Marketing dimensions (migration 0025). Stored on analytics_sessions at session ENTRY only, so
+      // the whole session inherits them and they survive the /fuel/ -> /menu utm drop.
+      ad_id: uget('ad_id'),
+      offer: uget('v') || (typeof window.GT_OFFER === 'string' ? window.GT_OFFER : null),
     });
 
     // 2b. DWELL — count only foreground time; pause when the tab is hidden.

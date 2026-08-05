@@ -15,6 +15,17 @@
 /assets/js/*
   Cache-Control: public, max-age=2592000
 
+# ⚠️ attribution.js is the TRACKING script and must NOT inherit the 30-day cache above.
+# Found 2026-08-05: browsers were executing a 3,218-byte copy of this file while the deployed
+# version was 9,775 bytes — a month-stale build that predated the analytics rewrite (7fa8e6f), so
+# for those visitors window.gtTrack was undefined, no visitor/session id was ever generated, and
+# every pageview they sent landed with a NULL session_id. Measurement changes were invisible for up
+# to 30 days and returning-visitor sessions were silently lost.
+# no-cache still stores the file but revalidates every load, so it is a cheap 304 when unchanged and
+# always correct the moment we deploy. Never fold this back into the wildcard.
+/assets/js/attribution.js
+  Cache-Control: no-cache, must-revalidate
+
 /data/*
   Cache-Control: public, max-age=300
 

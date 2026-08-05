@@ -60,6 +60,13 @@ CREATE TABLE IF NOT EXISTS marketing_variants (
   landing_path    TEXT,              -- /fuel/
   landing_variant TEXT,              -- the ?v= value this ad points at (must match `offer`)
   status          TEXT NOT NULL DEFAULT 'draft',  -- draft | live | paused | retired
+  -- Geo the ad actually targets (e.g. 'Utah'). Reports exclude paid sessions from outside it.
+  -- Added 2026-08-05 after publishing an ad edit produced 6 "sessions" in 34 seconds from Prineville
+  -- OR, Boardman OR, Forest City NC, Gallatin TN and Fort Worth TX — every one a Meta data center,
+  -- all reporting placement Facebook_Right_Column which this campaign explicitly EXCLUDES. That is
+  -- Meta's ad-review crawler fetching the landing page, not people. Left in the table (crawler volume
+  -- is worth seeing) but filtered out of every funnel rate, or it silently inflates the denominator.
+  target_region   TEXT,
   launched_at     TEXT,
   retired_at      TEXT,
   notes           TEXT,
@@ -89,3 +96,8 @@ CREATE INDEX IF NOT EXISTS idx_asessions_adid  ON analytics_sessions (ad_id);
 CREATE INDEX IF NOT EXISTS idx_attr_offer      ON attribution (offer);
 CREATE INDEX IF NOT EXISTS idx_attr_adid       ON attribution (ad_id);
 CREATE INDEX IF NOT EXISTS idx_spend_adid      ON marketing_spend (day, ad_id);
+
+-- Makes the nightly Meta pull idempotent: one row per ad per day, re-runnable, and correct when Meta
+-- retroactively revises spend (it does). PARTIAL (WHERE ad_id IS NOT NULL) so the pre-existing
+-- hand-entered rows — which have no ad_id — are untouched and can still be added freely.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_spend_day_ad ON marketing_spend (day, ad_id) WHERE ad_id IS NOT NULL;

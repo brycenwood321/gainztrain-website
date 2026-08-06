@@ -63,6 +63,13 @@ export default {
       // Daily 13:00 UTC (~7am MDT / 6am MST) — owner morning digest + health probe. Emails the owners
       // only if OWNER_NOTIFY_ENABLED=true; escalates an SMS if a health signal trips.
       ctx.waitUntil(hit(env, '/api/admin/daily-digest'));
+      // Daily — pull yesterday's per-ad spend from Meta into marketing_spend and audit the variant
+      // registry for drift. Runs BEFORE anyone reads /app/ops/marketing/ in the morning, so the cost
+      // half of the funnel is as current as the signup half. Was a laptop-only Python script, which
+      // meant CAC went stale the moment nobody remembered to run it. Re-pulls a 30-day window because
+      // Meta revises spend retroactively; the upsert on (day, ad_id) makes that idempotent.
+      // No-ops with skipped:true until META_ADS_TOKEN + META_AD_ACCOUNT are set on the Pages project.
+      ctx.waitUntil(hit(env, '/api/admin/meta-spend-sync'));
       // Saturday-only: PRE-SHOP reconciliation, ~2h after the lock and ~2h before billing. This is the
       // one that catches a paying customer the kitchen has no order for (Jameson) or an order stuck in
       // 'pending' instead of 'locked' (Jeferson) — i.e. money in, no food out — while Jayson can still

@@ -46,6 +46,35 @@ export async function onRequestPost(context) {
   const dryRun = body.dry_run !== false;              // SAFE DEFAULT: must explicitly pass false to mutate
   const only = Array.isArray(body.only) ? new Set(body.only) : null;
 
+  // ── MANUAL ANCHOR OVERRIDE ────────────────────────────────────────────────────────────────────
+  // The derivation below reads PAID INVOICES. Money that arrives outside the invoice system is
+  // therefore invisible to it: a hand-made charge in the Stripe dashboard ("Create payment") is a
+  // bare PaymentIntent with no invoice and no billing_reason, so the sub still looks unpaid for that
+  // week and gets BLOCKED with its anchor stuck in the past. That is exactly what happened to
+  // Jeferson on 2026-08-05 — $119 collected by hand for the Aug 2 week that a paused-collection void
+  // had erased.
+  //
+  // Deliberately narrow, because a wrong anchor applied in bulk is a mass double-charge:
+  //   - refuses to run unless `only` names EXACTLY ONE customer
+  //   - must still be a Saturday, so the one-billing-day invariant cannot be hand-waved away
+  //   - every other guard rail in moveToBillingDay still applies (past, >21d, paused, earlier than
+  //     the current period end)
+  //   - the audit row records that a human chose this, so it never reads like a derived value
+  let override = null;
+  if (body.anchor) {
+    if (!only || only.size !== 1) {
+      return fail(400, 'override_needs_one', 'anchor override requires "only" naming exactly one customer_id.');
+    }
+    override = new Date(body.anchor);
+    if (Number.isNaN(override.getTime())) return fail(400, 'bad_anchor', 'anchor must be an ISO timestamp.');
+    if (override.getUTCDay() !== 6) {
+      return fail(400, 'anchor_not_saturday', 'anchor must fall on a Saturday — every GT subscription bills Saturday.');
+    }
+    if (override.getTime() - Date.now() <= 5 * 60 * 1000) {
+      return fail(400, 'anchor_in_past', 'anchor must be at least 5 minutes in the future.');
+    }
+  }
+
   const subs = await all(env.DB,
     `SELECT s.id, s.customer_id, s.stripe_subscription_id, s.status, s.meals_per_week,
             c.first_name, c.last_name, c.email
@@ -81,18 +110,27 @@ export async function onRequestPost(context) {
         row.action = 'skipped'; row.reason = 'paused_anchored_on_resume'; results.push(row); continue;
       }
 
-      const invs = await stripe(env, 'GET', 'invoices', {
-        subscription: s.stripe_subscription_id, status: 'paid', limit: 12,
-      });
-      const lastPaid = (invs.data || []).find((i) => CYCLE_REASONS.has(i.billing_reason));
-      if (!lastPaid) { row.action = 'skipped'; row.reason = 'no_paid_cycle_yet'; results.push(row); continue; }
+      let anchor;
+      if (override) {
+        // Derivation skipped on purpose: the paid-invoice history cannot see the payment that
+        // justified this override, so consulting it would just re-derive the wrong answer.
+        anchor = override;
+        row.anchor_source = 'manual_override';
+      } else {
+        const invs = await stripe(env, 'GET', 'invoices', {
+          subscription: s.stripe_subscription_id, status: 'paid', limit: 12,
+        });
+        const lastPaid = (invs.data || []).find((i) => CYCLE_REASONS.has(i.billing_reason));
+        if (!lastPaid) { row.action = 'skipped'; row.reason = 'no_paid_cycle_yet'; results.push(row); continue; }
 
-      const paidAt = new Date(lastPaid.created * 1000);
-      const anchor = anchorAfterPaidCycle(paidAt, lastPaid.billing_reason);
-      row.last_paid_at = paidAt.toISOString();
-      row.last_paid_amount = (lastPaid.amount_paid || 0) / 100;
-      row.last_paid_reason = lastPaid.billing_reason;
-      row.covers_delivery = deliveryBoughtBy(paidAt, lastPaid.billing_reason);
+        const paidAt = new Date(lastPaid.created * 1000);
+        anchor = anchorAfterPaidCycle(paidAt, lastPaid.billing_reason);
+        row.last_paid_at = paidAt.toISOString();
+        row.last_paid_amount = (lastPaid.amount_paid || 0) / 100;
+        row.last_paid_reason = lastPaid.billing_reason;
+        row.covers_delivery = deliveryBoughtBy(paidAt, lastPaid.billing_reason);
+        row.anchor_source = 'derived';
+      }
       row.next_unpaid_delivery = iso(new Date(anchor.getTime() + 86400 * 1000)); // the Sunday after the anchor
       row.new_anchor = anchor.toISOString();
 
@@ -113,7 +151,8 @@ export async function onRequestPost(context) {
       await run(env.DB,
         `INSERT INTO audit_log (at, actor, entity, action, detail_json) VALUES (?, 'admin:rebill-anchor', ?, 'billing_anchor_moved', ?)`,
         nowIso(), `subscription:${s.id}`,
-        JSON.stringify({ from: row.stripe_next_charge, to: row.new_anchor, covers: row.next_unpaid_delivery }));
+        JSON.stringify({ from: row.stripe_next_charge, to: row.new_anchor, covers: row.next_unpaid_delivery,
+                         source: row.anchor_source, note: body.note || null }));
       row.action = 'updated';
     } catch (e) {
       row.action = 'ERROR';

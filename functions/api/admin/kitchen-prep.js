@@ -16,20 +16,36 @@ export async function onRequestGet(context) {
   const denied = await requireStaffOrAdmin(context);
   if (denied) return denied;
 
-  const week = new URL(request.url).searchParams.get('week_of') || upcomingSunday();
+  const url = new URL(request.url);
+  const week = url.searchParams.get('week_of') || upcomingSunday();
+
+  // KITCHEN PREVIEW (?include_pending=1): count orders that are still OPEN alongside locked ones.
+  // Normally the cook list is locked-only, and rightly so — you cook what is final. But when the
+  // kitchen has to run before the Saturday lock (2026-08-07: Jayson out of town, so prep moved to
+  // Friday), locked-only reports zero and the only way to get a real number was to lock early, which
+  // slams the ordering window shut on customers hours before the midnight cutoff they were promised.
+  // This flag separates the two: the kitchen sees the full projected list, the customer keeps their
+  // window, and the 1:30am lock still runs normally. READ-ONLY — it locks nothing.
+  const includePending = url.searchParams.get('include_pending') === '1';
+  const orderFilter = includePending
+    ? `o.status NOT IN ('skipped_paused','skipped_canceled')`
+    : `o.status = 'locked'`;
+  const totalsFilter = includePending
+    ? `status NOT IN ('skipped_paused','skipped_canceled')`
+    : `status = 'locked'`;
 
   // Original tally (unchanged).
   const meals = await all(env.DB,
     `SELECT ms.meal_position AS position, ms.meal_name AS name, SUM(ms.qty) AS total_qty
        FROM meal_selections ms
        JOIN orders o ON o.subscription_id = ms.subscription_id AND o.week_of = ms.week_of
-      WHERE ms.week_of = ? AND o.status = 'locked' AND ms.qty > 0
+      WHERE ms.week_of = ? AND ${orderFilter} AND ms.qty > 0
       GROUP BY ms.meal_position, ms.meal_name
       ORDER BY total_qty DESC, ms.meal_position`, week);
 
   const totals = await one(env.DB,
     `SELECT COUNT(*) AS orders, COALESCE(SUM(total_meals),0) AS meals
-       FROM orders WHERE week_of = ? AND status = 'locked'`, week);
+       FROM orders WHERE week_of = ? AND ${totalsFilter}`, week);
   const grand = meals.reduce((s, m) => s + (m.total_qty || 0), 0);
 
   // Per order × meal rows (with goal/sex) — drive batches + packing.
@@ -40,7 +56,7 @@ export async function onRequestGet(context) {
        FROM meal_selections ms
        JOIN orders o ON o.subscription_id = ms.subscription_id AND o.week_of = ms.week_of
        JOIN customers c ON c.id = o.customer_id
-      WHERE ms.week_of = ? AND o.status = 'locked' AND ms.qty > 0
+      WHERE ms.week_of = ? AND ${orderFilter} AND ms.qty > 0
       ORDER BY c.last_name, ms.meal_position`, week);
 
   // Menu position → slug + macros (for batch matching + label macros).

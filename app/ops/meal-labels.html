@@ -178,39 +178,12 @@
         break-after: avoid;
       }
 
-      /* ── DK-2251 62mm CONTINUOUS tape mode (toggled via "Label stock") ──
-         The 62mm tape is ~2x the width of the 29mm die-cut, so print TWO of the SAME landscape labels
-         (QR left, name/meal/macros right — IDENTICAL to the die-cut) SIDE BY SIDE, dashed cut line
-         between them. Pairs run down the tape. */
-      html.tape62, html.tape62 body { width: 62mm; }
-      html.tape62 .label-grid { width: 62mm; max-width: 62mm; margin: 0; padding: 0; display: block; }
-      html.tape62 .label-pair {
-        display: flex;
-        width: 62mm;
-        page-break-after: always;
-        break-after: page;
-      }
-      html.tape62 .label-pair:last-child { page-break-after: avoid; break-after: avoid; }
-      html.tape62 .label {
-        width: 31mm; height: 90mm;    /* each half of the 62mm tape; same 90mm length as the die-cut */
-        page-break-after: auto; break-after: auto;
-      }
-      html.tape62 .label-pair .label:first-child { border-right: 0.3mm dashed #cccccc; } /* cut guide */
-      /* IDENTICAL rotated-landscape content to the die-cut label (QR left, text right). */
-      html.tape62 .label-rot {
-        inset: auto; top: 50%; left: 50%;
-        width: 90mm; height: 29mm;
-        transform: translate(-50%, -50%) rotate(90deg);
-      }
-
       @page {
         size: 29mm 90mm;
         margin: 0;
       }
     }
   </style>
-  <!-- JS sets the @page size here to match the chosen label stock (later @page wins the cascade). -->
-  <style id="pageSize">@media print { @page { size: 29mm 90mm; margin: 0; } }</style>
 </head>
 <body>
 
@@ -229,14 +202,6 @@
         Prepped on:
         <input type="date" id="prep-date"
           style="padding:8px 10px;border:1px solid #d4d4d8;border-radius:8px;font-size:0.9rem;background:#fafafa;" />
-      </label>
-      <label style="font-size:0.85rem;font-weight:600;color:#3f3f46;display:flex;align-items:center;gap:8px;">
-        Label stock:
-        <select id="label-stock" onchange="applyStock(this.value)"
-          style="padding:8px 10px;border:1px solid #d4d4d8;border-radius:8px;font-size:0.9rem;background:#fafafa;">
-          <option value="29">DK-1201 · 29mm die-cut</option>
-          <option value="62">DK-2251 · 62mm continuous</option>
-        </select>
       </label>
     </div>
   </div>
@@ -398,16 +363,8 @@
       const totalMeals = labels.length;
       summary.textContent = `${orders.length} customer${orders.length !== 1 ? "s" : ""} · ${totalMeals} label${totalMeals !== 1 ? "s" : ""} to print`;
 
-      const twoUp = document.documentElement.classList.contains("tape62");  // DK-2251 = 2 labels per row
-      let pair = null;
       labels.forEach((label, idx) => {
-        const el = renderLabel(label, idx);
-        if (twoUp) {
-          if (idx % 2 === 0) { pair = document.createElement("div"); pair.className = "label-pair"; grid.appendChild(pair); }
-          pair.appendChild(el);
-        } else {
-          grid.appendChild(el);
-        }
+        grid.appendChild(renderLabel(label, idx));
 
         // Generate the QR after the element is in the DOM. Wrapped so one bad QR can't throw out of the
         // forEach and halt the whole sheet. Encodes just the mealId — the Assembly tab decodes it and
@@ -424,30 +381,13 @@
       });
     }
 
-    // ── LABEL STOCK: DK-1201 (29mm die-cut, default) vs DK-2251 (62mm continuous tape) ──
-    // Switches the print layout + @page size. Choice is remembered per device. ?tape=62 also selects it.
-    function applyStock(stock) {
-      const is62 = String(stock) === "62";
-      document.documentElement.classList.toggle("tape62", is62);
-      // @page = ONE printed segment. 62mm mode = a PAIR of the landscape labels side by side (62mm × 90mm).
-      document.getElementById("pageSize").textContent = is62
-        ? "@media print { @page { size: 62mm 90mm; margin: 0; } }"
-        : "@media print { @page { size: 29mm 90mm; margin: 0; } }";
-      const sel = document.getElementById("label-stock");
-      if (sel) sel.value = is62 ? "62" : "29";
-      localStorage.setItem("gt_label_stock", is62 ? "62" : "29");
-      // Re-render so the DOM regroups into pairs (62mm) or flat labels (29mm).
-      if (typeof renderAll === "function") renderAll();
-    }
+    // Clear the old DK-2251 tape preference so a device that once picked 62mm isn't carrying dead state.
+    localStorage.removeItem("gt_label_stock");
 
     // Set date picker default to upcoming Sunday, then render
     const dateInput = document.getElementById("prep-date");
     dateInput.value = upcomingSunday();
     dateInput.addEventListener("change", renderAll);
-
-    // Restore saved label stock (or ?tape=62), default die-cut.
-    const _tapeParam = new URLSearchParams(location.search).get("tape");
-    applyStock(_tapeParam === "62" ? "62" : (localStorage.getItem("gt_label_stock") || "29"));
 
     renderAll();
   </script>

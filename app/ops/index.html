@@ -1952,6 +1952,32 @@
       color: #f87171;
       margin-left: 8px;
     }
+
+    /* Confirmation that a customer's pack finished and they were messaged. Green, not red - this is
+       the good outcome, and it must be visually distinct from scan-error sitting right next to it. */
+    .scan-notice {
+      font-size: 0.8rem;
+      color: #4ade80;
+      margin-left: 8px;
+      font-weight: 600;
+    }
+
+    /* End-of-prep sweep: catches anyone the per-scan auto-notify missed. */
+    .notify-panel {
+      margin: 14px 0 0; padding: 14px 16px; border-radius: 12px;
+      background: rgba(255, 107, 53, 0.07); border: 1px solid rgba(255, 107, 53, 0.28);
+    }
+    .notify-head { font-weight: 800; font-size: 0.95rem; margin-bottom: 3px; }
+    .notify-sub { font-size: 0.8rem; opacity: 0.75; margin: 0 0 11px; line-height: 1.45; }
+    .notify-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .notify-btn {
+      flex: 1 1 200px; padding: 11px 14px; border-radius: 9px; border: none; cursor: pointer;
+      font-weight: 700; font-size: 0.87rem; background: #ff6b35; color: #fff;
+    }
+    .notify-btn.secondary { background: rgba(255, 255, 255, 0.12); color: inherit; }
+    .notify-btn:disabled { opacity: 0.55; cursor: default; }
+    .notify-btn:focus-visible { outline: 2px solid #ff6b35; outline-offset: 2px; }
+    .notify-result { font-size: 0.82rem; margin-top: 10px; line-height: 1.5; min-height: 1em; }
   </style>
 </head>
 <body>
@@ -2251,6 +2277,23 @@
       </div>
     </div>
 
+    <!-- End-of-prep sweep. Per-customer messages already go out automatically as each pack finishes;
+         these catch anyone the scanner missed (a lost label, packing split across two phones, a
+         network blip). Both are safe to press twice - the server refuses to move a status backwards
+         and notify() dedups, so nobody gets messaged the same thing twice. -->
+    <div class="notify-panel">
+      <div class="notify-head">Tell customers their food is ready</div>
+      <p class="notify-sub">
+        Scanning a customer's last meal already messages them. Press these when prep is finished to
+        catch anyone the scanner missed. Safe to press more than once.
+      </p>
+      <div class="notify-actions">
+        <button type="button" class="notify-btn" id="notify-pickup-btn">🥡 Notify pickup customers</button>
+        <button type="button" class="notify-btn secondary" id="notify-delivery-btn">🚚 Deliveries are on the way</button>
+      </div>
+      <div class="notify-result" id="notify-result"></div>
+    </div>
+
     <!-- Main body -->
     <div class="assembly-body">
 
@@ -2316,6 +2359,7 @@
       <input type="text" id="manual-input" placeholder="Paste a meal ID + Enter" autocomplete="off" />
       <button id="manual-btn">Scan</button>
       <span class="scan-error" id="scan-error"></span>
+      <span class="scan-notice" id="scan-notice"></span>
     </div>
 
   </div>
@@ -2522,6 +2566,9 @@
               mealName: meal.meal_name,
               macros,
               fulfillment: order.fulfillment,
+              // Carried so a completed pack can tell the server WHICH order just finished.
+              orderId: order.order_id || null,
+              deliveryStatus: order.delivery_status || "scheduled",
               customerTotalMeals: totalMeals
             };
           }
@@ -2655,6 +2702,102 @@
       return v;
     }
 
+    // ── AUTO-NOTIFY WHEN A CUSTOMER'S PACK IS COMPLETE ──
+    // Scanning the last meal for a customer means their order is packed, so tell them.
+    //   pickup   -> pickup_ready. Safe to fire early in the morning because the message names the
+    //               Sunday window explicitly, so "ready" cannot be read as "come now".
+    //   delivery -> prepping, NOT out_for_delivery. Packed is not the same as on the road; the driver
+    //               advances that step from the run sheet or the per-order scan page.
+    //
+    // Idempotent by construction: /api/admin/delivery-status refuses to move a status backwards and
+    // notify() dedups on (status, order_id), so a re-scan, a second phone, or the bulk sweep afterwards
+    // cannot double-message anybody. Best-effort by nature - scans live in localStorage per DEVICE, so
+    // if packing is split across two phones neither may see a customer finish. That is exactly what the
+    // "notify everyone" sweep at the end of prep is for; this just means most people hear sooner.
+    const autoNotified = new Set();
+    async function notifyPackComplete(meal) {
+      if (!meal || !meal.orderId) return;
+      if (autoNotified.has(meal.orderId)) return;
+      autoNotified.add(meal.orderId);
+      const status = meal.fulfillment === "delivery" ? "prepping" : "pickup_ready";
+      const noticeEl = document.getElementById("scan-notice");
+      try {
+        const res = await fetch(
+          `/api/admin/delivery-status?order_id=${encodeURIComponent(meal.orderId)}&status=${status}`,
+          { method: "POST", credentials: "include" });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.detail || res.status);
+        const sent = body.summary && body.summary.notified;
+        if (noticeEl) {
+          noticeEl.textContent = sent
+            ? `✅ ${meal.customerName} packed — ${meal.fulfillment === "delivery" ? "marked prepped" : "sent pickup text"}`
+            : `✅ ${meal.customerName} packed (already notified)`;
+          setTimeout(() => { noticeEl.textContent = ""; }, 6000);
+        }
+      } catch (e) {
+        // Let it be retried, and never block packing on a network hiccup.
+        autoNotified.delete(meal.orderId);
+        if (noticeEl) {
+          noticeEl.textContent = `⚠️ ${meal.customerName} packed, but the notification did not send — use "Notify everyone" when you finish`;
+          setTimeout(() => { noticeEl.textContent = ""; }, 9000);
+        }
+      }
+    }
+
+    // ── END-OF-PREP SWEEP ──
+    // Mass mode on /api/admin/delivery-status: advances every locked order of that fulfilment type for
+    // the week and messages whoever hasn't been told. Orders already at or past the status are skipped
+    // server-side, so this is the catch-all for anything the per-scan auto-notify missed.
+    //
+    // ⚠️ week_of is DELIBERATELY not sent. The server defaults to upcomingSunday(), which is right both
+    // on Saturday (packing for tomorrow) and on Sunday (delivery day). The dashboard's own getWeekStr()
+    // reads a localStorage value that only "Pull Orders" ever refreshes, so a device that pulled last
+    // week would sweep the WRONG week and message the wrong people. Let the server decide.
+    const SWEEP = {
+      pickup:   { status: 'pickup_ready',     btn: 'notify-pickup-btn',   verb: 'their food is ready for pickup' },
+      delivery: { status: 'out_for_delivery', btn: 'notify-delivery-btn', verb: 'their food is on the way' },
+    };
+    const sweepArmed = {};
+    async function sweepNotify(kind) {
+      const cfg = SWEEP[kind];
+      const btn = document.getElementById(cfg.btn);
+      const out = document.getElementById("notify-result");
+      const original = btn.dataset.label || (btn.dataset.label = btn.textContent);
+
+      // Two-step confirm instead of a native dialog: this sends real messages to real customers, but a
+      // modal is miserable on a phone mid-prep and would block the page.
+      if (!sweepArmed[kind]) {
+        sweepArmed[kind] = true;
+        btn.textContent = "Press again to send";
+        out.textContent = `This messages every ${kind} customer for this week who hasn't already been told ${cfg.verb}.`;
+        setTimeout(() => {
+          if (!sweepArmed[kind]) return;
+          sweepArmed[kind] = false; btn.textContent = original; out.textContent = "";
+        }, 8000);
+        return;
+      }
+
+      sweepArmed[kind] = false;
+      btn.disabled = true;
+      btn.textContent = "Sending…";
+      out.textContent = "";
+      try {
+        const res = await fetch(`/api/admin/delivery-status?status=${cfg.status}`,
+          { method: "POST", credentials: "include" });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
+        const s = body.summary || {};
+        out.textContent = s.notified
+          ? `✅ Messaged ${s.notified} ${kind} customer${s.notified === 1 ? "" : "s"} for ${s.week_of}. ${s.skipped || 0} skipped (already told, or not ${kind}).`
+          : `Nothing to send — everyone for ${s.week_of || "this week"} had already been told.`;
+      } catch (e) {
+        out.textContent = `⚠️ Could not send: ${e.message}. Nobody was messaged twice — it is safe to press again.`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    }
+
     function handleScan(rawValue) {
       const mealId = extractMealId(rawValue);
       const errorEl = document.getElementById("scan-error");
@@ -2683,6 +2826,10 @@
       // Mark as scanned first so dynamic counts are correct
       scanned.push(mealId);
       saveScanned(scanned);
+
+      // Did that complete this customer's pack? Counted AFTER the push, so the last meal counts.
+      const packedForCustomer = scanned.filter(id => mealMap[id] && mealMap[id].customerId === meal.customerId).length;
+      if (packedForCustomer >= meal.customerTotalMeals) notifyPackComplete(meal);
 
       if (cardIsVisible) {
         // Animate the current card out, then show the new one
@@ -2738,6 +2885,10 @@
     }
 
     manualBtn.addEventListener("click", fireManualScan);
+
+    // End-of-prep sweep buttons.
+    document.getElementById("notify-pickup-btn").addEventListener("click", () => sweepNotify("pickup"));
+    document.getElementById("notify-delivery-btn").addEventListener("click", () => sweepNotify("delivery"));
     manualInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") fireManualScan();
     });

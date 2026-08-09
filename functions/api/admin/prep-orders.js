@@ -55,7 +55,9 @@ export async function onRequestGet(context) {
 
   // Same cook-list join as /api/gainztrain-orders + /api/admin/kitchen-prep.
   const rows = await all(env.DB,
-    `SELECT o.customer_id,
+    // o.id + o.delivery_status ride along so the Assembly scanner can tell /api/admin/delivery-status
+    // WHICH order just finished packing, and can skip anyone already notified.
+    `SELECT o.customer_id, o.id AS order_id, o.delivery_status,
             c.first_name, c.last_name, c.goal, c.sex, c.address, c.city, c.zip,
             COALESCE(o.delivery_method, c.delivery_method) AS fulfillment,
             ms.meal_position, ms.meal_name, ms.qty
@@ -75,6 +77,8 @@ export async function onRequestGet(context) {
       const fulfillment = r.fulfillment === 'delivery' ? 'delivery' : 'pickup';
       entry = {
         customer_id: r.customer_id,
+        order_id: r.order_id,
+        delivery_status: r.delivery_status || 'scheduled',
         first_name: r.first_name || '',
         last_name: r.last_name || '',
         gender: mapGender(r.sex),

@@ -3,8 +3,8 @@
 //      Stripe webhook retry that re-runs dispatch() can't double-send (see migrations/0007).
 //   2. Template rendering: pure (data)=>{subject,html,sms} functions — no GHL merge tags, so the old
 //      "(Insert billing link)" leak class can't recur.
-//   3. Channel fan-out: email always; SMS only for events in SMS_EVENTS, only to customers with
-//      recorded consent + a phone, and only when env.SMS_AUTH_ENABLED === 'true' (A2P master switch).
+//   3. Channel fan-out: email always; SMS only for events in SMS_EVENTS, only to customers who have
+//      a phone and haven't switched texts off, and only when env.SMS_AUTH_ENABLED === 'true'.
 //   4. Non-blocking by contract: callers should still try/catch, but notify() itself never throws on a
 //      comms failure — a hiccup must never break the underlying business action or fail a webhook.
 import { one, run, nowIso } from './db.js';
@@ -45,15 +45,21 @@ const SMS_EVENTS = new Set([
   'meal_reminder_final',    // Friday last call — the one marketing-class text, and the highest-leverage
 ]);
 
-// A2P/TCPA gate. `customers.sms_marketing_consent` is the unchecked box on /start, and it is the ONLY
-// thing that authorizes a text. Deliberately re-read from D1 here instead of trusted off the passed-in
-// customer: notify() is called from 30+ places with hand-built objects that don't carry the column, and
-// a MISSING field must never read as consent. FAIL-CLOSED — any error, any doubt, no text.
-// A phone is required too; three migrated customers have consent-less accounts with no number at all.
-async function smsAuthorized(env, customerId) {
+// Can we physically text this person? A phone is the only hard requirement — several migrated
+// customers still have accounts with no number at all, and those stay email-only until they add one.
+//
+// ⚠️ The signup checkbox (`customers.sms_marketing_consent`) is NOT required for these six events, by
+// Brycen's decision 2026-08-09. The reasoning, so nobody "restores" the gate later without knowing it:
+// every event in SMS_EVENTS is a SERVICE message to an existing paying subscriber about an order they
+// already bought — their food is locked, it's on the way, their card failed, the cutoff is tonight.
+// That is transactional, not solicitation. The consent flag is still captured and still meaningful;
+// it's what would gate genuinely PROMOTIONAL texts (a win-back, a discount push), and the allowlist
+// deliberately contains none of those. Add a promotional event to SMS_EVENTS and you must gate it on
+// `sms_marketing_consent` at the same time.
+async function smsReachable(env, customerId) {
   try {
-    const row = await one(env.DB, `SELECT phone, sms_marketing_consent FROM customers WHERE id = ?`, customerId);
-    return !!(row && Number(row.sms_marketing_consent) === 1 && row.phone);
+    const row = await one(env.DB, `SELECT phone FROM customers WHERE id = ?`, customerId);
+    return !!(row && row.phone);
   } catch { return false; }
 }
 
@@ -108,12 +114,26 @@ export async function notify(env, customer, eventKey, data = {}, opts = {}) {
       cls = 'critical';
       try { await run(env.DB, `INSERT INTO audit_log (at, actor, entity, action, detail_json) VALUES (?, 'notify', ?, 'unmapped_pref_class', ?)`, nowIso(), `event:${eventKey}`, JSON.stringify({ eventKey })); } catch { /* ignore */ }
     }
+    // Is a text even on the table for this event? Worked out before loading prefs so we know whether
+    // a critical-class event still needs them (it does, for the SMS leg — see smsAllowed below).
+    const mayText = SMS_EVENTS.has(eventKey) && !!rendered.sms && String(env.SMS_AUTH_ENABLED) === 'true';
+
     let prefs = null;
-    if (cls !== 'critical') {
+    if (cls !== 'critical' || mayText) {
       try { prefs = await one(env.DB, `SELECT email_account, email_marketing, sms_account, sms_marketing FROM notification_prefs WHERE customer_id = ?`, customer.id); } catch { prefs = null; }
     }
     let emailAllowed = cls === 'critical' || !prefs || (cls === 'account' ? prefs.email_account : prefs.email_marketing) !== 0;
-    const smsAllowed = cls === 'critical' || !prefs || (cls === 'account' ? prefs.sms_account : prefs.sms_marketing) !== 0;
+
+    // SMS opt-out works DIFFERENTLY from email, on purpose. Email is the system of record: critical
+    // messages always send there and can't be switched off. Text is a courtesy layered on top, so a
+    // customer who has turned texts off stays off even for critical events — they still receive every
+    // one of them by email, so nothing is lost and "stop texting me" actually means something.
+    //
+    // All six SMS_EVENTS are order/service messages, so they all read the SAME switch: sms_account
+    // ("text me about my order", default ON). sms_marketing stays reserved for promotional texts,
+    // which the allowlist contains none of — gating the Friday cutoff reminder on a marketing flag was
+    // what silently suppressed it for some customers and not others.
+    const smsAllowed = !prefs || prefs.sms_account !== 0;
 
     // Marketing email REQUIRES a one-click CAN-SPAM unsubscribe footer (transactional never gets one).
     // FAIL-CLOSED: if we can't build the footer, suppress the send rather than mail a non-compliant
@@ -135,14 +155,10 @@ export async function notify(env, customer, eventKey, data = {}, opts = {}) {
     }
 
     const wantEmail = emailAllowed && (rendered.html || rendered.subject);
-    // Four independent gates before a text goes out: the A2P master switch, the customer's own
-    // account/marketing opt-out, this event being in SMS_EVENTS, and recorded consent + a real phone.
-    // The consent lookup is last so it only costs a query on the handful of events that can text.
-    const wantSms = smsAllowed
-      && rendered.sms
-      && String(env.SMS_AUTH_ENABLED) === 'true'
-      && SMS_EVENTS.has(eventKey)
-      && (await smsAuthorized(env, customer.id));
+    // Three gates before a text goes out: the event is on the allowlist and the A2P master switch is
+    // on (mayText), the customer hasn't turned texts off, and we actually have a number for them.
+    // The phone lookup is last so it only costs a query on the handful of events that can text.
+    const wantSms = mayText && smsAllowed && (await smsReachable(env, customer.id));
 
     // Resolve the GHL contact once (lazy-create + persist) and reuse it for both channels — but only if
     // we're actually going to send something (an opted-out customer needs no contact lookup).

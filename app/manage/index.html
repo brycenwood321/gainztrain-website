@@ -116,7 +116,11 @@
         <div class="sub">Receipts, payment alerts, and order confirmations always send. You can opt out of the rest.</div>
         <label class="ck"><input type="checkbox" id="np_email_account"> <span>Account change confirmations <span style="color:var(--muted)">(pause, plan, delivery, goal)</span></span></label>
         <label class="ck"><input type="checkbox" id="np_email_marketing"> <span>Weekly menu drops &amp; meal reminders</span></label>
-        <label class="ck"><input type="checkbox" id="np_sms_marketing"> <span>Text notifications <span style="color:var(--muted)">(reminders + updates, when texting is available)</span></span></label>
+        <!-- Drives sms_account, the single switch notify() reads for every text we send. It used to
+             read AND write sms_marketing, which defaults to 0, so the box rendered unchecked for
+             everyone and any save silently turned that customer's texts off - see the comment on the
+             save handler below. -->
+        <label class="ck"><input type="checkbox" id="np_sms"> <span>Text me about my order <span style="color:var(--muted)">(cutoff reminder, order locked, out for delivery, card issues)</span></span></label>
         <div class="acts"><button class="btn" id="npSave">Save preferences</button></div>
       </div>
     </div>
@@ -171,10 +175,10 @@
     }
     async function loadPrefs(){
       const r=await api('/api/account/notification-prefs');
-      const p=(r.body&&r.body.prefs)||{email_account:1,email_marketing:1,sms_marketing:0};
+      const p=(r.body&&r.body.prefs)||{email_account:1,email_marketing:1,sms_account:1,sms_marketing:0};
       $('np_email_account').checked=p.email_account!==0;
       $('np_email_marketing').checked=p.email_marketing!==0;
-      $('np_sms_marketing').checked=p.sms_marketing!==0;
+      $('np_sms').checked=p.sms_account!==0;
     }
     function setMethod(m){method=m;$('optPickup').classList.toggle('sel',m==='pickup');$('optDelivery').classList.toggle('sel',m==='delivery');$('addrFields').classList.toggle('hidden',m!=='delivery');}
     $('optPickup').onclick=()=>setMethod('pickup');$('optDelivery').onclick=()=>setMethod('delivery');
@@ -200,7 +204,13 @@
     $('addrSave').onclick=()=>act('addrSave',()=>post('/api/account/address',{delivery_method:method,address:$('address').value,city:$('city').value,zip:$('zip').value}),
       b=>b.delivery_method==='pickup'?'Saved — free pickup at our Orem kitchen.':('Saved — Zone '+b.delivery_zone+' delivery, '+money(b.delivery_fee_cents)+'/week'+(b.effective==='next_week'?' starting next week.':', prorated this week.')));
     $('pwSave').onclick=async()=>{const pw=$('newpw').value;if(pw.length<8){msg('Password must be at least 8 characters.','err');return;}await act('pwSave',()=>post('/api/auth/set-password',{password:pw}),'Password updated.');$('newpw').value='';};
-    $('npSave').onclick=()=>act('npSave',()=>post('/api/account/notification-prefs',{email_account:$('np_email_account').checked,email_marketing:$('np_email_marketing').checked,sms_account:$('np_sms_marketing').checked,sms_marketing:$('np_sms_marketing').checked}),'Preferences saved.');
+    // ⚠️ This used to send BOTH sms_account and sms_marketing from one checkbox that loaded its state
+    // from sms_marketing (default 0). The box therefore rendered unchecked for everyone, and saving
+    // this panel for ANY reason wrote sms_account=0 — silently switching that customer's texts off
+    // without ever asking them. It's how Destiny ended up opted out of texts on the same account where
+    // she'd ticked the SMS consent box at signup. Only sms_account is sent now; sms_marketing is left
+    // alone so a promotional opt-in isn't clobbered by an unrelated save.
+    $('npSave').onclick=()=>act('npSave',()=>post('/api/account/notification-prefs',{email_account:$('np_email_account').checked,email_marketing:$('np_email_marketing').checked,sms_account:$('np_sms').checked}),'Preferences saved.');
     $('cardBtn').onclick=async()=>{const b=$('cardBtn');b.disabled=true;b.textContent='…';const r=await post('/api/account/portal');if(r.body.url){location.href=r.body.url;return;}b.disabled=false;b.textContent='Update card & billing';msg(r.body.detail||'Could not open billing.','err');};
 
     load();

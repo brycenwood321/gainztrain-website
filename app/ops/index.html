@@ -2716,7 +2716,21 @@
     // "notify everyone" sweep at the end of prep is for; this just means most people hear sooner.
     const autoNotified = new Set();
     async function notifyPackComplete(meal) {
-      if (!meal || !meal.orderId) return;
+      if (!meal) return;
+      // ⚠️ NEVER return silently here. The shared prep_orders row in ops_kv predates order_id being
+      // added to /api/admin/prep-orders, and hydratePrepOrders() overwrites local data with the server
+      // copy on every boot and every Orders-tab switch — so a device can easily hold orders with no
+      // order_id and no way to notify. Returning quietly meant the kitchen scanned a finished pack and
+      // reasonably concluded the customer had been told. Say so instead; a fresh "Pull Orders" repairs
+      // the shape.
+      if (!meal.orderId) {
+        const el = document.getElementById("scan-notice");
+        if (el) {
+          el.textContent = `⚠️ ${meal.customerName} packed — can't notify from this device. Tap "⬇ Pull Orders", then use "Notify" below.`;
+          setTimeout(() => { el.textContent = ""; }, 9000);
+        }
+        return;
+      }
       if (autoNotified.has(meal.orderId)) return;
       autoNotified.add(meal.orderId);
       const status = meal.fulfillment === "delivery" ? "prepping" : "pickup_ready";
@@ -2749,10 +2763,26 @@
     // the week and messages whoever hasn't been told. Orders already at or past the status are skipped
     // server-side, so this is the catch-all for anything the per-scan auto-notify missed.
     //
-    // ⚠️ week_of is DELIBERATELY not sent. The server defaults to upcomingSunday(), which is right both
-    // on Saturday (packing for tomorrow) and on Sunday (delivery day). The dashboard's own getWeekStr()
-    // reads a localStorage value that only "Pull Orders" ever refreshes, so a device that pulled last
-    // week would sweep the WRONG week and message the wrong people. Let the server decide.
+    // ⚠️ week_of IS sent, computed from the device's local date — and this was wrong until 2026-08-09.
+    // Letting the server default to upcomingSunday() looked safer (it dodges the stale localStorage
+    // week), but upcomingSunday() is UTC: from 6pm Sunday Mountain it is already Monday UTC, so it
+    // rolls to the FOLLOWING Sunday. A driver finishing the run at 7pm would have swept a week with no
+    // locked orders and been told "Nothing to send — everyone had already been told." A false success,
+    // at exactly the moment the button matters.
+    // Local date is correct on both packing day and delivery day, and the week is ECHOED in the UI so
+    // a device with a wrong clock or timezone is visible to the human rather than silently wrong.
+    function deliveryWeekLocal() {
+      const d = new Date();
+      const add = (7 - d.getDay()) % 7;   // 0 when today is already Sunday
+      const t = new Date(d.getFullYear(), d.getMonth(), d.getDate() + add);
+      const p = (n) => String(n).padStart(2, "0");
+      return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`;
+    }
+    function prettyWeek(iso) {
+      try {
+        return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+      } catch (e) { return iso; }
+    }
     const SWEEP = {
       pickup:   { status: 'pickup_ready',     btn: 'notify-pickup-btn',   verb: 'their food is ready for pickup' },
       delivery: { status: 'out_for_delivery', btn: 'notify-delivery-btn', verb: 'their food is on the way' },
@@ -2766,10 +2796,12 @@
 
       // Two-step confirm instead of a native dialog: this sends real messages to real customers, but a
       // modal is miserable on a phone mid-prep and would block the page.
+      const week = deliveryWeekLocal();
       if (!sweepArmed[kind]) {
         sweepArmed[kind] = true;
         btn.textContent = "Press again to send";
-        out.textContent = `This messages every ${kind} customer for this week who hasn't already been told ${cfg.verb}.`;
+        // Name the week out loud. If this reads wrong, the device's clock is wrong — stop and pull.
+        out.textContent = `This messages every ${kind} customer for ${prettyWeek(week)} who hasn't already been told ${cfg.verb}.`;
         setTimeout(() => {
           if (!sweepArmed[kind]) return;
           sweepArmed[kind] = false; btn.textContent = original; out.textContent = "";
@@ -2782,14 +2814,20 @@
       btn.textContent = "Sending…";
       out.textContent = "";
       try {
-        const res = await fetch(`/api/admin/delivery-status?status=${cfg.status}`,
+        const res = await fetch(`/api/admin/delivery-status?status=${cfg.status}&week_of=${week}`,
           { method: "POST", credentials: "include" });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
         const s = body.summary || {};
+        // "Nothing to send" is ambiguous on its own — it means both "all done" and "wrong week, matched
+        // nobody". Distinguish them: if the week had no orders at all, say so loudly instead of
+        // reporting success.
+        const touched = (s.updated || 0) + (s.skipped || 0);
         out.textContent = s.notified
-          ? `✅ Messaged ${s.notified} ${kind} customer${s.notified === 1 ? "" : "s"} for ${s.week_of}. ${s.skipped || 0} skipped (already told, or not ${kind}).`
-          : `Nothing to send — everyone for ${s.week_of || "this week"} had already been told.`;
+          ? `✅ Messaged ${s.notified} ${kind} customer${s.notified === 1 ? "" : "s"} for ${prettyWeek(s.week_of || week)}. ${s.skipped || 0} skipped (already told, or not ${kind}).`
+          : touched
+            ? `Nothing to send — all ${touched} ${kind} order${touched === 1 ? "" : "s"} for ${prettyWeek(s.week_of || week)} had already been told.`
+            : `⚠️ No locked orders at all for ${prettyWeek(s.week_of || week)} — nobody was messaged. Check that this is the right week.`;
       } catch (e) {
         out.textContent = `⚠️ Could not send: ${e.message}. Nobody was messaged twice — it is safe to press again.`;
       } finally {

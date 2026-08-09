@@ -7,6 +7,9 @@
 //   - Jameson  (2026-07-10) paid, but the lock cron had run a day early so no order row existed.
 //   - Jeferson (2026-07-23) paid, order stuck 'pending', meals made by hand off-system.
 //   - Jeferson (2026-08-02) picked up 14 meals with NO payment: his 07-30 renewal invoice was VOIDED.
+//   - Luis Soto (2026-08-09) 14 meals cooked with NO payment: he canceled, and the $0 invoice Stripe
+//     raised when the subscription ended read as 'paid' + 'subscription_cycle', identical to a comp.
+//     THIS CHECK COUNTED HIM AS PAID and reported the week clean apart from two others.
 //
 // ⚠️ THE LESSON FROM THAT THIRD ONE — READ BEFORE CHANGING THIS FILE. The original version of this
 // check asked "does this customer look unhealthy?" (subscription past_due/unpaid, or carrying an OPEN
@@ -36,13 +39,38 @@ import { ownerNotify } from '../../_lib/owner_notify.js';
 const LOOKBACK_DAYS = 45;   // far enough back to cover any prepaid week still in play
 const MAX_PAGES = 5;        // 500 invoices — a hard stop so a bad filter can't spin
 
+// Does this PAID invoice actually represent a week of food that got bought?
+//
+// ⚠️ status:'paid' AND billing_reason ARE BOTH INSUFFICIENT — verified against live Stripe 2026-08-08.
+// Brycen's and Marissa's OWNERS100 comp renewals arrive as $0 with billing_reason 'subscription_cycle'
+// and MUST keep counting. Luis Soto's subscription ended that same morning and produced a $0 invoice
+// with billing_reason 'subscription_cycle' too — byte-for-byte the same on both fields — and it must
+// NOT count. It did: the audit filed him inside "10 paid" and reported 2 issues on the very morning
+// 14 of his meals went into the cook with nothing paying for them. Same failure shape as Jeferson,
+// one field further in.
+//
+// What actually separates them is a DISCOUNT. A comp is real meal charges taken to zero by a 100%-off
+// coupon, so the invoice carries a discount (and a subtotal that the discount zeroed). A trial-end or
+// cancellation invoice has nothing billable on it at all — no discount, no subtotal.
+//
+// Do NOT "simplify" this into an amount test (that erases every comp and floods the alert with false
+// positives until people stop reading it) or back into a billing_reason test (that is what let Luis
+// through). Returns the KIND of coverage, or null when the invoice bought nothing.
+function invoiceCoversDelivery(inv) {
+  if ((inv.amount_paid || 0) > 0) return 'paid';
+  const hasDiscount = !!inv.discount || (Array.isArray(inv.discounts) && inv.discounts.length > 0);
+  const zeroedByDiscount = (inv.subtotal || 0) > 0 && (inv.total || 0) === 0;
+  return (hasDiscount || zeroedByDiscount) ? 'comp' : null;
+}
+
 // Pull every PAID invoice in the window and map stripe_subscription_id → Set(delivery weeks it paid for).
 // Only 'paid' counts. A voided invoice (the pause_collection behaviour, and exactly what happened to
-// Jeferson) collected nothing and must never be read as coverage.
+// Jeferson) collected nothing and must never be read as coverage — and neither does a $0 invoice that
+// no discount explains (see invoiceCoversDelivery above).
 async function paidWeeksBySubscription(env) {
   const sinceTs = Math.floor((Date.now() - LOOKBACK_DAYS * 86400 * 1000) / 1000);
   const map = new Map();
-  let startingAfter = null, pages = 0, counted = 0, truncated = false;
+  let startingAfter = null, pages = 0, counted = 0, ignored = 0, truncated = false;
 
   while (pages < MAX_PAGES) {
     const params = { status: 'paid', limit: 100, created: { gte: sinceTs } };
@@ -52,10 +80,16 @@ async function paidWeeksBySubscription(env) {
     for (const inv of rows) {
       const subId = invoiceSubscriptionId(inv);
       if (!subId) continue;
+      const kind = invoiceCoversDelivery(inv);
+      if (!kind) { ignored++; continue; }   // $0 with nothing bought — buys no delivery
       const week = deliveryBoughtBy(new Date(inv.created * 1000), inv.billing_reason);
       if (!map.has(subId)) map.set(subId, new Map());
-      // Keep the invoice that covered it, so the report can cite real money.
-      map.get(subId).set(week, { id: inv.id, amount: (inv.amount_paid || 0) / 100, reason: inv.billing_reason });
+      // Keep the invoice that covered it, so the report can cite real money. Stripe returns newest
+      // first, so first-write-wins keeps the most recent evidence for a week rather than the oldest.
+      const weeks = map.get(subId);
+      if (!weeks.has(week)) {
+        weeks.set(week, { id: inv.id, amount: (inv.amount_paid || 0) / 100, reason: inv.billing_reason, kind });
+      }
       counted++;
     }
     pages++;
@@ -63,7 +97,7 @@ async function paidWeeksBySubscription(env) {
     startingAfter = rows[rows.length - 1].id;
     if (pages === MAX_PAGES && page.has_more) truncated = true;
   }
-  return { map, counted, truncated };
+  return { map, counted, ignored, truncated };
 }
 
 async function audit(env, weekOf) {
@@ -100,9 +134,9 @@ async function audit(env, weekOf) {
   const billingAt = anchorForDelivery(weekOf);
   const billingSettled = Date.now() >= billingAt.getTime() + 20 * 60 * 1000; // 20 min for Stripe to settle
 
-  const { map: paidWeeks, counted, truncated } = billingSettled
+  const { map: paidWeeks, counted, ignored, truncated } = billingSettled
     ? await paidWeeksBySubscription(env)
-    : { map: new Map(), counted: 0, truncated: false };
+    : { map: new Map(), counted: 0, ignored: 0, truncated: false };
   const issues = [];
   let paidCount = 0;
 
@@ -110,7 +144,24 @@ async function audit(env, weekOf) {
     const who = `${o.first_name || '?'} ${o.last_name || ''}`.trim();
     const cover = o.stripe_subscription_id ? paidWeeks.get(o.stripe_subscription_id)?.get(weekOf) : null;
 
-    if (cover) { paidCount++; continue; }
+    if (cover) {
+      paidCount++;
+      // INDEPENDENT TRIPWIRE, deliberately not routed through the invoice logic above. A canceled
+      // subscription in the cook list is worth a human glance no matter how confident the payment
+      // scan is, because the lock (Sat 01:30 MT) runs seven and a half hours before billing (09:00)
+      // — so a cancellation that lands in between commits food that nothing pays for, and the only
+      // thing standing between that and a loss is this report. If the payment evidence is genuine
+      // (they paid, then canceled) this costs one glance; if it is not, it is the whole catch.
+      if (o.sub_status === 'canceled') {
+        issues.push({
+          type: 'canceled_but_cooking', name: who, email: o.email, phone: o.phone,
+          customer_id: o.customer_id, meals: o.total_meals, sub_status: o.sub_status,
+          delivery_method: o.delivery_method,
+          detail: `Cooking ${o.total_meals} meals for ${weekOf} but the subscription is CANCELED. Payment scan says covered by invoice ${cover.id} (${cover.kind}, $${cover.amount.toFixed(2)}, ${cover.reason}) — confirm that really covers this week before the food goes out.`,
+        });
+      }
+      continue;
+    }
 
     // THE CORE FINDING: food is going out for a delivery week no payment covers.
     issues.push({
@@ -148,7 +199,8 @@ async function audit(env, weekOf) {
   }
 
   const report = { week_of: weekOf, cooking_for: locked.length, paid_and_cooked: paidCount,
-    invoices_examined: counted, payment_check_ran: billingSettled, issue_count: issues.length, issues };
+    invoices_examined: counted, zero_value_invoices_ignored: ignored,
+    payment_check_ran: billingSettled, issue_count: issues.length, issues };
   // A skipped payment check must be visible. "0 issues" because we did not look is not the same as
   // "0 issues" because everything is paid, and nobody should have to guess which one they're reading.
   if (!billingSettled) {

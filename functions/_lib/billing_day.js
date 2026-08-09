@@ -75,6 +75,13 @@ export async function moveToBillingDay(env, stripeSubId, anchor) {
   // A paused sub bills nothing, so its anchor is meaningless until it resumes — and resume.js sets the
   // anchor itself. Combining trial_end with pause_collection is also undocumented; don't risk it.
   if (live.pause_collection) return { applied: false, reason: 'paused' };
+  // ⚠️ A QUEUED CANCELLATION CANCELS *AT* THE PERIOD END — so moving that date moves the CANCELLATION,
+  // not just the billing day. Luis Soto, 2026-08-08: resume re-anchored him to Sat 15:00 with
+  // cancel_at_period_end still set, which scheduled his cancellation for exactly the moment he should
+  // have been charged. Stripe canceled instead of billing, hours after the lock had already committed
+  // 14 meals to the cook. Callers that legitimately want to keep someone must clear the flag FIRST
+  // (resume.js does); everything else has no business rewriting a customer's cancellation date.
+  if (live.cancel_at_period_end) return { applied: false, reason: 'pending_cancellation' };
 
   const itemEnd = live.items?.data?.[0]?.current_period_end || live.current_period_end;
   if (itemEnd) {

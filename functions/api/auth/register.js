@@ -55,6 +55,23 @@ export async function onRequestPost(context) {
     return fail(409, 'email_exists', 'An account with that email already exists — try logging in.');
   }
 
+  // Consent and preference must AGREE. notification_prefs.sms_marketing defaults to 0 (a TCPA-safe
+  // default from before consent was ever captured), and notify() reads it for marketing-class texts —
+  // so a customer who ticked the box at signup could still have the Friday last-call text silently
+  // suppressed, purely because a prefs row happened to exist. Ticking the box IS the marketing opt-in,
+  // so record it as one. They can still turn marketing texts off later in /app/manage without
+  // revoking consent.
+  if (smsOptIn) {
+    try {
+      await run(
+        env.DB,
+        `INSERT INTO notification_prefs (customer_id, sms_marketing, updated_at) VALUES (?, 1, ?)
+         ON CONFLICT(customer_id) DO UPDATE SET sms_marketing = 1, updated_at = excluded.updated_at`,
+        id, now,
+      );
+    } catch { /* non-fatal — consent flag is still recorded on the customer row */ }
+  }
+
   // Marketing attribution (Phase 1): first-touch UTMs captured client-side + the self-reported
   // "how did you hear about us?" answer. Best-effort — attribution must never fail a signup.
   try {

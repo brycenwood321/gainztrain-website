@@ -65,6 +65,16 @@ export async function onRequestPost(context) {
       await run(context.env.DB,
         `UPDATE customers SET sms_marketing_consent = 1, sms_consent_at = ?, updated_at = ? WHERE id = ?`,
         nowIso(), nowIso(), auth.customer.id);
+      // Keep consent and preference in step (same reason as register.js): sms_marketing defaults to 0,
+      // and notify() reads it for marketing-class texts, so consent alone would leave the Friday
+      // last-call suppressed. Only forced when the caller didn't set sms_marketing explicitly in this
+      // same request — an explicit choice always wins over this convenience default.
+      if (!('sms_marketing' in body)) {
+        v.sms_marketing = 1;
+        await run(context.env.DB,
+          `UPDATE notification_prefs SET sms_marketing = 1, updated_at = ? WHERE customer_id = ?`,
+          nowIso(), auth.customer.id);
+      }
     } else {
       await run(context.env.DB,
         `UPDATE customers SET sms_marketing_consent = 0, updated_at = ? WHERE id = ?`,

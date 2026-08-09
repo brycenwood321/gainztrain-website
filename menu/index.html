@@ -45,6 +45,15 @@
       color:var(--orange); font-size:1.25rem; font-weight:800; cursor:pointer; line-height:1; }
     .pick-btn:disabled { opacity:.35; cursor:default; }
     .pick-n { min-width:1.4rem; text-align:center; font-weight:800; font-size:1.05rem; }
+    /* Shown when the menu can't be ordered from — either the Saturday blackout or the gap before the
+       next week's menu goes live. Must always carry a working CTA; a closed menu page with no way
+       forward is a dead end for paid traffic. */
+    .menu-notice { max-width:640px; margin:1.1rem auto 0; padding:.95rem 1.1rem; border-radius:12px;
+      background:#fff6f1; border:1px solid #ffd9c4; color:#4a3f39; font-size:.92rem; line-height:1.55; text-align:left; }
+    .menu-notice b { color:#1a1614; }
+    .menu-notice-cta { display:inline-block; margin-top:.7rem; background:var(--orange,#ff6b35); color:#fff;
+      font-weight:800; text-decoration:none; padding:.6rem 1.1rem; border-radius:10px; font-size:.9rem; }
+    .menu-notice-cta:hover { filter:brightness(.94); }
     .cartbar { position:fixed; left:0; right:0; bottom:0; z-index:60; background:#141414; color:#fff;
       padding:.85rem 1.25rem; display:none; }
     .cartbar.show { display:block; }
@@ -226,11 +235,41 @@
 
         var wk = new Date(cur.week_of + 'T12:00:00');
         var wkStr = wk.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-        document.getElementById('weekPill').textContent = 'Week of ' + wkStr;
 
         // MEALS-FIRST FLOW: pick meals here → account + checkout on /start → picks auto-save in the app.
         // Picking is enabled only for the actually-orderable week outside the Saturday blackout.
         var pickable = cur.is_orderable !== false && !cur.ordering_closed;
+
+        // TWO DIFFERENT closed states, and conflating them is what made this page a silent dead end:
+        //   ordering_closed === true  → Saturday blackout; the new menu drops Sunday.
+        //   is_orderable === false    → the orderable week's menu isn't confirmed LIVE yet, so
+        //                               /api/menu/public is falling back to the last published week.
+        // Before 2026-08-09 the second case rendered no steppers, no cart bar and NO MESSAGE, while the
+        // how-it-works copy below still told visitors to "tap +" on buttons that weren't there, under a
+        // week pill naming a week already cooked and delivered. That window opens every Saturday at
+        // cutoff and stays open until the next menu goes live (historically 2-5 days) — and it is where
+        // the paid ad's "Start My First Week" CTA lands, via /fuel/.
+        // Rules: never show a stale week as if it were current, and never leave the page with no way on.
+        var stale = cur.is_orderable === false && !cur.ordering_closed;
+        document.getElementById('weekPill').textContent = stale
+          ? 'Last week’s menu · new menu drops soon'
+          : 'Week of ' + wkStr;
+
+        if (!pickable) {
+          // /start does NOT bounce back here when the menu isn't orderable (it only redirects to /menu
+          // for pick-less visitors when ordering is genuinely open), so this CTA can't loop — a visitor
+          // signs up count-first and picks meals in the app once the menu goes live.
+          var notice = document.createElement('div');
+          notice.className = 'menu-notice';
+          notice.innerHTML = (stale
+            ? '<b>Next week’s menu is being finalized.</b> Here’s last week’s, so you can see the kind of food we cook. ' +
+              'Start your plan now and pick your meals in the app the moment the new menu drops.'
+            : '<b>Ordering is closed for the weekend.</b> The new menu drops Sunday and ordering reopens with it. ' +
+              'Start your plan now and pick your meals as soon as it’s live.') +
+            '<a class="menu-notice-cta" href="/start/">Start my plan →</a>';
+          var pill = document.getElementById('weekPill');
+          pill.parentNode.insertBefore(notice, pill.nextSibling);
+        }
         var plans = [], MINM = 6, MAXM = 16;
         try {
           var pr = await fetch('/api/plans').then(function (r) { return r.json(); });
@@ -291,7 +330,9 @@
               '<button class="pick-btn" id="pm_' + m.position + '" aria-label="fewer">–</button>' +
               '<span class="pick-n" id="pn_' + m.position + '">0</span>' +
               '<button class="pick-btn" id="pp_' + m.position + '" aria-label="more">+</button></span></div>'
-            : (cur.ordering_closed ? '<div class="pick-row"><span class="pick-label">Ordering reopens Sunday with the new menu</span></div>' : '');
+            : '<div class="pick-row"><span class="pick-label">' +
+              (cur.ordering_closed ? 'Ordering reopens Sunday with the new menu' : 'New menu drops soon') +
+              '</span></div>';
           return '<div class="meal-card fade-up">' + img +
             '<div class="meal-card-body">' +
             '<p class="meal-card-name">' + esc(m.name) + up + '</p>' +

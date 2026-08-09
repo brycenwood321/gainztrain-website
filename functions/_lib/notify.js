@@ -3,7 +3,8 @@
 //      Stripe webhook retry that re-runs dispatch() can't double-send (see migrations/0007).
 //   2. Template rendering: pure (data)=>{subject,html,sms} functions — no GHL merge tags, so the old
 //      "(Insert billing link)" leak class can't recur.
-//   3. Channel fan-out: email always; SMS only when env.SMS_AUTH_ENABLED === 'true' (A2P gate).
+//   3. Channel fan-out: email always; SMS only for events in SMS_EVENTS, only to customers with
+//      recorded consent + a phone, and only when env.SMS_AUTH_ENABLED === 'true' (A2P master switch).
 //   4. Non-blocking by contract: callers should still try/catch, but notify() itself never throws on a
 //      comms failure — a hiccup must never break the underlying business action or fail a webhook.
 import { one, run, nowIso } from './db.js';
@@ -26,6 +27,35 @@ const PREF_CLASS = {
 };
 
 function appBase(env) { return (env && (env.APP_BASE_URL || env.GT_APP_BASE_URL)) || 'https://gainztrainprep.com'; }
+
+// ── SMS scope ── which events may ALSO go out as a text. Deliberately SHORT. Every template carries an
+// `sms` string, but a text interrupts in a way email doesn't, so one has to earn its place: money at
+// risk, or a deadline the customer can still act on. Everything else stays email-only.
+//
+// Set with Brycen 2026-08-09 when A2P cleared. Adding a key here is a real product decision, not a
+// tweak — at ~12 subscribers each addition is roughly +12 texts/week. The events deliberately left OUT
+// are the noisy ones: order_confirmed/order_updated fire every time a customer taps save (43 times in
+// the 30 days before launch), and receipts/menu drops/Wednesday reminders read fine as email.
+const SMS_EVENTS = new Set([
+  'payment_failed',         // card declined — the text that actually recovers money
+  'payment_failed_final',   // same moment, last stop before the meals stop
+  'order_locked',           // Saturday: "your N meals are locked and headed to prep"
+  'order_out_for_delivery', // Sunday logistics — they need to be home / know it's coming
+  'order_pickup_ready',     // Sunday logistics — pickup customers
+  'meal_reminder_final',    // Friday last call — the one marketing-class text, and the highest-leverage
+]);
+
+// A2P/TCPA gate. `customers.sms_marketing_consent` is the unchecked box on /start, and it is the ONLY
+// thing that authorizes a text. Deliberately re-read from D1 here instead of trusted off the passed-in
+// customer: notify() is called from 30+ places with hand-built objects that don't carry the column, and
+// a MISSING field must never read as consent. FAIL-CLOSED — any error, any doubt, no text.
+// A phone is required too; three migrated customers have consent-less accounts with no number at all.
+async function smsAuthorized(env, customerId) {
+  try {
+    const row = await one(env.DB, `SELECT phone, sms_marketing_consent FROM customers WHERE id = ?`, customerId);
+    return !!(row && Number(row.sms_marketing_consent) === 1 && row.phone);
+  } catch { return false; }
+}
 
 // Which bucket each event belongs to (drives the in-app feed icon + deep link).
 const CATEGORY = {
@@ -105,7 +135,14 @@ export async function notify(env, customer, eventKey, data = {}, opts = {}) {
     }
 
     const wantEmail = emailAllowed && (rendered.html || rendered.subject);
-    const wantSms = smsAllowed && rendered.sms && String(env.SMS_AUTH_ENABLED) === 'true';
+    // Four independent gates before a text goes out: the A2P master switch, the customer's own
+    // account/marketing opt-out, this event being in SMS_EVENTS, and recorded consent + a real phone.
+    // The consent lookup is last so it only costs a query on the handful of events that can text.
+    const wantSms = smsAllowed
+      && rendered.sms
+      && String(env.SMS_AUTH_ENABLED) === 'true'
+      && SMS_EVENTS.has(eventKey)
+      && (await smsAuthorized(env, customer.id));
 
     // Resolve the GHL contact once (lazy-create + persist) and reuse it for both channels — but only if
     // we're actually going to send something (an opted-out customer needs no contact lookup).

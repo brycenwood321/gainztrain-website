@@ -103,7 +103,10 @@ export const TEMPLATES = {
       note: 'If you did NOT do this, reply to this email right away so we can lock your account.',
       cta: { label: 'Go to your account', href: link(env, '/app/') },
     }),
-    sms: 'Gainz Train: your account password was just changed. If this wasn\'t you, reply STOP-no, reply to your email, or contact us right away.',
+    // NOTE: never put "reply STOP" wording in a template body — GHL appends its own
+    // "Reply STOP to unsubscribe." to every outbound SMS, so ours would double up, and telling a
+    // customer to reply STOP for a SECURITY issue would silently opt them out of all texting.
+    sms: 'Gainz Train: your account password was just changed. If this wasn\'t you, reply to your confirmation email or contact us right away.',
   }),
 
   paused: (d, env) => ({

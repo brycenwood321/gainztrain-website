@@ -10,6 +10,7 @@ import { createSession } from '../../_lib/auth.js';
 import { notify } from '../../_lib/notify.js';
 import { str, normEmail, toE164 } from '../../_lib/validate.js';
 import { rateLimit, clientIp } from '../../_lib/ratelimit.js';
+import { orderableWeek } from '../../_lib/menu.js';
 import { capiEvent } from '../../_lib/capi.js';
 
 export async function onRequestPost(context) {
@@ -118,7 +119,7 @@ export async function onRequestPost(context) {
     // future magic links can reach them). Non-blocking — a comms hiccup must never fail the signup.
     try {
       await notify(env, { id, email, first_name: firstName, last_name: lastName, phone, ghl_contact_id: null },
-        'welcome', { firstName, hasPassword: !!password });
+        'welcome', { firstName, hasPassword: !!password, firstDelivery: orderableWeek() });
     } catch { /* non-fatal */ }
     return ok({ customer: { id, email, first_name: firstName } }, { 'Set-Cookie': cookie });
   } catch {

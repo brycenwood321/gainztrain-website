@@ -19,7 +19,7 @@ import { notify } from '../_lib/notify.js';
 import { ownerNotify } from '../_lib/owner_notify.js';
 import { capiEvent } from '../_lib/capi.js';
 import { stripe } from '../_lib/stripe.js';
-import { moveToBillingDay, anchorAfterPaidCycle } from '../_lib/billing_day.js';
+import { moveToBillingDay, anchorAfterPaidCycle, deliveryBoughtBy } from '../_lib/billing_day.js';
 
 const SIG_TOLERANCE_SECONDS = 300; // reject events whose timestamp is >5 min skewed
 
@@ -227,7 +227,15 @@ async function safeNotifyBilling(env, event) {
         const cust = await ensureCustomer(env, obj.customer);
         if (!cust) return;
         const discount = (obj.total_discount_amounts || []).reduce((s, d) => s + (d.amount || 0), 0);
-        const data = { amount, discount, invoiceUrl: obj.hosted_invoice_url || null };
+        // Tell them which Sunday they actually bought. deliveryBoughtBy() is the SAME function the
+        // billing anchor uses, so the date in the receipt cannot drift from the week they were charged
+        // for — a weekend signup is told "August 16", not "this week".
+        const paidAt = new Date((obj.created || Math.floor(Date.now() / 1000)) * 1000);
+        const data = {
+          amount, discount,
+          invoiceUrl: obj.hosted_invoice_url || null,
+          firstDelivery: deliveryBoughtBy(paidAt, reason),
+        };
         // Fire only on invoice.paid (NOT the payment_succeeded twin) and key on the invoice id.
         if (reason === 'subscription_create') {
           await notify(env, cust, 'order_receipt_first', data, { dedupKey: `receipt_first:${obj.id}` });

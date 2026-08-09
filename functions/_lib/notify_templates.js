@@ -89,6 +89,7 @@ export const TEMPLATES = {
     html: layout(env, {
       heading: `Welcome to Gainz Train${d.firstName ? ', ' + escapeHtml(d.firstName) : ''}! 💪`,
       intro: `Your account is ready. Log in anytime at <a href="${link(env, '/app/')}">${appBase(env).replace('https://', '')}/app</a> with this email${d.hasPassword ? ' and your password' : ' — just choose "Email me a link" to get in'}.`,
+      rows: d.firstDelivery ? [['Your first delivery', prettyDate(d.firstDelivery)]] : [],
       note: 'If you ever forget your password, choose "Email me a link" on the login page.',
       cta: { label: 'Go to your account', href: link(env, '/app/') },
     }),
@@ -321,6 +322,11 @@ export const TEMPLATES = {
   }),
 
   // ----- Billing, fired off the Stripe webhook (Step 2) -----
+  // ⚠️ The "next step" line used to read "pick your meals for THIS week before the Friday cutoff".
+  // 45% of signups land on a Saturday or Sunday, AFTER that week's cutoff and lock — for them the
+  // sentence was wrong on both counts, and it read as "your food arrives tomorrow". One Saturday
+  // signup drove to the kitchen the next morning expecting meals that were eight days out. The first
+  // delivery date is now stated outright, and the instruction adapts to which week they're actually on.
   order_receipt_first: (d, env) => ({
     subject: `You\'re on the Gainz Train — order confirmed (${money(d.amount)})`,
     html: layout(env, {
@@ -329,11 +335,16 @@ export const TEMPLATES = {
       rows: [
         ['Charged today', money(d.amount)],
         d.discount ? ['You saved', money(d.discount)] : null,
+        d.firstDelivery ? ['Your first delivery', prettyDate(d.firstDelivery)] : null,
       ].filter(Boolean),
-      note: 'Next step: pick your meals for this week before the Friday cutoff. We\'ll email you when each new menu drops.',
+      note: d.firstDelivery
+        ? `Your first delivery is <b>${prettyDate(d.firstDelivery)}</b>. Pick your meals for that week any time before the Friday midnight cutoff before it — if you don't, we'll choose a balanced set for you so you never miss a week.`
+        : 'Next step: pick your meals before the Friday midnight cutoff. We\'ll email you when each new menu drops.',
       cta: { label: 'Pick your meals', href: link(env, '/app/menu/') },
     }),
-    sms: `Gainz Train: you\'re in! Charged ${money(d.amount)}. Pick your meals before Friday: ` + link(env, '/app/menu/'),
+    sms: `Gainz Train: you\'re in! Charged ${money(d.amount)}.` +
+      (d.firstDelivery ? ` First delivery ${prettyDate(d.firstDelivery)}.` : '') +
+      ` Pick your meals: ` + link(env, '/app/menu/'),
   }),
 
   renewal_receipt: (d, env) => ({

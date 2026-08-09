@@ -156,6 +156,10 @@
         <label for="code" style="margin-top:1rem;">Promo code (optional)</label>
         <input id="code" type="text" autocapitalize="characters" placeholder="e.g. FOUNDER25" />
         <div id="codeMsg" class="zipmsg"></div>
+        <!-- Populated from /api/menu/public -> orderable_week. Sits ABOVE the subscription note because
+             it is the single fact weekend signups get wrong: 45% of signups land after the Saturday
+             lock, and nothing anywhere used to tell them their food was a week out. -->
+        <p class="note hidden" id="firstDeliveryNote" style="margin-top:.85rem;"></p>
         <p class="note" style="margin-top:.85rem;">🔒 This is a <b>weekly subscription</b>, billed each week. Pause or cancel anytime.</p>
         <p class="note" style="margin-top:.6rem;"><b>The Full Week Guarantee:</b> eat every meal in your first week. If it wasn't worth it, we refund you and you keep the food. First order only. Tell us within 7 days of your first delivery. <a href="/terms-of-service/#guarantee">Full terms</a>.</p>
         <div id="msg" class="msg"></div>
@@ -394,6 +398,22 @@
           }catch(e){}
         }
       }
+      // Say out loud which Sunday they'll first be fed, BEFORE they pay. Same date the receipt will
+      // quote, because both come from the orderable week. Best-effort: never block signup on it.
+      try{
+        const pub=await api('/api/menu/public');
+        const wk=pub.status===200&&pub.body&&pub.body.orderable_week;
+        if(wk){
+          const d=new Date(wk+'T12:00:00');
+          const pretty=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+          const soon=(new Date(wk+'T12:00:00')-new Date())<1000*60*60*72;
+          const el=$('firstDeliveryNote');
+          el.innerHTML='📦 Your first delivery is <b>'+pretty+'</b>'+
+            (soon?'.':' — this week’s orders are already locked for prep, so you start with the next one.');
+          el.classList.remove('hidden');
+        }
+      }catch(e){/* non-fatal */}
+
       if(me.status===200&&me.body.ok){
         loggedIn=true;
         $('acctFields').classList.add('hidden');

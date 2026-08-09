@@ -119,8 +119,9 @@
     .lbl-meal { font-size: 10px; font-weight: 600; color: #333; line-height: 1.15; margin-top: 1mm; }
     .lbl-macros { display: flex; gap: 3.5mm; font-size: 11px; font-weight: 700; color: #000; margin-top: 1.5mm; }
     .lbl-macros b { font-weight: 900; }
-    /* Let the full GT code + date wrap onto the lines beneath instead of getting cut off. */
-    .lbl-id { font-size: 7px; color: #b3b3b3; font-family: monospace; margin-top: 1mm; line-height: 1.25; word-break: break-all; }
+    /* Prepped-on date. Deliberately IDENTICAL to .lbl-meal (size/weight/colour/font) — the old style was
+       7px light-grey monospace, which a thermal printer dithers into something barely readable. */
+    .lbl-date { font-size: 10px; font-weight: 600; color: #333; line-height: 1.15; margin-top: 1mm; }
 
     /* ── PRINT STYLES ── */
     @media print {
@@ -331,7 +332,9 @@
               <span>C <b>${label.macros.carbs}</b>g</span>
               <span>V <b>${label.macros.veggies}</b>g</span>
             </div>
-            <div class="lbl-id">${label.mealId} · ${label.preppedOn}</div>
+            <!-- The GT meal ID is no longer PRINTED (the QR scanner replaced reading it by eye), but it is
+                 still encoded in the QR below, which is what Assembly decodes. -->
+            <div class="lbl-date">${label.preppedOn}</div>
           </div>
         </div>
       `;

@@ -114,7 +114,7 @@ export async function onRequestPost(context) {
           `${sub.id}:${weekOf}`, sub.id, sub.customer_id, weekOf, pickedTotal, upRow?.up || 0, sub.delivery_method || 'pickup', now, now, now);
         await billUpcharge(env, sub, weekOf, upRow?.up || 0);
         const lockedMeals = picked.map((p) => ({ name: p.meal_name, qty: p.qty })).filter((m) => m.qty > 0);
-        await notify(env, cust, 'order_locked', { meals: lockedMeals, total: pickedTotal, weekOf },
+        await notify(env, cust, 'order_locked', { meals: lockedMeals, total: pickedTotal, weekOf, method: sub.delivery_method || 'pickup' },
           { dedupKey: `order_locked:${sub.id}:${weekOf}` });
         summary.locked_as_picked++;
         continue;
@@ -146,7 +146,7 @@ export async function onRequestPost(context) {
         now, `subscription:${sub.id}`, JSON.stringify({ week_of: weekOf, source }));
       const filledMeals = pickList(menu, qtyByPos);
       const filledTotal = filledMeals.reduce((s, m) => s + m.qty, 0);
-      await notify(env, cust, 'order_autofilled', { meals: filledMeals, total: filledTotal, weekOf, source },
+      await notify(env, cust, 'order_autofilled', { meals: filledMeals, total: filledTotal, weekOf, source, method: sub.delivery_method || 'pickup' },
         { dedupKey: `order_autofilled:${sub.id}:${weekOf}` });
       summary.autofilled++;
     } catch (e) {

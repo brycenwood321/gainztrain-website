@@ -6,6 +6,8 @@
 // `sms` is OPTIONAL. notify() only sends the SMS leg when env.SMS_AUTH_ENABLED === 'true' (A2P gate),
 // so leaving sms set is safe — it just queues until A2P clears.
 
+import { PICKUP, pickupSentence } from './pickup.js';
+
 const ORANGE = '#ff6b35';
 
 // ── shared helpers ───────────────────────────────────────────────────────────
@@ -223,7 +225,8 @@ export const TEMPLATES = {
       intro: `Ordering for the week of ${prettyDate(d.weekOf)} closes tonight at the Friday cutoff. Choose your ${d.mealsPerWeek} meals now or we\'ll repeat last week for you.`,
       cta: { label: 'Pick my meals', href: link(env, '/app/menu/') },
     }),
-    sms: `Gainz Train: LAST CALL — pick your meals before tonight\'s cutoff: ${link(env, '/app/menu/')}`,
+    // Plain punctuation only: an em dash here forced the whole text to UCS-2 and billed 2 segments.
+    sms: `Gainz Train: LAST CALL, pick your meals before tonight\'s midnight cutoff: ${link(env, '/app/menu/')}`,
   }),
 
   menu_posted: (d, env) => ({
@@ -261,14 +264,23 @@ export const TEMPLATES = {
     sms: `Gainz Train: your order for ${prettyDate(d.weekOf)} is updated — ${mealListSms(d.meals)}. Change again before Friday: ` + link(env, '/app/menu/'),
   }),
 
+  // Fires Saturday, the day before delivery — which makes it the message the site has always promised
+  // would carry "the pickup address and time window the day before". It now actually does. Pickup
+  // customers are the majority (7 of 11), and before this nothing we sent contained an address at all.
+  // The SMS deliberately does NOT list every meal: at 14 meals that ran to several billed segments and
+  // buried the one thing they need, which is where and when to show up.
   order_locked: (d, env) => ({
     subject: `Your meals are locked in for ${prettyDate(d.weekOf)}`,
     html: layout(env, {
       heading: 'Locked in — we\'re prepping these 🔥',
       intro: `Ordering for the week of ${prettyDate(d.weekOf)} has closed and your order is locked for prep:`,
-      note: mealListHtml(d.meals) + `<p style="font-size:13px;color:#7a7270">We\'ll let you know when they\'re on the way.</p>`,
+      note: mealListHtml(d.meals) +
+        (d.method === 'pickup'
+          ? `<p style="font-size:14px;color:#1a1614;background:#fff1ea;padding:10px 12px;border-radius:8px">🥡 ${pickupSentence()}</p>`
+          : `<p style="font-size:13px;color:#7a7270">We\'ll let you know when they\'re on the way.</p>`),
     }),
-    sms: `Gainz Train: your ${d.total} meals for ${prettyDate(d.weekOf)} are locked in and headed to prep. ${mealListSms(d.meals)}`,
+    sms: `Gainz Train: your ${d.total} meals for ${prettyDate(d.weekOf)} are locked in. ` +
+      (d.method === 'pickup' ? PICKUP.smsLine : 'We\'ll text you when they\'re on the way.'),
   }),
 
   order_autofilled: (d, env) => ({
@@ -276,7 +288,13 @@ export const TEMPLATES = {
     html: layout(env, {
       heading: 'We picked for you this week',
       intro: `You didn\'t choose your meals before the Friday cutoff for the week of ${prettyDate(d.weekOf)}, so we ${d.source === 'repeat_last_week' ? 'repeated last week\'s order' : 'put together a balanced set'} so you don\'t miss a week:`,
-      note: mealListHtml(d.meals) + `<p style="font-size:13px;color:#7a7270">Want different meals next week? Just pick them before Friday and we\'ll use your choices.</p>`,
+      // Also a Saturday message, so pickup customers need the same where/when as order_locked —
+      // these are the people LEAST engaged with the app, so they're the likeliest to just turn up.
+      note: mealListHtml(d.meals) +
+        (d.method === 'pickup'
+          ? `<p style="font-size:14px;color:#1a1614;background:#fff1ea;padding:10px 12px;border-radius:8px">🥡 ${pickupSentence()}</p>`
+          : '') +
+        `<p style="font-size:13px;color:#7a7270">Want different meals next week? Just pick them before Friday and we\'ll use your choices.</p>`,
       cta: { label: 'Set next week\'s meals', href: link(env, '/app/menu/') },
     }),
     sms: `Gainz Train: you didn\'t pick by the cutoff so we chose this week for you — ${mealListSms(d.meals)}. Pick next week anytime: ` + link(env, '/app/menu/'),
@@ -312,13 +330,17 @@ export const TEMPLATES = {
     sms: `Gainz Train: your meals have been delivered. Enjoy! 💪`,
   }),
 
+  // Was "ready at the Orem kitchen. Swing by anytime during pickup hours" — no address, no hours, and
+  // "anytime" against a kitchen that is only staffed for a couple of hours. Both are now stated.
   order_pickup_ready: (d, env) => ({
-    subject: 'Your Gainz Train meals are ready for pickup',
+    subject: `Ready for pickup — ${PICKUP.windowLabel} today`,
     html: layout(env, {
       heading: 'Ready for pickup 🥡',
-      intro: `Your meals for the week of ${prettyDate(d.weekOf)} are ready at the Orem kitchen. Swing by anytime during pickup hours.`,
+      intro: `Your meals for the week of ${prettyDate(d.weekOf)} are packed and waiting. ${pickupSentence()}`,
+      rows: [['Where', PICKUP.addressLine], ['When', `Today, ${PICKUP.windowLabel}`]],
+      note: 'Can\'t make the window? Reply to this email and we\'ll sort something out.',
     }),
-    sms: `Gainz Train: your meals are ready for pickup at the Orem kitchen!`,
+    sms: `Gainz Train: your meals are ready! ${PICKUP.smsLine}`,
   }),
 
   // ----- Billing, fired off the Stripe webhook (Step 2) -----

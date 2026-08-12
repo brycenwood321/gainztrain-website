@@ -6,6 +6,7 @@ import { ok } from '../../_lib/respond.js';
 import { requireAdmin } from '../../_lib/admin.js';
 import { one, all, addDaysIso } from '../../_lib/db.js';
 import { upcomingSunday, orderableWeek } from '../../_lib/menu.js';
+import { weeklyListCents } from '../../_lib/plans.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
 
 const ACTIVE = ['active', 'trialing', 'past_due'];
@@ -31,8 +32,10 @@ export async function onRequestPost(context) {
     `SELECT COUNT(*) AS n FROM subscriptions WHERE status IN (${ACTIVE.map(() => '?').join(',')})`, ...ACTIVE);
   const prod = await one(env.DB,
     `SELECT COUNT(*) AS orders, COALESCE(SUM(total_meals),0) AS meals FROM orders WHERE week_of = ? AND status = 'locked'`, week);
-  const wrr = await one(env.DB,
-    `SELECT COALESCE(SUM(meals_per_week * tier_price_cents),0) AS cents FROM subscriptions WHERE status IN (${BILLING.map(() => '?').join(',')})`, ...BILLING);
+  // tier_price_cents is NULL on almost every sub (see weeklyListCents) — derive from the plan bands.
+  const wrrRows = await all(env.DB,
+    `SELECT meals_per_week, tier_price_cents FROM subscriptions WHERE status IN (${BILLING.map(() => '?').join(',')})`, ...BILLING);
+  const wrrCents = weeklyListCents(wrrRows);
   const rev30 = await one(env.DB,
     `SELECT COALESCE(SUM(amount_paid_cents),0) AS cents FROM invoices WHERE status = 'paid' AND created_at >= ?`, addDaysIso(-30));
   const refunds30 = await one(env.DB,
@@ -55,7 +58,7 @@ export async function onRequestPost(context) {
   lines.push('—');
   lines.push(`Active subscriptions: ${activeCount?.n || 0}`);
   lines.push(`This week locked: ${prod?.orders || 0} orders / ${prod?.meals || 0} meals (${week})`);
-  lines.push(`Weekly recurring (list): ${money(wrr?.cents || 0)}`);
+  lines.push(`Weekly recurring (list): ${money(wrrCents)}`);
   lines.push(`Net revenue 30d: ${money((rev30?.cents || 0) + (refunds30?.cents || 0))}`);
   lines.push(`Health: ${healthOk ? 'all clear ✅' : `⚠️ ${failed} failed comms, ${stuck} stuck webhooks`}`);
 

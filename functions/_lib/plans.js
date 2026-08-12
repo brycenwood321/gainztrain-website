@@ -19,6 +19,26 @@ export function tierForMeals(n) {
   return TIERS.find((t) => n >= t.min && n <= t.max) || null;
 }
 
+// Weekly LIST value (pre-discount) of a set of subscription rows, in cents.
+//
+// ⚠️ Do NOT compute this as SUM(meals_per_week * tier_price_cents) in SQL, which is what the owner
+// digest and the ops Overview both did until 2026-08-12. `tier_price_cents` is NULL for almost every
+// subscription: _lib/mirror.js `deriveMealTier` returns `unit: null` whenever the Stripe subscription
+// carries `metadata.meals_per_week` — which every app checkout does — so the column is only ever
+// written as a side effect of a tier CHANGE. Live at the time of the fix: 8 of 9 active subs NULL, so
+// the digest Brycen reads every morning reported $73.50/week against a real figure near $650.
+//
+// The plan bands are the authority; the mirrored column is only a fallback for a legacy/custom price
+// that does not fit a band. Same derivation the customer-facing display already uses in api/me.js.
+export function weeklyListCents(rows) {
+  return (rows || []).reduce((sum, r) => {
+    const meals = Number(r.meals_per_week) || 0;
+    if (!meals) return sum;
+    const perMeal = tierForMeals(meals)?.perMealCents ?? Number(r.tier_price_cents) ?? 0;
+    return sum + meals * perMeal;
+  }, 0);
+}
+
 // Public plan list for the pick-a-plan page (no Stripe ids leaked).
 export function publicPlans() {
   return TIERS.map((t) => ({ key: t.key, name: t.name, min: t.min, max: t.max, per_meal_cents: t.perMealCents }));

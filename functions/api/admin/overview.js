@@ -5,6 +5,7 @@ import { ok, fail } from '../../_lib/respond.js';
 import { requireOwner } from '../../_lib/admin.js';
 import { one, all, addDaysIso } from '../../_lib/db.js';
 import { upcomingSunday } from '../../_lib/menu.js';
+import { weeklyListCents } from '../../_lib/plans.js';
 
 const ACTIVE = ['active', 'trialing', 'past_due']; // headcount/production set (past_due still gets meals)
 const BILLING = ['active', 'trialing'];            // revenue set — past_due isn't being collected
@@ -33,9 +34,10 @@ export async function onRequestGet(context) {
 
   // Weekly LIST price (pre-discount, billing set only). Coupons aren't applied here — labeled as such.
   const inBilling = BILLING.map(() => '?').join(',');
-  const wrr = await one(env.DB,
-    `SELECT COALESCE(SUM(meals_per_week * tier_price_cents),0) AS cents
-       FROM subscriptions WHERE status IN (${inBilling})`, ...BILLING);
+  // tier_price_cents is NULL on almost every sub (see weeklyListCents) — derive from the plan bands.
+  const wrrRows = await all(env.DB,
+    `SELECT meals_per_week, tier_price_cents FROM subscriptions WHERE status IN (${inBilling})`, ...BILLING);
+  const wrrCents = weeklyListCents(wrrRows);
 
   // NET 30-day revenue = paid invoices MINUS refunds. Refund rows are stored NEGATIVE (mirror.js), so
   // adding them nets correctly. Without this the dashboard silently overstates revenue.
@@ -56,7 +58,7 @@ export async function onRequestGet(context) {
     subscriptions: { active: activeCount, by_status: byStatus },
     production: { orders: prod?.orders || 0, meals: prod?.meals || 0, upcharge_cents: prod?.upcharge_cents || 0 },
     delivery_split: split,
-    weekly_list_price_cents: wrr?.cents || 0, // pre-discount list price (billing set)
+    weekly_list_price_cents: wrrCents, // pre-discount list price (billing set)
     revenue_30d_cents: (rev30?.cents || 0) + (refunds30?.cents || 0), // NET of refunds
     refunds_30d_cents: refunds30?.cents || 0,
     health: { failed_comms_24h: failedComms?.n || 0, stuck_webhooks: stuckWebhooks?.n || 0 },

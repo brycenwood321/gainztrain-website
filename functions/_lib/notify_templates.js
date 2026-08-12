@@ -112,11 +112,18 @@ export const TEMPLATES = {
     sms: 'Gainz Train: your account password was just changed. If this wasn\'t you, reply to your confirmation email or contact us right away.',
   }),
 
+  // `lockedWeek` is set only when the customer paused AFTER their order was locked into the cook
+  // (the Saturday 07:30Z lock → Sunday delivery window). Saying nothing there was how someone could
+  // pause, still receive a week of food, and be surprised by it — or not receive it and be surprised
+  // by that. Either way the silence was the problem.
   paused: (d, env) => ({
     subject: 'Your Gainz Train meals are paused',
     html: layout(env, {
       heading: 'Your meals are paused',
       intro: 'Done — your subscription is paused. You won\'t be charged and we won\'t cook for you until you resume. Your plan and meal preferences are saved exactly as they were.',
+      note: d.lockedWeek
+        ? `<p style="font-size:14px;color:#1a1614;background:#fff1ea;padding:10px 12px;border-radius:8px">One thing: your meals for <b>${prettyDate(d.lockedWeek)}</b> were already locked in and prepped before you paused, so that delivery is still coming. We'll be in touch about it — the pause takes effect from the week after.</p>`
+        : undefined,
       cta: { label: 'Resume anytime', href: link(env, '/app/manage/') },
     }),
     sms: 'Gainz Train: your meals are paused — no charges until you resume. Resume anytime at ' + link(env, '/app/manage/'),

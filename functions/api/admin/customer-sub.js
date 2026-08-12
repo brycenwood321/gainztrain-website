@@ -10,9 +10,10 @@ import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
 import { currentSub, findMealItem } from '../../_lib/account.js';
 import { tierForMeals, ensureStripePrice, MIN_MEALS, MAX_MEALS } from '../../_lib/plans.js';
-import { orderableWeek, isLocked } from '../../_lib/menu.js';
+import { orderableWeek, isLocked, upcomingSunday } from '../../_lib/menu.js';
 import { notify } from '../../_lib/notify.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
+import { moveToBillingDay, anchorForNextDelivery } from '../../_lib/billing_day.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -40,26 +41,79 @@ export async function onRequestPost(context) {
         const sub = await currentSub(env, customerId, ['active', 'trialing', 'past_due']);
         if (!sub || !sub.stripe_subscription_id) return fail(400, 'no_active_sub', 'No active plan to pause.');
         if (sub.status === 'paused') return ok({ status: 'paused' });
+        // Same lock-awareness as account/pause.js — see the long comment there. pause_collection
+        // 'void' cancels the pending invoice, so pausing between the Saturday lock and Saturday
+        // billing gives away a week of food that is already in the cook.
+        const lockedOrder = await one(env.DB,
+          `SELECT week_of, total_meals FROM orders WHERE customer_id = ? AND week_of = ? AND status = 'locked'`,
+          customerId, upcomingSunday());
         await stripe(env, 'POST', `subscriptions/${sub.stripe_subscription_id}`, { pause_collection: { behavior: 'void' } });
         const now = nowIso();
         await run(env.DB, `UPDATE subscriptions SET status='paused', paused_at=?, updated_at=? WHERE id=?`, now, now, sub.id);
-        try { await notify(env, customer, 'paused'); } catch { /* non-fatal */ }
-        try { await ownerNotify(env, 'owner_paused', tag(`${who}'s plan PAUSED (${sub.meals_per_week} meals/wk)`), { entity: `customer:${customerId}` }); } catch { /* non-fatal */ }
-        return ok({ status: 'paused' });
+        try { await notify(env, customer, 'paused', { lockedWeek: lockedOrder?.week_of || null, lockedMeals: lockedOrder?.total_meals || 0 }); } catch { /* non-fatal */ }
+        try {
+          await ownerNotify(env, 'owner_paused',
+            tag(`${who}'s plan PAUSED (${sub.meals_per_week} meals/wk)`)
+              + (lockedOrder
+                ? ` — ⚠️ PAUSED AFTER THE LOCK: ${lockedOrder.total_meals} meals for ${lockedOrder.week_of} are already in the cook and pausing VOIDS that invoice. Collect for this week by hand.`
+                : ''),
+            { entity: `customer:${customerId}` });
+        } catch { /* non-fatal */ }
+        return ok({ status: 'paused', week_already_locked: !!lockedOrder, locked_week: lockedOrder?.week_of || null });
       }
 
       // ── RESUME (un-pause) ──
+      // ⚠️ THIS MUST STAY IN STEP WITH functions/api/account/resume.js — see the long comment there.
+      // Until 2026-08-12 this twin cleared only `pause_collection`, so the Luis Soto failure was
+      // fully reproducible through the ops dashboard even after the customer-facing path was fixed:
+      // a queued cancellation stayed armed, and the re-anchor that MOVES the period end would have
+      // rescheduled that cancellation onto the billing Saturday. It also never re-anchored, so a
+      // phone-in customer resumed by staff came back on their pre-pause weekday, permanently off the
+      // Saturday cycle. Phone-in customers are exactly the ones routed through here.
       case 'resume': {
         const sub = await currentSub(env, customerId, ['paused']);
         if (!sub || !sub.stripe_subscription_id) return fail(400, 'no_paused_sub', 'No paused plan to resume.');
-        await stripe(env, 'POST', `subscriptions/${sub.stripe_subscription_id}`, { pause_collection: '' });
-        const live = await stripe(env, 'GET', `subscriptions/${sub.stripe_subscription_id}`);
+
+        // Pause and cancel are INDEPENDENT Stripe flags. Resuming means "keep sending me meals", so
+        // a queued cancellation is called off — never silently: the customer gets the 'reactivated'
+        // notice and the owner alert names it, so a mistaken resume is visible and objectable.
+        const before = await stripe(env, 'GET', `subscriptions/${sub.stripe_subscription_id}`);
+        const clearedPendingCancel = before?.cancel_at_period_end === true;
+
+        await stripe(env, 'POST', `subscriptions/${sub.stripe_subscription_id}`, {
+          pause_collection: '',
+          ...(clearedPendingCancel ? { cancel_at_period_end: false } : {}),
+        });
+        let live = await stripe(env, 'GET', `subscriptions/${sub.stripe_subscription_id}`);
+
+        // Bring them back onto the SATURDAY billing day; a paused sub keeps its pre-pause anchor.
+        // Non-fatal — a Stripe hiccup must not block the resume (rebill-anchor can re-align later).
+        try {
+          const moved = await moveToBillingDay(env, sub.stripe_subscription_id, anchorForNextDelivery());
+          if (moved.applied) live = await stripe(env, 'GET', `subscriptions/${sub.stripe_subscription_id}`);
+        } catch { /* non-fatal */ }
+
         const status = live?.status === 'active' ? 'active' : (live?.status || 'active');
         const now = nowIso();
-        await run(env.DB, `UPDATE subscriptions SET status=?, paused_at=NULL, updated_at=? WHERE id=?`, status, now, sub.id);
+        // current_period_end lives on the subscription ITEMS; the flat field can be null with no error.
+        const periodEnd = live?.items?.data?.[0]?.current_period_end || live?.current_period_end;
+        await run(env.DB,
+          `UPDATE subscriptions SET status=?, paused_at=NULL, cancel_at_period_end=?, current_period_end=?, updated_at=? WHERE id=?`,
+          status,
+          clearedPendingCancel ? 0 : (sub.cancel_at_period_end || 0),
+          periodEnd ? new Date(periodEnd * 1000).toISOString() : sub.current_period_end,
+          now, sub.id);
         try { await notify(env, customer, 'resumed'); } catch { /* non-fatal */ }
-        try { await ownerNotify(env, 'owner_resumed', tag(`${who}'s plan RESUMED (${sub.meals_per_week} meals/wk)`), { entity: `customer:${customerId}` }); } catch { /* non-fatal */ }
-        return ok({ status });
+        if (clearedPendingCancel) {
+          try { await notify(env, customer, 'reactivated'); } catch { /* non-fatal */ }
+        }
+        try {
+          await ownerNotify(env, 'owner_resumed',
+            tag(`${who}'s plan RESUMED (${sub.meals_per_week} meals/wk)`)
+              + (clearedPendingCancel ? ' — this also CALLED OFF a pending cancellation, so they bill again on their next Saturday.' : ''),
+            { entity: `customer:${customerId}` });
+        } catch { /* non-fatal */ }
+        return ok({ status, cancellation_cleared: clearedPendingCancel });
       }
 
       // ── CANCEL / UNCANCEL (at period end; keeps meals through the paid period) ──

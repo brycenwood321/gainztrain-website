@@ -265,8 +265,14 @@ async function safeNotifyBilling(env, event) {
         if (obj.status !== 'unpaid') return;
         const cust = await ensureCustomer(env, obj.customer);
         if (!cust) return;
+        // `obj` is a SUBSCRIPTION here, and current_period_end has relocated onto its ITEMS — read
+        // flat it is always undefined, so the key degraded to `unpaid:<sub_id>:` and this email could
+        // fire only ONCE per subscription for all time. That directly contradicts the intent stated
+        // in the comment above ("keyed per billing period so a later cycle can re-fire"): a customer
+        // who goes unpaid, fixes their card, and lapses again months later would get no final notice.
+        const periodEnd = obj.items?.data?.[0]?.current_period_end || obj.current_period_end || '';
         await notify(env, cust, 'payment_failed_final', { invoiceUrl: null },
-          { dedupKey: `unpaid:${obj.id}:${obj.current_period_end || ''}` });
+          { dedupKey: `unpaid:${obj.id}:${periodEnd}` });
         break;
       }
       case 'charge.refunded': {
@@ -300,7 +306,18 @@ async function safeNotifyBilling(env, event) {
         const when = obj.next_payment_attempt
           ? new Date(obj.next_payment_attempt * 1000).toISOString()
           : (obj.period_end ? new Date(obj.period_end * 1000).toISOString() : null);
-        await notify(env, cust, 'renewal_upcoming', { amount, when }, { dedupKey: `upcoming:${obj.subscription}:${obj.period_end || ''}` });
+        // ⚠️ dedupKey MUST be scoped to the customer. It used to read
+        // `upcoming:${obj.subscription}:${obj.period_end}` — two compounding faults: `obj.subscription`
+        // is one of the relocated flat fields (the whole reason invoiceSubscriptionId() exists, used
+        // at lines 126/145), so it rendered the literal string "undefined"; and once every sub moved
+        // to the same Saturday anchor on 2026-08-03 they all shared one `period_end`. The key
+        // collapsed to ONE per week for the entire roster, and comms_log.dedup_key is UNIQUE, so
+        // every customer after the first was silently swallowed as {ok:true, deduped:true}.
+        // Live evidence before the fix: `upcoming:undefined:1786806000`, 1 customer, while 12 billed.
+        // This is the only warning before the Saturday charge — the thing that lets a failing card
+        // get fixed in time — so total suppression was a money bug, not just a comms one.
+        await notify(env, cust, 'renewal_upcoming', { amount, when },
+          { dedupKey: `upcoming:${cust.id}:${invoiceSubscriptionId(obj) || 'nosub'}:${obj.period_end || ''}` });
         break;
       }
       case 'customer.source.expiring': {

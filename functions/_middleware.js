@@ -15,8 +15,15 @@ const BLOCKED_PATHS = [
 
 // Legacy GHL-funnel endpoints that MUTATE Stripe billing — only ever called server-to-server by GHL,
 // never by a browser. Require the admin token so an anonymous attacker can't sabotage a customer's
-// billing. (get-subscription + submit-meals are still client-called by the old menu picker, so they're
-// handled separately during cutover.)
+// billing.
+//
+// The two that used to be exempted here — get-subscription and submit-meals — were DELETED 2026-08-12
+// along with /menu-selection/, the old picker that called them (Phase F of the cutover; no customer
+// had been on that funnel since 2026-06-09, and it had 0 recorded pageviews). They were the last
+// unauthenticated surfaces in the codebase: submit-meals took a POST with nothing but an email and
+// wrote meal-count fields to that person's CRM record, then applied a tag that triggers a workflow —
+// no auth, no rate limit, usable as a mail amplifier. get-subscription answered "is this email a
+// customer, and what's their name" to anyone who asked. Do not reintroduce either.
 const ADMIN_ONLY = [
   /^\/api\/assign-delivery-zone\/?$/i,
   /^\/api\/switch-to-pickup\/?$/i,

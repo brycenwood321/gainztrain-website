@@ -2442,20 +2442,39 @@
 
   <script>
     // ── WEEK STRING (shared with index.html via localStorage) ──
+    // The delivery Sunday this device is working on, derived from the date. On Sunday itself this is
+    // TODAY (0 days), not next Sunday — so packaging + scan data holds all day Sunday until Mon 00:00
+    // local. Do NOT add `|| 7`: that rolled the week forward on Sunday morning and orphaned the day's
+    // prep data. Same rule pullOrders() uses, so the two can never disagree.
+    function computeWeekStr(now) {
+      const today = now || new Date();
+      const daysUntilSunday = (7 - today.getDay()) % 7;
+      const sunday = new Date(today);
+      sunday.setDate(today.getDate() + daysUntilSunday);
+      return `${sunday.getFullYear()}${String(sunday.getMonth()+1).padStart(2,"0")}${String(sunday.getDate()).padStart(2,"0")}`;
+    }
+
+    // ⚠️ THIS USED TO CACHE FOREVER AND IT CORRUPTED REAL DATA.
+    // It read localStorage.gainztrain_week and only computed a value when the key was ABSENT — and the
+    // only writer was the "Pull Orders" button. So a device that pulled once kept that week
+    // indefinitely: it rendered last week's picks, and `normalizeMealIds()` regenerated meal IDs from
+    // the stale week, printing labels that would not scan on a correctly-dated device.
+    //
+    // Proven in production: the Aug 16 menu was built on a device still holding week 20260809, so the
+    // draft for Aug 16 was written to the ops_kv key `menu_week_20260809` — over the PREVIOUS week's
+    // draft. A device computing the week correctly then finds no `menu_week_20260816` at all and the
+    // Ingredients tab renders empty on prep morning.
+    //
+    // Now the DATE is authoritative and localStorage is only a mirror kept in sync for the other
+    // readers (app/ops/meal-labels.html reads the same key independently). A deliberate override is
+    // still possible for looking at a past week, but it must be opted into explicitly — a stale cache
+    // must never silently masquerade as one.
     function getWeekStr() {
-      let w = localStorage.getItem("gainztrain_week");
-      if (!w) {
-        const today = new Date();
-        // Days until the CURRENT delivery Sunday. On Sunday itself this is 0 (stay on today's week) — NOT
-        // next Sunday — so the packaging + scan data holds all day Sunday (until Mon 00:00 local). Do NOT
-        // add `|| 7`: that rolled the week forward Sunday morning and orphaned the day's prep data.
-        const daysUntilSunday = (7 - today.getDay()) % 7;
-        const sunday = new Date(today);
-        sunday.setDate(today.getDate() + daysUntilSunday);
-        w = `${sunday.getFullYear()}${String(sunday.getMonth()+1).padStart(2,"0")}${String(sunday.getDate()).padStart(2,"0")}`;
-        localStorage.setItem("gainztrain_week", w);
-      }
-      return w;
+      const derived = computeWeekStr();
+      const stored = localStorage.getItem("gainztrain_week");
+      if (localStorage.getItem("gainztrain_week_override") === "1" && stored) return stored;
+      if (stored !== derived) localStorage.setItem("gainztrain_week", derived);
+      return derived;
     }
 
     // ── NORMALIZE MEAL IDs ──
@@ -3111,13 +3130,10 @@
       status.textContent = "";
       status.className = "pull-status";
 
-      const today = new Date();
-      // On Sunday this resolves to TODAY (the delivery/packaging day), not next Sunday — so pulling on
-      // Sunday morning re-fetches the week being packaged, not an empty future week. No `|| 7` (see getWeekStr).
-      const daysUntilSunday = (7 - today.getDay()) % 7;
-      const sunday = new Date(today);
-      sunday.setDate(today.getDate() + daysUntilSunday);
-      const weekDate = `${sunday.getFullYear()}-${String(sunday.getMonth()+1).padStart(2,"0")}-${String(sunday.getDate()).padStart(2,"0")}`;
+      // Same derivation as getWeekStr(), reused rather than duplicated — these two drifting apart is
+      // precisely what let a stale week survive. YYYYMMDD -> YYYY-MM-DD for the API.
+      const w = computeWeekStr();
+      const weekDate = `${w.slice(0,4)}-${w.slice(4,6)}-${w.slice(6,8)}`;
 
       try {
         const res = await fetch(`${API_URL}?week=${weekDate}`, { credentials: 'include' });
@@ -3179,14 +3195,36 @@
         return;
       }
 
-      // Flag ordered meals that don't exist in the meal library (won't be counted in shopping quantities).
-      const libNames = new Set((loadMealLibrary() || []).map(m => (m.name || "").toLowerCase().trim()));
-      const unmatched = [...new Set(all.flatMap(o => (o.meals || []).map(m => (m.meal_name || "").trim()))
-        .filter(n => n && !libNames.has(n.toLowerCase())))];
+      // Flag ordered meals that will not be counted in ingredient quantities.
+      //
+      // ⚠️ This used to diff ordered names against the MEAL LIBRARY, which is the wrong set and made the
+      // warning near-useless: the library holds every meal ever created, so it almost always matches and
+      // the banner almost never fires. But `buildIngredientPills()` computes quantities from the
+      // CONFIRMED meals in this week's menu draft — a much smaller set. On 2026-08-09 the draft was
+      // missing Chicken Broccoli Rice entirely (15 locked meals) and the banner said nothing, because
+      // the library did contain it.
+      //
+      // Diff against BOTH. Missing from the confirmed menu is the one that actually loses food.
       const escO = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-      const warnBanner = unmatched.length
-        ? `<div class="ing-unmatched-warn">⚠ ${unmatched.length} ordered meal${unmatched.length > 1 ? "s" : ""} not in the meal library — won't be counted in ingredient quantities: <b>${unmatched.map(escO).join(", ")}</b>. Fix the meal name (Menu tab) so it matches.</div>`
-        : "";
+      const orderedNames = [...new Set(all.flatMap(o => (o.meals || []).map(m => (m.meal_name || "").trim())).filter(Boolean))];
+      const libNames = new Set((loadMealLibrary() || []).map(m => (m.name || "").toLowerCase().trim()));
+      const confirmedNames = new Set(((loadCurrentMenu()?.meals || [])
+        .filter(m => m.status === "confirmed")).map(m => (m.name || "").toLowerCase().trim()));
+
+      const notInLibrary = orderedNames.filter(n => !libNames.has(n.toLowerCase()));
+      // Only meaningful once a menu has actually been confirmed; before that the Ingredients tab shows
+      // its own "no confirmed meals yet" empty state and this would just duplicate it.
+      const notInConfirmed = confirmedNames.size
+        ? orderedNames.filter(n => !confirmedNames.has(n.toLowerCase()))
+        : [];
+
+      const warnBanner =
+        (notInConfirmed.length
+          ? `<div class="ing-unmatched-warn">⚠ ${notInConfirmed.length} ordered meal${notInConfirmed.length > 1 ? "s are" : " is"} NOT on this week's confirmed menu, so ${notInConfirmed.length > 1 ? "they contribute" : "it contributes"} nothing to the shopping list: <b>${notInConfirmed.map(escO).join(", ")}</b>. Confirm ${notInConfirmed.length > 1 ? "them" : "it"} on the Menu tab or you will under-buy.</div>`
+          : "") +
+        (notInLibrary.length
+          ? `<div class="ing-unmatched-warn">⚠ ${notInLibrary.length} ordered meal${notInLibrary.length > 1 ? "s" : ""} not in the meal library — won't be counted in ingredient quantities: <b>${notInLibrary.map(escO).join(", ")}</b>. Fix the meal name (Menu tab) so it matches.</div>`
+          : "");
 
       list.innerHTML = warnBanner + all.map((order, idx) => {
         const fulfBadge = order.fulfillment === "delivery"

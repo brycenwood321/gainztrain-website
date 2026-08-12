@@ -6,7 +6,19 @@
 // requireOwner — do not loosen those.
 import { ok, fail } from '../../_lib/respond.js';
 import { requireStaffOrAdmin } from '../../_lib/admin.js';
+import { isOwner } from '../../_lib/auth.js';
+import { getSessionCustomer } from '../../_lib/auth.js';
 import { one, all } from '../../_lib/db.js';
+
+// Is this request an OWNER (or the admin token), rather than a plain staff session? Used to decide
+// whether the billing detail below is included — see the note on hosted_invoice_url.
+async function isOwnerLevel(context) {
+  if (context.request.headers.get('x-admin-token')) return true; // token already passed requireStaffOrAdmin
+  try {
+    const auth = await getSessionCustomer(context);
+    return !!(auth && isOwner(auth.customer));
+  } catch { return false; }
+}
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -23,11 +35,17 @@ export async function onRequestGet(context) {
     const subscriptions = await all(env.DB,
       `SELECT id, stripe_subscription_id, status, meals_per_week, tier_price_cents, coupon_code,
               current_period_end, cancel_at_period_end, created_at FROM subscriptions WHERE customer_id = ? ORDER BY created_at DESC`, id);
-    const invoices = await all(env.DB,
+    // ⚠️ `hosted_invoice_url` is a CREDENTIAL, not a field. A Stripe hosted invoice link opens that
+    // customer's billing detail — and a pay button — to ANYONE holding it, with no login. When the
+    // Customers tab was opened to staff (commit 2ff2442) this came along with it, so every kitchen
+    // hire could read them. Billing history is owner-only; the rest of the customer view stays
+    // staff-visible, because the kitchen genuinely needs names, addresses and meal picks.
+    const ownerLevel = await isOwnerLevel(context);
+    const invoices = ownerLevel ? await all(env.DB,
       `SELECT id, status, amount_due_cents, amount_paid_cents, discount_cents, hosted_invoice_url, created_at
-         FROM invoices WHERE customer_id = ? ORDER BY created_at DESC LIMIT 50`, id);
-    const payments = await all(env.DB,
-      `SELECT id, amount_cents, status, created_at FROM payments WHERE customer_id = ? ORDER BY created_at DESC LIMIT 50`, id);
+         FROM invoices WHERE customer_id = ? ORDER BY created_at DESC LIMIT 50`, id) : [];
+    const payments = ownerLevel ? await all(env.DB,
+      `SELECT id, amount_cents, status, created_at FROM payments WHERE customer_id = ? ORDER BY created_at DESC LIMIT 50`, id) : [];
     // Meal picks per week (most recent first) + that week's order lock status, so the team can see exactly
     // what someone selected and whether it's locked into the kitchen yet.
     const selections = await all(env.DB,
@@ -43,7 +61,12 @@ export async function onRequestGet(context) {
       `SELECT COALESCE(SUM(amount_paid_cents),0) AS cents FROM invoices WHERE customer_id = ? AND status = 'paid'`, id);
     const refunded = await one(env.DB,
       `SELECT COALESCE(SUM(amount_cents),0) AS cents FROM payments WHERE customer_id = ? AND status = 'refunded'`, id);
-    return ok({ customer, subscriptions, invoices, payments, selections, orders, total_spent_cents: (spent?.cents || 0) + (refunded?.cents || 0) });
+    return ok({
+      customer, subscriptions, invoices, payments, selections, orders,
+      // Lifetime spend is a plain number with no capability attached, so staff keep it.
+      total_spent_cents: (spent?.cents || 0) + (refunded?.cents || 0),
+      billing_detail_visible: ownerLevel,
+    });
   }
 
   const customers = await all(env.DB,

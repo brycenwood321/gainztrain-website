@@ -15,6 +15,7 @@ import { currentSub, findItem } from '../../_lib/account.js';
 import { ensureDeliveryPrice } from '../../_lib/plans.js';
 import { orderableWeek, isLocked } from '../../_lib/menu.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
+import { notify } from '../../_lib/notify.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -73,6 +74,9 @@ export async function onRequestPost(context) {
   // ── 3. Delivery address (recompute zone + sync Stripe delivery line) ──
   const ac = body.address_change;
   let addrResult = null;
+  // Hoisted so the customer's notice can state the SAME timing the proration actually used — "this
+  // week, prorated" vs "from next week". Computed inside the Stripe branch below.
+  let addrWeekLocked = false;
   if (ac && typeof ac === 'object') {
     const method = str(ac.delivery_method) === 'delivery' ? 'delivery' : 'pickup';
     let zone = 0, feeCents = 0, zip = '', address = '', city = '';
@@ -95,6 +99,7 @@ export async function onRequestPost(context) {
       const weekOf = orderableWeek();
       const order = await one(env.DB, `SELECT status FROM orders WHERE subscription_id = ? AND week_of = ?`, sub.id, weekOf);
       const weekLocked = isLocked(weekOf) || (order && order.status === 'locked');
+      addrWeekLocked = !!weekLocked;
       const proration = weekLocked ? 'none' : 'create_prorations';
       try {
         const stripeSub = await stripe(env, 'GET', `subscriptions/${sub.stripe_subscription_id}`);
@@ -129,6 +134,23 @@ export async function onRequestPost(context) {
   try { await run(env.DB, `INSERT INTO audit_log (at, actor, entity, action, detail_json) VALUES (?, ?, ?, 'admin_edit_customer', ?)`,
     now, actor, `customer:${customerId}`, JSON.stringify({ changed })); } catch { /* non-fatal */ }
   try { await ownerNotify(env, 'owner_edit_customer', `${customer.first_name || customer.email} edited (${changed.join(', ')}) — by ${actor}`, { entity: `customer:${customerId}` }); } catch { /* non-fatal */ }
+
+  // Tell the CUSTOMER when staff changed their delivery, exactly as api/account/address.js does when
+  // they change it themselves. This path recomputes their zone AND swaps the Stripe delivery line, so
+  // it changes what they pay every week — and it used to say nothing at all. The asymmetry was the bug:
+  // the same change was announced when the customer made it and silent when we did.
+  // Password resets are deliberately NOT announced here: set-password.js already owns that notice, and
+  // an owner resetting a password is usually doing it WITH the customer on the phone.
+  if (addrResult) {
+    try {
+      await notify(env, customer, 'delivery_changed', {
+        method: addrResult.delivery_method,
+        zone: addrResult.delivery_zone,
+        feeCents: addrResult.delivery_fee_cents,
+        nextWeek: addrWeekLocked,
+      });
+    } catch { /* non-fatal */ }
+  }
 
   return ok({ changed, address: addrResult });
 }

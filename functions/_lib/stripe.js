@@ -28,6 +28,19 @@ export async function stripe(env, method, path, params, idempotencyKey) {
   if (!key) throw Object.assign(new Error('stripe_key_missing'), { code: 'stripe_key_missing' });
 
   const headers = { Authorization: `Bearer ${key}` };
+
+  // ⚠️ PIN THE API VERSION. Without a Stripe-Version header every call runs on whatever the ACCOUNT's
+  // default version happens to be — so Stripe can move a field and this codebase changes behaviour
+  // with zero deploys and zero errors. That is not hypothetical here: `invoice.subscription` moved to
+  // invoice.parent.subscription_details, and `current_period_end` moved onto subscription ITEMS. Both
+  // returned null SILENTLY and each one cost real money before anyone noticed.
+  //
+  // Deliberately NOT hardcoded. Guessing a version would change live billing behaviour the moment it
+  // deploys. Set STRIPE_API_VERSION to the value shown in the Stripe dashboard (Developers → API
+  // version) — that pins today's behaviour with no change — then upgrade on purpose, reading the
+  // migration notes, instead of being upgraded silently.
+  if (env.STRIPE_API_VERSION) headers['Stripe-Version'] = env.STRIPE_API_VERSION;
+
   let url = `https://api.stripe.com/v1/${path}`;
   const init = { method, headers };
 

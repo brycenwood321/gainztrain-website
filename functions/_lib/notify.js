@@ -24,6 +24,10 @@ const PREF_CLASS = {
   paused: 'account', resumed: 'account', canceled: 'account', reactivated: 'account',
   tier_changed: 'account', delivery_changed: 'account', goal_changed: 'account',
   menu_posted: 'marketing', meal_reminder: 'marketing', meal_reminder_final: 'marketing', renewal_upcoming: 'marketing',
+  // Lifecycle follow-ups. The first-week check-in is 'account' rather than 'marketing': it asks how a
+  // paying customer's first week went and names the refund window that is open at that moment, which
+  // is service, not promotion. The other two are plainly marketing and carry the unsubscribe footer.
+  first_week_checkin: 'account', checkout_abandoned: 'marketing', winback: 'marketing',
 };
 
 function appBase(env) { return (env && (env.APP_BASE_URL || env.GT_APP_BASE_URL)) || 'https://gainztrainprep.com'; }
@@ -71,6 +75,7 @@ const CATEGORY = {
   order_receipt_first: 'billing', renewal_receipt: 'billing', payment_failed: 'billing',
   payment_failed_final: 'billing', payment_recovered: 'billing', refund_issued: 'billing',
   subscription_ended: 'billing', renewal_upcoming: 'billing', card_expiring: 'billing',
+  first_week_checkin: 'account', checkout_abandoned: 'account', winback: 'account',
   menu_posted: 'order', order_confirmed: 'order', order_updated: 'order', order_locked: 'order',
   order_autofilled: 'order', meal_reminder: 'order', meal_reminder_final: 'order',
   order_prepped: 'order', order_out_for_delivery: 'order', order_pickup_ready: 'order', order_delivered: 'order',

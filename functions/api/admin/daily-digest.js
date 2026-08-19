@@ -44,6 +44,16 @@ export async function onRequestPost(context) {
   // Health.
   const failedComms = await one(env.DB,
     `SELECT COUNT(*) AS n FROM comms_log WHERE ghl_status = 'failed' AND sent_at >= ?`, addDaysIso(-1));
+  // WHO failed, not just how many. A bare count hides the worst case: the SAME contact failing over and
+  // over reads identically to several unrelated one-offs. That is exactly what happened in August -
+  // order_confirmed, order_updated and then a Saturday order_locked all failed for one contact across
+  // three days, and nothing surfaced it because each digest just said "1 failed comms". A customer was
+  // never told their order locked. Look back 7 days so a repeat offender is visible as a repeat.
+  const failedDetail = await all(env.DB,
+    `SELECT COALESCE(c.email, 'unknown') AS who, cl.template, COUNT(*) AS n, MAX(cl.sent_at) AS last_at
+       FROM comms_log cl LEFT JOIN customers c ON c.id = cl.customer_id
+      WHERE cl.ghl_status = 'failed' AND cl.sent_at >= ?
+      GROUP BY who, cl.template ORDER BY n DESC, last_at DESC LIMIT 10`, addDaysIso(-7));
   const stuckWebhooks = await one(env.DB,
     `SELECT COUNT(*) AS n FROM stripe_events WHERE processed_at IS NULL AND received_at < ?`, addDaysIso(-0.05)); // >~1h old
 
@@ -67,9 +77,14 @@ export async function onRequestPost(context) {
 
   // Escalate health problems as a BIG (SMS-eligible) alert so they don't sit unseen until morning.
   if (!healthOk) {
+    const detailLines = failedDetail.map((f) => `• ${f.who} — ${f.template} ×${f.n} (last ${String(f.last_at).slice(0, 16)})`);
+    // Name the repeat offenders in the summary itself; the alert is often read on a phone lock screen.
+    const repeat = failedDetail.filter((f) => f.n > 1).map((f) => f.who);
     await ownerNotify(env, 'owner_health_alert',
-      `GT health: ${failed} failed comms, ${stuck} webhooks stuck >1h — check /app/ops`,
-      { entity: 'system', lines: [`failed_comms_24h: ${failed}`, `stuck_webhooks: ${stuck}`] });
+      `GT health: ${failed} failed comms, ${stuck} webhooks stuck >1h`
+        + (repeat.length ? ` — REPEAT FAILURES for ${[...new Set(repeat)].join(', ')}, they are not receiving email` : '')
+        + ' — check /app/ops',
+      { entity: 'system', lines: [`failed_comms_24h: ${failed}`, `stuck_webhooks: ${stuck}`, '— failures, last 7 days —', ...detailLines] });
   }
 
   // Sunday morning (this digest runs 13:00 UTC ≈ 7am MT, so UTC-Sunday == Sunday morning in Denver):

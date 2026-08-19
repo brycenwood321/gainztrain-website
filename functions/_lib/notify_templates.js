@@ -64,6 +64,18 @@ function layout(env, { heading, intro, rows = [], note, cta }) {
 
 const PRORATE_NOTE = 'This change takes effect for this week, prorated — Stripe charges the difference (or credits you) on your card automatically.';
 
+// Defensive readers for the three fields that used to render the literal string "undefined" into a
+// customer-facing message when a caller omitted them. Each returns a falsy value the templates can
+// branch on rather than interpolating blindly.
+function mealsCount(d) { const n = Number(d && d.meals); return Number.isFinite(n) && n > 0 ? n : 0; }
+function mealsPerWeek(d) { const n = Number(d && d.mealsPerWeek); return Number.isFinite(n) && n > 0 ? String(n) : 'your'; }
+function lockedTotal(d) {
+  const n = Number(d && d.total);
+  if (Number.isFinite(n) && n > 0) return n;
+  // Fall back to summing the meal list rather than printing nothing.
+  return mealItems(d && d.meals).reduce((t, m) => t + (Number(m.qty) || 0), 0) || 'your';
+}
+
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
@@ -160,15 +172,20 @@ export const TEMPLATES = {
     sms: 'Gainz Train: your cancellation was reversed — you\'re staying on. See you this week.',
   }),
 
+  // `meals` is guarded because this template renders it into the subject, the body AND the SMS - a
+  // caller that omitted it produced "Your plan is now undefined meals/week" on three channels at once.
+  // Every current caller passes a validated integer, so this is belt-and-braces, not a live fix.
   tier_changed: (d, env) => ({
-    subject: d.nextWeek ? `Your plan changes to ${d.meals} meals/week next week` : `Your plan is now ${d.meals} meals/week`,
+    subject: mealsCount(d) ? (d.nextWeek ? `Your plan changes to ${mealsCount(d)} meals/week next week` : `Your plan is now ${mealsCount(d)} meals/week`) : 'Your Gainz Train plan was updated',
     html: layout(env, {
-      heading: `You\'re ${d.nextWeek ? 'set for' : 'now on'} ${d.meals} meals a week`,
+      heading: mealsCount(d)
+        ? `You\'re ${d.nextWeek ? 'set for' : 'now on'} ${mealsCount(d)} meals a week`
+        : 'Your plan was updated',
       intro: d.nextWeek
         ? 'Your meal plan is updated. This week\'s order is already locked in for prep, so the new count starts with next week\'s menu:'
         : 'Your meal plan was updated. Here\'s the new setup:',
       rows: [
-        ['Meals per week', String(d.meals)],
+        mealsCount(d) ? ['Meals per week', String(mealsCount(d))] : null,
         d.perMealCents ? ['Per-meal price', money(d.perMealCents)] : null,
       ].filter(Boolean),
       note: d.nextWeek
@@ -176,9 +193,11 @@ export const TEMPLATES = {
         : PRORATE_NOTE,
       cta: { label: d.nextWeek ? 'Set next week\'s meals' : 'Pick your meals', href: link(env, '/app/menu/') },
     }),
-    sms: d.nextWeek
-      ? `Gainz Train: your plan changes to ${d.meals} meals/week starting next week (this week\'s locked order is unchanged).`
-      : `Gainz Train: your plan is now ${d.meals} meals/week. The difference is prorated on your card automatically.`,
+    sms: !mealsCount(d)
+      ? 'Gainz Train: your plan was updated. See the details in your account.'
+      : (d.nextWeek
+        ? `Gainz Train: your plan changes to ${mealsCount(d)} meals/week starting next week (this week\'s locked order is unchanged).`
+        : `Gainz Train: your plan is now ${mealsCount(d)} meals/week. The difference is prorated on your card automatically.`),
   }),
 
   delivery_changed: (d, env) => {
@@ -219,7 +238,7 @@ export const TEMPLATES = {
     subject: 'Pick your Gainz Train meals',
     html: layout(env, {
       heading: 'Time to pick your meals 🍱',
-      intro: `Your Gainz Train meals for the week of ${prettyDate(d.weekOf)} aren\'t picked yet. Choose your ${d.mealsPerWeek} meals before the Friday cutoff${d.cutoff ? ` (${prettyDate(d.cutoff)})` : ''} or we\'ll repeat last week for you.`,
+      intro: `Your Gainz Train meals for the week of ${prettyDate(d.weekOf)} aren\'t picked yet. Choose your ${mealsPerWeek(d)} meals before the Friday cutoff${d.cutoff ? ` (${prettyDate(d.cutoff)})` : ''} or we\'ll repeat last week for you.`,
       cta: { label: 'Pick my meals', href: link(env, '/app/menu/') },
     }),
     sms: `Gainz Train: pick your meals for ${prettyDate(d.weekOf)} before Friday: ${link(env, '/app/menu/')}`,
@@ -229,7 +248,7 @@ export const TEMPLATES = {
     subject: 'Last call — pick your Gainz Train meals',
     html: layout(env, {
       heading: 'Last call — pick your meals tonight',
-      intro: `Ordering for the week of ${prettyDate(d.weekOf)} closes tonight at the Friday cutoff. Choose your ${d.mealsPerWeek} meals now or we\'ll repeat last week for you.`,
+      intro: `Ordering for the week of ${prettyDate(d.weekOf)} closes tonight at the Friday cutoff. Choose your ${mealsPerWeek(d)} meals now or we\'ll repeat last week for you.`,
       cta: { label: 'Pick my meals', href: link(env, '/app/menu/') },
     }),
     // Plain punctuation only: an em dash here forced the whole text to UCS-2 and billed 2 segments.
@@ -286,7 +305,7 @@ export const TEMPLATES = {
           ? `<p style="font-size:14px;color:#1a1614;background:#fff1ea;padding:10px 12px;border-radius:8px">🥡 ${pickupSentence()}</p>`
           : `<p style="font-size:13px;color:#7a7270">We\'ll let you know when they\'re on the way.</p>`),
     }),
-    sms: `Gainz Train: your ${d.total} meals for ${prettyDate(d.weekOf)} are locked in. ` +
+    sms: `Gainz Train: your ${lockedTotal(d)} meals for ${prettyDate(d.weekOf)} are locked in. ` +
       (d.method === 'pickup' ? PICKUP.smsLine : 'We\'ll text you when they\'re on the way.'),
   }),
 
@@ -462,6 +481,50 @@ export const TEMPLATES = {
       note: 'We\'d love to know what we could do better — just reply and let us know.',
     }),
     sms: 'Gainz Train: your subscription has ended. Thanks for riding with us — restart anytime at ' + link(env, '/start/'),
+  }),
+
+  // ----- Lifecycle gaps (added 2026-08-19). Each covers a moment the system was silent. -----
+
+  // Sent a few days into the FIRST week. That week is the only one in which the Full Week Guarantee is
+  // claimable (terms §5, 7 days), so staying quiet through it meant the one window where a wobbling
+  // customer could still be saved was also the one where we said nothing. Deliberately asks a question
+  // instead of selling: a reply is worth more than a click here, and it doubles as the review ask.
+  first_week_checkin: (d, env) => ({
+    subject: 'How was your first week?',
+    html: layout(env, {
+      heading: `How\'d we do${d.firstName ? ', ' + escapeHtml(d.firstName) : ''}?`,
+      intro: 'You\'re a few meals into your first week with us, so we want to hear it straight — what landed, what didn\'t, and what you want to see on the menu.',
+      note: '<p style="font-size:13px;color:#7a7270">Just hit reply. A real person reads these.</p>'
+        + '<p style="font-size:13px;color:#7a7270">And if the first week genuinely wasn\'t worth it, say so — the Full Week Guarantee refunds you and you keep the food. No hard feelings and no hoops.</p>',
+      cta: { label: 'Pick next week\'s meals', href: link(env, '/app/menu/') },
+    }),
+  }),
+
+  // They made an account and never subscribed. 11 such accounts existed with zero follow-up and no
+  // template to send one. Low-key on purpose: they got as far as the form, so the job is to remove
+  // whatever stopped them, not to pitch again.
+  checkout_abandoned: (d, env) => ({
+    subject: 'Still want to get started?',
+    html: layout(env, {
+      heading: 'You\'re one step away',
+      intro: 'You made a Gainz Train account but never finished picking a plan. If something got in the way — pricing, delivery area, timing — just reply and tell us; we\'ll sort it out.',
+      note: '<p style="font-size:13px;color:#7a7270">No pressure. If the timing isn\'t right, ignore this and we won\'t chase you.</p>',
+      cta: { label: 'Finish setting up', href: link(env, '/menu/') },
+    }),
+  }),
+
+  // Two weeks after a subscription actually ended. `subscription_ended` fires once at the moment of
+  // ending and then nothing ever again, so a customer who left had no path back that we initiated.
+  // Asking WHY is the point: cancel.js captures no reason, so this is the cheapest retention input
+  // available, and week-4 retention is the named lever over CPA.
+  winback: (d, env) => ({
+    subject: 'What made you stop?',
+    html: layout(env, {
+      heading: 'We\'d rather know than guess',
+      intro: 'It\'s been a couple of weeks since your last Gainz Train delivery. If something was off — the food, the price, the timing, the portions — we genuinely want to hear it. One line is plenty.',
+      note: '<p style="font-size:13px;color:#7a7270">Just reply to this email. If you\'d rather not, no problem, and this is the last you\'ll hear from us about it.</p>',
+      cta: { label: 'Start again', href: link(env, '/start/') },
+    }),
   }),
 };
 

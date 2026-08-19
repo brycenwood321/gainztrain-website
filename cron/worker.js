@@ -70,6 +70,12 @@ export default {
       // Meta revises spend retroactively; the upsert on (day, ad_id) makes that idempotent.
       // No-ops with skipped:true until META_ADS_TOKEN + META_AD_ACCOUNT are set on the Pages project.
       ctx.waitUntil(hit(env, '/api/admin/meta-spend-sync'));
+      // Daily — the three lifecycle moments the system used to stay silent through: a check-in a few
+      // days into someone's FIRST week (while the Full Week Guarantee is still claimable), a nudge to
+      // an account that never finished checkout, and a win-back two weeks after a subscription ended.
+      // Idempotent by dedupKey, not by the date maths, so a missed run catches people the next morning
+      // rather than skipping them permanently. Add ?dry=1 by hand to see who would be messaged.
+      ctx.waitUntil(hit(env, '/api/admin/lifecycle-comms'));
       // Saturday-only: PRE-SHOP reconciliation, ~2h after the lock and ~2h before billing. This is the
       // one that catches a paying customer the kitchen has no order for (Jameson) or an order stuck in
       // 'pending' instead of 'locked' (Jeferson) — i.e. money in, no food out — while Jayson can still

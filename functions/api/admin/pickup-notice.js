@@ -31,6 +31,9 @@ export async function onRequestPost(context) {
   const params = new URL(request.url).searchParams;
   const dry = params.get('dry') === '1';
   const includeOwners = params.get('include_owners') === '1';
+  // Single-recipient smoke test. The whole point is to prove BOTH legs land before 12 people get it,
+  // so the per-channel results below are returned rather than collapsed into a count.
+  const only = params.get('only');
   const eventKey = params.get('event') || 'change';
   const tpl = EVENTS[eventKey];
   if (!tpl) return fail(400, 'bad_event', `event must be one of: ${Object.keys(EVENTS).join(', ')}`);
@@ -62,6 +65,7 @@ export async function onRequestPost(context) {
   const recipients = [];
 
   for (const r of rows) {
+    if (only && r.customer_id !== only) continue;
     if (r.is_owner === 1 && !includeOwners) { summary.skipped_owner++; continue; }
     if (!r.email) { summary.skipped_no_email++; continue; }
     summary.candidates++;
@@ -82,7 +86,13 @@ export async function onRequestPost(context) {
     if (res.deduped) summary.deduped++;
     else if (res.ok) summary.sent++;
     else summary.failed++;
+    // Per-channel truth. `sent: 12` with every sms leg missing is a false green, and this system has
+    // been bitten by exactly that before.
+    const last = recipients[recipients.length - 1];
+    last.result = res.deduped ? 'deduped' : (res.ok ? 'ok' : (res.reason || 'failed'));
+    last.channels = (res.results || []).map((x) => `${x.channel || x.type || '?'}:${x.ok === false ? 'FAIL' : 'ok'}`);
   }
 
+  summary.sms_gate = String(env.SMS_AUTH_ENABLED) === 'true' ? 'on' : 'OFF (email only)';
   return ok({ summary, recipients });
 }

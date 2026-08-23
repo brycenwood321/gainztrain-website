@@ -44,7 +44,7 @@ export async function onRequestPost(context) {
   // Two per request. Each customer really costs ~10 subrequests once every D1 write is counted
   // (claim, prefs, phone lookup, contact upsert, two sends, two send-logs, feed row), and 4 still
   // reached the ~50 ceiling. The script loops, so a low number costs passes, not outcomes.
-  const max = Math.max(1, Math.min(10, parseInt(params.get('max') || '2', 10) || 2));
+  const max = Math.max(1, Math.min(10, parseInt(params.get('max') || '5', 10) || 5));
   // Finish a partial delivery: ?channel=sms sends only the text, so somebody who already has the
   // email is not mailed twice to deliver one message.
   const channel = params.get('channel');
@@ -140,6 +140,7 @@ export async function onRequestPost(context) {
       const slice = targets.slice(i, i + BATCH);
       attemptedUpTo = i + slice.length;
       await Promise.all(slice.map(async ({ row: r, entry }) => {
+        try {
         const cust = {
           id: r.customer_id, email: r.email, first_name: r.first_name,
           ghl_contact_id: r.ghl_contact_id,
@@ -165,8 +166,22 @@ export async function onRequestPost(context) {
         else summary.failed++;
         // Per-channel truth. `sent: 15` with every sms leg missing is a false green, and this system
         // has been bitten by exactly that before.
+        //
+        // ⚠️ notify() returns results as an OBJECT keyed by channel ({email:'sent', sms:'sent'}), not
+        // an array. This line called .map on it and threw a TypeError on EVERY run — after the sends
+        // had already gone out, and outside the try above, so it took the whole batch down as a 1101.
+        // That is why each attempt delivered exactly BATCH messages and then 500'd, and why the counts
+        // tracked the batch size rather than any resource limit. Reporting code must never be able to
+        // fail a send that already succeeded.
         entry.result = res.deduped ? 'deduped' : (res.ok ? 'ok' : (res.reason || 'failed'));
-        entry.channels = (res.results || []).map((x) => `${x.channel || x.type || '?'}:${x.ok === false ? 'FAIL' : 'ok'}`);
+        const rr = res.results;
+        entry.channels = rr && typeof rr === 'object' && !Array.isArray(rr)
+          ? Object.keys(rr).map((ch) => `${ch}:${rr[ch]}`)
+          : [];
+        } catch (e) {
+          // Never let bookkeeping fail a message that already went out.
+          entry.result = entry.result || `reporting_error: ${e && e.message}`;
+        }
       }));
     }
     summary.remaining = Math.max(0, targets.length - attemptedUpTo);

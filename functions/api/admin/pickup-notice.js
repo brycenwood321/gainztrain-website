@@ -37,6 +37,11 @@ export async function onRequestPost(context) {
   // Single-recipient smoke test. The whole point is to prove BOTH legs land before 12 people get it,
   // so the per-channel results below are returned rather than collapsed into a count.
   const only = params.get('only');
+  // Hard cap on customers per request. A Pages Function gets ~50 subrequests, and each customer can
+  // cost three GHL fetches (ensure-contact + email + sms). Fifteen at once overran it on
+  // 2026-08-22: the Worker threw 1101 PART WAY THROUGH, after real messages had gone out. The
+  // script loops until `remaining` is 0, and dedup makes each extra pass cheap.
+  const max = Math.max(1, Math.min(10, parseInt(params.get('max') || '5', 10) || 5));
   const eventKey = params.get('event') || 'change';
   const tpl = EVENTS[eventKey];
   if (!tpl) return fail(400, 'bad_event', `event must be one of: ${Object.keys(EVENTS).join(', ')}`);
@@ -94,10 +99,21 @@ export async function onRequestPost(context) {
     targets.push({ row: r, entry });
   }
 
+  // Work through everyone, but stop launching REAL sends once `max` of them have happened.
+  //
+  // A deduped customer costs one D1 insert that conflicts and returns — zero GHL fetches — so they are
+  // free to walk past and must NOT count against the cap. Counting attempts instead of sends was a bug
+  // in the first version of this fix: the first five names are already deduped, so every pass would
+  // have chewed on the same five and never reached anybody new.
+  summary.remaining = 0;
   if (!dry) {
     const BATCH = 5;
+    let attemptedUpTo = 0;
     for (let i = 0; i < targets.length; i += BATCH) {
-      await Promise.all(targets.slice(i, i + BATCH).map(async ({ row: r, entry }) => {
+      if (summary.sent + summary.failed >= max) break;
+      const slice = targets.slice(i, i + BATCH);
+      attemptedUpTo = i + slice.length;
+      await Promise.all(slice.map(async ({ row: r, entry }) => {
         const cust = {
           id: r.customer_id, email: r.email, first_name: r.first_name,
           ghl_contact_id: r.ghl_contact_id,
@@ -119,6 +135,7 @@ export async function onRequestPost(context) {
         entry.channels = (res.results || []).map((x) => `${x.channel || x.type || '?'}:${x.ok === false ? 'FAIL' : 'ok'}`);
       }));
     }
+    summary.remaining = Math.max(0, targets.length - attemptedUpTo);
   }
 
   summary.sms_gate = String(env.SMS_AUTH_ENABLED) === 'true' ? 'on' : 'OFF (email only)';

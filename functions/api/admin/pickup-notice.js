@@ -41,7 +41,7 @@ export async function onRequestPost(context) {
   // cost three GHL fetches (ensure-contact + email + sms). Fifteen at once overran it on
   // 2026-08-22: the Worker threw 1101 PART WAY THROUGH, after real messages had gone out. The
   // script loops until `remaining` is 0, and dedup makes each extra pass cheap.
-  const max = Math.max(1, Math.min(10, parseInt(params.get('max') || '5', 10) || 5));
+  const max = Math.max(1, Math.min(10, parseInt(params.get('max') || '4', 10) || 4));
   const eventKey = params.get('event') || 'change';
   const tpl = EVENTS[eventKey];
   if (!tpl) return fail(400, 'bad_event', `event must be one of: ${Object.keys(EVENTS).join(', ')}`);
@@ -63,8 +63,19 @@ export async function onRequestPost(context) {
       WHERE o.week_of = ?
         AND o.status NOT IN ('skipped_paused','skipped_canceled')
         AND COALESCE(o.delivery_method, c.delivery_method) = 'pickup'
+        -- Skip anyone who already holds a live claim for this exact event+week. Doing this in SQL
+        -- rather than letting notify() dedup them matters: EVERY D1 call counts against the Worker's
+        -- ~50 subrequest budget, so walking past ten already-done customers to reach the eleventh was
+        -- itself enough to blow the limit. A pass now touches only people who still need the message.
+        -- Matches the dedupKey built below; release_orphans flips ghl_status off 'claimed' so a
+        -- stranded customer reappears here.
+        AND NOT EXISTS (
+          SELECT 1 FROM comms_log cl
+           WHERE cl.dedup_key = ? || o.customer_id || ?
+             AND cl.ghl_status = 'claimed'
+        )
       ORDER BY c.first_name, c.last_name`,
-    week);
+    week, `pickup:${eventKey}:`, `:${week}`);
 
   const summary = {
     week_of: week, event: tpl, when, dry,
@@ -126,6 +137,9 @@ export async function onRequestPost(context) {
         } catch (e) {
           res = { ok: false, reason: `threw: ${e && e.message}` };
         }
+        // Should be rare now that the query excludes claimed customers — a non-zero count here means
+        // a concurrent run claimed them between the query and the send, which is exactly what the
+        // dedupKey exists to make harmless.
         if (res.deduped) summary.deduped++;
         else if (res.ok) summary.sent++;
         else summary.failed++;

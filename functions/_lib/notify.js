@@ -192,11 +192,15 @@ export async function notify(env, customer, eventKey, data = {}, opts = {}) {
       }
     }
 
-    const wantEmail = emailAllowed && (rendered.html || rendered.subject);
+    // opts.channels restricts which legs may fire. Added 2026-08-22 so a partially-delivered send can
+    // be finished off — four customers had the email but not the text after a Worker died between the
+    // two legs, and re-running the whole notify would have mailed them a duplicate to deliver one SMS.
+    const only = Array.isArray(opts.channels) ? opts.channels : null;
+    const wantEmail = emailAllowed && (rendered.html || rendered.subject) && (!only || only.includes('email'));
     // Three gates before a text goes out: the event is on the allowlist and the A2P master switch is
     // on (mayText), the customer hasn't turned texts off, and we actually have a number for them.
     // The phone lookup is last so it only costs a query on the handful of events that can text.
-    const wantSms = mayText && smsAllowed && (await smsReachable(env, customer.id));
+    const wantSms = mayText && smsAllowed && (!only || only.includes('sms')) && (await smsReachable(env, customer.id));
 
     // Resolve the GHL contact once (lazy-create + persist) and reuse it for both channels — but only if
     // we're actually going to send something (an opted-out customer needs no contact lookup).
@@ -226,7 +230,7 @@ export async function notify(env, customer, eventKey, data = {}, opts = {}) {
     // Claim-then-CONFIRM: if the email leg actually FAILED (real GHL error, not the dev no-token /
     // no-contact 'queued_no_token' case), release the dedup claim so a webhook retry can re-attempt.
     // Without this, at-most-once silently degrades to never-sent on a transient GHL outage.
-    if (opts.dedupKey && results.email === 'failed') {
+    if (opts.dedupKey && wantEmail && results.email === 'failed') {
       try { await run(env.DB, `DELETE FROM comms_log WHERE dedup_key = ? AND ghl_status = 'claimed'`, opts.dedupKey); } catch { /* best effort */ }
       return { ok: false, reason: 'send_failed', results };
     }

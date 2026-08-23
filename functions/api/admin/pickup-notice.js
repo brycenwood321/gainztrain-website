@@ -41,7 +41,14 @@ export async function onRequestPost(context) {
   // cost three GHL fetches (ensure-contact + email + sms). Fifteen at once overran it on
   // 2026-08-22: the Worker threw 1101 PART WAY THROUGH, after real messages had gone out. The
   // script loops until `remaining` is 0, and dedup makes each extra pass cheap.
-  const max = Math.max(1, Math.min(10, parseInt(params.get('max') || '4', 10) || 4));
+  // Two per request. Each customer really costs ~10 subrequests once every D1 write is counted
+  // (claim, prefs, phone lookup, contact upsert, two sends, two send-logs, feed row), and 4 still
+  // reached the ~50 ceiling. The script loops, so a low number costs passes, not outcomes.
+  const max = Math.max(1, Math.min(10, parseInt(params.get('max') || '2', 10) || 2));
+  // Finish a partial delivery: ?channel=sms sends only the text, so somebody who already has the
+  // email is not mailed twice to deliver one message.
+  const channel = params.get('channel');
+  const channels = channel === 'sms' ? ['sms'] : (channel === 'email' ? ['email'] : null);
   const eventKey = params.get('event') || 'change';
   const tpl = EVENTS[eventKey];
   if (!tpl) return fail(400, 'bad_event', `event must be one of: ${Object.keys(EVENTS).join(', ')}`);
@@ -69,13 +76,13 @@ export async function onRequestPost(context) {
         -- itself enough to blow the limit. A pass now touches only people who still need the message.
         -- Matches the dedupKey built below; release_orphans flips ghl_status off 'claimed' so a
         -- stranded customer reappears here.
-        AND NOT EXISTS (
+        AND (? = 1 OR NOT EXISTS (
           SELECT 1 FROM comms_log cl
            WHERE cl.dedup_key = ? || o.customer_id || ?
              AND cl.ghl_status = 'claimed'
-        )
+        ))
       ORDER BY c.first_name, c.last_name`,
-    week, `pickup:${eventKey}:`, `:${week}`);
+    week, channels ? 1 : 0, `pickup:${eventKey}:`, `:${week}`);
 
   const summary = {
     week_of: week, event: tpl, when, dry,
@@ -132,8 +139,13 @@ export async function onRequestPost(context) {
         let res;
         try {
           // One notice per customer per week per event, whatever happens upstream.
+          // A channel-restricted run gets its OWN dedup key, so finishing the SMS leg cannot be
+          // blocked by (or clobber) the claim from the original full send.
+          const dedupKey = channels
+            ? `pickup:${eventKey}:${channels.join('+')}:${r.customer_id}:${week}`
+            : `pickup:${eventKey}:${r.customer_id}:${week}`;
           res = await notify(env, cust, tpl, { firstName: r.first_name, when, weekOf: week },
-            { dedupKey: `pickup:${eventKey}:${r.customer_id}:${week}` });
+            { dedupKey, channels });
         } catch (e) {
           res = { ok: false, reason: `threw: ${e && e.message}` };
         }

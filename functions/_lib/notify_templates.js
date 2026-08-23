@@ -369,6 +369,51 @@ export const TEMPLATES = {
     sms: `Gainz Train: your meals are ready! ${PICKUP.smsLine}`,
   }),
 
+  // ── Pickup logistics announcements (added 2026-08-22) ─────────────────────────────────────────────
+  // Pickup moved off Brycen's and Jayson's houses onto a tight 45-minute window at the kitchen. This
+  // changes the collection terms of an order the customer has ALREADY PAID FOR, so both events are
+  // 'critical' class and both are in SMS_EVENTS — somebody who reads neither drives to a house that
+  // nobody is at. Every where/when string comes from PICKUP, so these can never drift away from the
+  // automated order_locked / order_pickup_ready messages that carry the same details.
+  //
+  // `when` is the caller's word for the day ('tomorrow' on the Saturday announcement). `firstName` is
+  // rendered here in JS, never handed to GHL as a merge tag.
+  pickup_change: (d, env) => ({
+    subject: `Pickup moves to the kitchen ${d.when || 'this Sunday'}, ${PICKUP.windowLabel}`,
+    html: layout(env, {
+      heading: 'Pickup moves to the kitchen',
+      intro:
+        `Hey ${d.firstName || 'there'}, quick but important change to how you grab your meals.` +
+        `<br><br>For the last little while you have been picking up from my house or Jayson's. ` +
+        `Starting ${d.when || 'this Sunday'}, all pickups move to the Gainz Train kitchen.`,
+      rows: [['Where', PICKUP.addressLine], ['When', `Sundays, ${PICKUP.windowLabel}`]],
+      note:
+        `That is the window from here on out, every week. It is tighter than what you are used to, and ` +
+        `that is on purpose: prep wraps up right before 10:00, so your food is as fresh as it gets and ` +
+        `everything is packed and ready the moment you walk in.<br><br>` +
+        `Because it is a short window, we do need you inside it. If you miss it, we can still get your ` +
+        `meals to you, but it will be a flat $10 to deliver them.<br><br>` +
+        `If that time does not work for you on a given week, just reply to this email before Sunday and ` +
+        `we will figure something out. We would rather hear from you than have your food sitting there.`,
+    }),
+    sms: `Gainz Train: pickup moves to the kitchen, no more house pickup. Sun ${PICKUP.windowSms}, ${PICKUP.addressSms}. Miss it and delivery is $10.`,
+  }),
+
+  pickup_reminder: (d, env) => ({
+    subject: `Pickup today: ${PICKUP.windowLabel} at the Orem kitchen`,
+    html: layout(env, {
+      heading: 'Pickup is today 🥡',
+      intro:
+        `Morning ${d.firstName || 'there'}, reminder that your meals are ready today at the kitchen, ` +
+        `not at a house.`,
+      rows: [['Where', PICKUP.addressLine], ['When', `Today, ${PICKUP.windowLabel}`]],
+      note:
+        `That is a 45 minute window, so set an alarm if you need to. If you cannot make it, reply to ` +
+        `this email and we will deliver instead for a flat $10.`,
+    }),
+    sms: `Gainz Train: pickup is TODAY ${PICKUP.windowSms} at ${PICKUP.addressSms}. 45 min window. Miss it and delivery is $10.`,
+  }),
+
   // ----- Billing, fired off the Stripe webhook (Step 2) -----
   // ⚠️ The "next step" line used to read "pick your meals for THIS week before the Friday cutoff".
   // 45% of signups land on a Saturday or Sunday, AFTER that week's cutoff and lock — for them the

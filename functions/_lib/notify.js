@@ -21,6 +21,9 @@ const PREF_CLASS = {
   subscription_ended: 'critical', card_expiring: 'critical',
   order_confirmed: 'critical', order_updated: 'critical', order_locked: 'critical', order_autofilled: 'critical',
   order_prepped: 'critical', order_out_for_delivery: 'critical', order_pickup_ready: 'critical', order_delivered: 'critical',
+  // Where/when your already-paid-for food is collected. Not opt-out-able for the same reason
+  // order_pickup_ready is not: the alternative is a customer driving to a house nobody is at.
+  pickup_change: 'critical', pickup_reminder: 'critical',
   paused: 'account', resumed: 'account', canceled: 'account', reactivated: 'account',
   tier_changed: 'account', delivery_changed: 'account', goal_changed: 'account',
   menu_posted: 'marketing', meal_reminder: 'marketing', meal_reminder_final: 'marketing', renewal_upcoming: 'marketing',
@@ -47,6 +50,12 @@ const SMS_EVENTS = new Set([
   'order_out_for_delivery', // Sunday logistics — they need to be home / know it's coming
   'order_pickup_ready',     // Sunday logistics — pickup customers
   'meal_reminder_final',    // Friday last call — the one marketing-class text, and the highest-leverage
+  // Added 2026-08-22 with Brycen. Same test as the rest of this list: a deadline the customer can
+  // still act on. Pickup moved off two houses onto a 45-minute window, so a missed email means a
+  // wasted drive and $10 of delivery. Both are service messages about an order already paid for,
+  // which is why neither needs sms_marketing_consent — see the note on smsReachable below.
+  'pickup_change',          // Saturday: the window and location changed
+  'pickup_reminder',        // Sunday morning: last call before a 45-minute window
 ]);
 
 // Can we physically text this person? A phone is the only hard requirement — several migrated
@@ -77,6 +86,7 @@ const CATEGORY = {
   subscription_ended: 'billing', renewal_upcoming: 'billing', card_expiring: 'billing',
   first_week_checkin: 'account', checkout_abandoned: 'account', winback: 'account',
   menu_posted: 'order', order_confirmed: 'order', order_updated: 'order', order_locked: 'order',
+  pickup_change: 'order', pickup_reminder: 'order',
   order_autofilled: 'order', meal_reminder: 'order', meal_reminder_final: 'order',
   order_prepped: 'order', order_out_for_delivery: 'order', order_pickup_ready: 'order', order_delivered: 'order',
 };

@@ -17,6 +17,11 @@ export const PICKUP = {
   // message to UCS-2, where a segment is 70 characters instead of 160 — one dash was turning this text
   // into two billed segments. Same reason there are no emoji or curly quotes in any SMS string.
   smsLine: 'Pickup Sun 10:00am-10:45am, 149 N State St Ste B, Orem. Miss it and delivery is $10.',
+  // Plain-hyphen pieces for messages that need to word the sentence themselves (the announcement
+  // and the Sunday-morning reminder both read wrong if they start with the word "Sun"). Same
+  // GSM-7 rule applies: hyphens only, no en-dash, no emoji.
+  windowSms: '10:00am-10:45am',
+  addressSms: '149 N State St Ste B, Orem',
 };
 
 // The sentence used in emails. Kept here so the phrasing stays identical everywhere it appears.

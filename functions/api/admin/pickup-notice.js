@@ -12,8 +12,11 @@
 // ?dry=1 previews the exact recipient list and sends nothing. ALWAYS dry-run first — this is one of
 // the few endpoints that reaches every customer at once.
 //
-// Owners are skipped by default (is_owner), because Brycen and Jayson do not need to be told where
-// their own kitchen is. ?include_owners=1 overrides for testing.
+// Owners (Brycen/Jayson/Marissa/Alyssa) are INCLUDED by default, his call 2026-08-22: they collect
+// real meals like anybody else and the reason they were skipped at first was a guess, not a rule.
+// "If we have open meals" needs no special handling — the query below only returns people with a live
+// pickup order for the week, so an owner who did not order cannot be pulled in. ?exclude_owners=1
+// restores the old behaviour.
 import { ok, fail } from '../../_lib/respond.js';
 import { requireAdmin } from '../../_lib/admin.js';
 import { all } from '../../_lib/db.js';
@@ -30,7 +33,7 @@ export async function onRequestPost(context) {
 
   const params = new URL(request.url).searchParams;
   const dry = params.get('dry') === '1';
-  const includeOwners = params.get('include_owners') === '1';
+  const excludeOwners = params.get('exclude_owners') === '1';
   // Single-recipient smoke test. The whole point is to prove BOTH legs land before 12 people get it,
   // so the per-channel results below are returned rather than collapsed into a count.
   const only = params.get('only');
@@ -60,19 +63,21 @@ export async function onRequestPost(context) {
 
   const summary = {
     week_of: week, event: tpl, when, dry,
-    candidates: 0, sent: 0, deduped: 0, failed: 0, skipped_owner: 0, skipped_no_email: 0,
+    candidates: 0, sent: 0, deduped: 0, failed: 0, skipped_owner: 0, skipped_no_email: 0, owners_included: 0,
   };
   const recipients = [];
 
   for (const r of rows) {
     if (only && r.customer_id !== only) continue;
-    if (r.is_owner === 1 && !includeOwners) { summary.skipped_owner++; continue; }
+    if (r.is_owner === 1 && excludeOwners) { summary.skipped_owner++; continue; }
     if (!r.email) { summary.skipped_no_email++; continue; }
     summary.candidates++;
+    if (r.is_owner === 1) summary.owners_included++;
     recipients.push({
       name: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
       email: r.email,
       sms: r.phone ? 'yes' : 'no phone',
+      owner: r.is_owner === 1 || undefined,
     });
     if (dry) continue;
 

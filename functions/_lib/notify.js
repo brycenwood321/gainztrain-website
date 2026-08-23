@@ -43,20 +43,42 @@ function appBase(env) { return (env && (env.APP_BASE_URL || env.GT_APP_BASE_URL)
 // tweak — at ~12 subscribers each addition is roughly +12 texts/week. The events deliberately left OUT
 // are the noisy ones: order_confirmed/order_updated fire every time a customer taps save (43 times in
 // the 30 days before launch), and receipts/menu drops/Wednesday reminders read fine as email.
+//
+// ⚠️ STAGED ROLLOUT, Brycen's call 2026-08-22: "don't turn on all of the sms stuff, just the [pickup]
+// text for right now". SMS_AUTH_ENABLED had sat at false since launch, so when it flips to true every
+// event in this Set starts texting AT ONCE. That is a bad way to find out a template has a typo, and
+// nobody has ever received a GT text, so there is no calibration for what the volume feels like.
+//
+// So this Set now holds ONLY the two pickup events. The other six are written, tested and parked in
+// SMS_STAGED below. Promote them deliberately, ideally one at a time, starting with payment_failed
+// (it is the one that recovers money). Moving a line from STAGED to SMS_EVENTS is the whole change.
 const SMS_EVENTS = new Set([
-  'payment_failed',         // card declined — the text that actually recovers money
+  'pickup_change',          // Saturday: the window and location changed
+  'pickup_reminder',        // Sunday morning: last call before a 45-minute window
+]);
+
+// Written and ready, deliberately NOT sending yet. This is not dead code: it is the promotion queue,
+// and it exists so that "which texts are off" is a question with a written answer rather than a diff
+// somebody has to go find. Same reasoning as the live list — a deadline the customer can still act on.
+const SMS_STAGED = new Set([
+  'payment_failed',         // card declined — the text that actually recovers money. Promote first.
   'payment_failed_final',   // same moment, last stop before the meals stop
   'order_locked',           // Saturday: "your N meals are locked and headed to prep"
   'order_out_for_delivery', // Sunday logistics — they need to be home / know it's coming
   'order_pickup_ready',     // Sunday logistics — pickup customers
   'meal_reminder_final',    // Friday last call — the one marketing-class text, and the highest-leverage
-  // Added 2026-08-22 with Brycen. Same test as the rest of this list: a deadline the customer can
-  // still act on. Pickup moved off two houses onto a 45-minute window, so a missed email means a
-  // wasted drive and $10 of delivery. Both are service messages about an order already paid for,
-  // which is why neither needs sms_marketing_consent — see the note on smsReachable below.
-  'pickup_change',          // Saturday: the window and location changed
-  'pickup_reminder',        // Sunday morning: last call before a 45-minute window
 ]);
+
+// An event must never sit in both sets — that reads as "live" in one place and "off" in the other, and
+// the whole point of STAGED is that the answer is unambiguous. Cheap enough to check at module load.
+for (const e of SMS_STAGED) {
+  if (SMS_EVENTS.has(e)) throw new Error(`notify: ${e} is in both SMS_EVENTS and SMS_STAGED`);
+}
+
+// Exported so an ops/health surface can answer "which texts are actually live?" without reading source.
+export function smsRollout() {
+  return { live: [...SMS_EVENTS], staged: [...SMS_STAGED] };
+}
 
 // Can we physically text this person? A phone is the only hard requirement — several migrated
 // customers still have accounts with no number at all, and those stay email-only until they add one.
@@ -144,7 +166,8 @@ export async function notify(env, customer, eventKey, data = {}, opts = {}) {
     // customer who has turned texts off stays off even for critical events — they still receive every
     // one of them by email, so nothing is lost and "stop texting me" actually means something.
     //
-    // All six SMS_EVENTS are order/service messages, so they all read the SAME switch: sms_account
+    // Every event in SMS_EVENTS (and every one parked in SMS_STAGED) is an order/service message, so
+    // they all read the SAME switch: sms_account
     // ("text me about my order", default ON). sms_marketing stays reserved for promotional texts,
     // which the allowlist contains none of — gating the Friday cutoff reminder on a marketing flag was
     // what silently suppressed it for some customers and not others.

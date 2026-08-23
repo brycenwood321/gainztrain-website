@@ -18,7 +18,7 @@ import { ok, fail } from '../../_lib/respond.js';
 import { requireAdmin } from '../../_lib/admin.js';
 import { all } from '../../_lib/db.js';
 import { upcomingSunday } from '../../_lib/menu.js';
-import { notify } from '../../_lib/notify.js';
+import { notify, smsRollout } from '../../_lib/notify.js';
 
 const WEEK_RE = /^\d{4}-\d{2}-\d{2}$/;
 const EVENTS = { change: 'pickup_change', reminder: 'pickup_reminder' };
@@ -94,5 +94,8 @@ export async function onRequestPost(context) {
   }
 
   summary.sms_gate = String(env.SMS_AUTH_ENABLED) === 'true' ? 'on' : 'OFF (email only)';
+  // Which texts are live at all. Brycen's call 2026-08-22 was to switch on the pickup texts ONLY, so
+  // a preview that cannot show the blast radius is not a preview.
+  summary.sms_rollout = smsRollout();
   return ok({ summary, recipients });
 }

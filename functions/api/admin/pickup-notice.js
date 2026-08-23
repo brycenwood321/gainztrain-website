@@ -62,6 +62,24 @@ export async function onRequestPost(context) {
 
   // Anyone with a live order this week whose fulfilment is pickup. Same status exclusions as the cook
   // list: if we are not cooking for them, we are not telling them when to collect.
+  // Who still needs something, decided in SQL so a pass costs nothing for people already done.
+  //
+  // Two different questions depending on mode, and getting this wrong double-sends:
+  //   full send  -> anyone WITHOUT a live claim for this event+week
+  //   channel=sms -> anyone WITHOUT a successfully sent SMS row for this template. The claim filter is
+  //                  wrong here by definition: these customers were claimed by the full send, that is
+  //                  exactly why their text is missing. Matching on the delivered row instead means
+  //                  the nine who already got a text are excluded and cannot receive a second one.
+  const exclusion = channels
+    ? `AND NOT EXISTS (
+          SELECT 1 FROM comms_log cl
+           WHERE cl.customer_id = o.customer_id AND cl.template = ?
+             AND cl.channel = ? AND cl.ghl_status = 'sent')`
+    : `AND NOT EXISTS (
+          SELECT 1 FROM comms_log cl
+           WHERE cl.dedup_key = ? || o.customer_id || ? AND cl.ghl_status = 'claimed')`;
+  const exclusionArgs = channels ? [tpl, channels[0]] : [`pickup:${eventKey}:`, `:${week}`];
+
   const rows = await all(env.DB,
     `SELECT DISTINCT o.customer_id, c.email, c.first_name, c.last_name, c.phone,
             c.ghl_contact_id, c.is_owner
@@ -70,19 +88,9 @@ export async function onRequestPost(context) {
       WHERE o.week_of = ?
         AND o.status NOT IN ('skipped_paused','skipped_canceled')
         AND COALESCE(o.delivery_method, c.delivery_method) = 'pickup'
-        -- Skip anyone who already holds a live claim for this exact event+week. Doing this in SQL
-        -- rather than letting notify() dedup them matters: EVERY D1 call counts against the Worker's
-        -- ~50 subrequest budget, so walking past ten already-done customers to reach the eleventh was
-        -- itself enough to blow the limit. A pass now touches only people who still need the message.
-        -- Matches the dedupKey built below; release_orphans flips ghl_status off 'claimed' so a
-        -- stranded customer reappears here.
-        AND (? = 1 OR NOT EXISTS (
-          SELECT 1 FROM comms_log cl
-           WHERE cl.dedup_key = ? || o.customer_id || ?
-             AND cl.ghl_status = 'claimed'
-        ))
+        ${exclusion}
       ORDER BY c.first_name, c.last_name`,
-    week, channels ? 1 : 0, `pickup:${eventKey}:`, `:${week}`);
+    week, ...exclusionArgs);
 
   const summary = {
     week_of: week, event: tpl, when, dry,

@@ -67,35 +67,58 @@ export async function onRequestPost(context) {
   };
   const recipients = [];
 
+  // Filter first, then send in small concurrent batches.
+  //
+  // ⚠️ This was a sequential for-loop and it cost a failed send on 2026-08-22. Fifteen customers x
+  // (email + SMS) is up to thirty GHL round-trips back to back, which runs for about a minute — and
+  // Cloudflare ABORTS a Worker the moment the client disconnects. One blip on Brycen's wifi killed the
+  // run with no response and no way to tell how far it had got. Batching cuts the wall time to a few
+  // seconds, which is short enough that a blip has nothing to interrupt.
+  //
+  // Concurrency stays low on purpose: notify() writes D1 rows and GHL rate-limits, and this is not a
+  // hot path worth pushing.
+  const targets = [];
   for (const r of rows) {
     if (only && r.customer_id !== only) continue;
     if (r.is_owner === 1 && excludeOwners) { summary.skipped_owner++; continue; }
     if (!r.email) { summary.skipped_no_email++; continue; }
     summary.candidates++;
     if (r.is_owner === 1) summary.owners_included++;
-    recipients.push({
+    const entry = {
       name: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
       email: r.email,
       sms: r.phone ? 'yes' : 'no phone',
       owner: r.is_owner === 1 || undefined,
-    });
-    if (dry) continue;
-
-    const cust = {
-      id: r.customer_id, email: r.email, first_name: r.first_name,
-      ghl_contact_id: r.ghl_contact_id,
     };
-    // One notice per customer per week per event, whatever happens upstream.
-    const res = await notify(env, cust, tpl, { firstName: r.first_name, when, weekOf: week },
-      { dedupKey: `pickup:${eventKey}:${r.customer_id}:${week}` });
-    if (res.deduped) summary.deduped++;
-    else if (res.ok) summary.sent++;
-    else summary.failed++;
-    // Per-channel truth. `sent: 12` with every sms leg missing is a false green, and this system has
-    // been bitten by exactly that before.
-    const last = recipients[recipients.length - 1];
-    last.result = res.deduped ? 'deduped' : (res.ok ? 'ok' : (res.reason || 'failed'));
-    last.channels = (res.results || []).map((x) => `${x.channel || x.type || '?'}:${x.ok === false ? 'FAIL' : 'ok'}`);
+    recipients.push(entry);
+    targets.push({ row: r, entry });
+  }
+
+  if (!dry) {
+    const BATCH = 5;
+    for (let i = 0; i < targets.length; i += BATCH) {
+      await Promise.all(targets.slice(i, i + BATCH).map(async ({ row: r, entry }) => {
+        const cust = {
+          id: r.customer_id, email: r.email, first_name: r.first_name,
+          ghl_contact_id: r.ghl_contact_id,
+        };
+        let res;
+        try {
+          // One notice per customer per week per event, whatever happens upstream.
+          res = await notify(env, cust, tpl, { firstName: r.first_name, when, weekOf: week },
+            { dedupKey: `pickup:${eventKey}:${r.customer_id}:${week}` });
+        } catch (e) {
+          res = { ok: false, reason: `threw: ${e && e.message}` };
+        }
+        if (res.deduped) summary.deduped++;
+        else if (res.ok) summary.sent++;
+        else summary.failed++;
+        // Per-channel truth. `sent: 15` with every sms leg missing is a false green, and this system
+        // has been bitten by exactly that before.
+        entry.result = res.deduped ? 'deduped' : (res.ok ? 'ok' : (res.reason || 'failed'));
+        entry.channels = (res.results || []).map((x) => `${x.channel || x.type || '?'}:${x.ok === false ? 'FAIL' : 'ok'}`);
+      }));
+    }
   }
 
   summary.sms_gate = String(env.SMS_AUTH_ENABLED) === 'true' ? 'on' : 'OFF (email only)';

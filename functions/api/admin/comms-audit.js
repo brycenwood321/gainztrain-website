@@ -71,11 +71,6 @@ export async function onRequestPost(context) {
   const template = params.get('template');
   if (!template) return json({ ok: false, error: 'template required' }, 400);
   const report = await audit(context.env, template);
-  if (params.get('release_orphans') !== '1') return json({ ok: true, ...report, released: 0 }, 200);
-
-  // ?release_channel=sms frees a claim on ONE leg. A customer who got the email but not the text is
-  // not an "orphan" — they have a delivered row — yet their SMS claim still blocks the retry that
-  // would finish the job. Voiding it is the only way to reach them without re-sending the email.
   const relChan = params.get('release_channel');
   if (relChan) {
     const stuck = (await all(context.env.DB,
@@ -103,6 +98,11 @@ export async function onRequestPost(context) {
                   note: `Re-run the ${relChan} send; these will now be reached.` }, 200);
   }
 
+  if (params.get('release_orphans') !== '1') return json({ ok: true, ...report, released: 0 }, 200);
+
+  // ?release_channel=sms frees a claim on ONE leg. A customer who got the email but not the text is
+  // not an "orphan" — they have a delivered row — yet their SMS claim still blocks the retry that
+  // would finish the job. Voiding it is the only way to reach them without re-sending the email.
   // Void ONLY the claims of customers with no successful channel row. A delivered customer's claim is
   // left intact, which is what stops the retry from messaging them twice.
   const stamp = nowIso();

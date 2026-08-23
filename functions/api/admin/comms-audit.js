@@ -73,6 +73,36 @@ export async function onRequestPost(context) {
   const report = await audit(context.env, template);
   if (params.get('release_orphans') !== '1') return json({ ok: true, ...report, released: 0 }, 200);
 
+  // ?release_channel=sms frees a claim on ONE leg. A customer who got the email but not the text is
+  // not an "orphan" — they have a delivered row — yet their SMS claim still blocks the retry that
+  // would finish the job. Voiding it is the only way to reach them without re-sending the email.
+  const relChan = params.get('release_channel');
+  if (relChan) {
+    const stuck = (await all(context.env.DB,
+      `SELECT DISTINCT cl.customer_id, c.first_name, c.last_name
+         FROM comms_log cl JOIN customers c ON c.id = cl.customer_id
+        WHERE cl.template = ? AND cl.ghl_status = 'claimed'
+          AND cl.dedup_key LIKE ?
+          AND NOT EXISTS (
+            SELECT 1 FROM comms_log s
+             WHERE s.customer_id = cl.customer_id AND s.template = ?
+               AND s.channel = ? AND s.ghl_status = 'sent')`,
+      template, `%:${relChan}:%`, template, relChan)) || [];
+    const ts = nowIso();
+    let freed = 0;
+    for (const p of stuck) {
+      const r = await run(context.env.DB,
+        `UPDATE comms_log
+            SET dedup_key = dedup_key || ':voided:' || ?, ghl_status = 'claim_voided'
+          WHERE customer_id = ? AND template = ? AND ghl_status = 'claimed' AND dedup_key LIKE ?`,
+        ts, p.customer_id, template, `%:${relChan}:%`);
+      freed += r?.meta?.changes || 0;
+    }
+    return json({ ok: true, channel: relChan, freed,
+                  people: stuck.map((p) => `${p.first_name || ''} ${p.last_name || ''}`.trim()),
+                  note: `Re-run the ${relChan} send; these will now be reached.` }, 200);
+  }
+
   // Void ONLY the claims of customers with no successful channel row. A delivered customer's claim is
   // left intact, which is what stops the retry from messaging them twice.
   const stamp = nowIso();

@@ -45,10 +45,23 @@ async function audit(env, template) {
            counts: { delivered: delivered.length, orphans: orphans.length, failed: failed.length } };
 }
 
+// ?detail=<customer_id> dumps the raw comms_log rows for one person. Aggregates hid the answer once
+// already: a 'queued_no_token' row (GHL contact could not be resolved) is neither 'sent' nor 'failed',
+// so it vanished from both the delivered list and the failure count.
+async function detail(env, template, customerId) {
+  return await all(env.DB,
+    `SELECT channel, ghl_status, contact_id, sent_at, dedup_key
+       FROM comms_log WHERE customer_id = ? AND template = ? ORDER BY sent_at`,
+    customerId, template);
+}
+
 export async function onRequestGet(context) {
   const denied = await requireAdmin(context); if (denied) return denied;
-  const template = new URL(context.request.url).searchParams.get('template');
+  const params = new URL(context.request.url).searchParams;
+  const template = params.get('template');
   if (!template) return json({ ok: false, error: 'template required' }, 400);
+  const who = params.get('detail');
+  if (who) return json({ ok: true, customer_id: who, rows: await detail(context.env, template, who) }, 200);
   return json({ ok: true, ...(await audit(context.env, template)) }, 200);
 }
 

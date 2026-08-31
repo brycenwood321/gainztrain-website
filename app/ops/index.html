@@ -3850,6 +3850,7 @@
     // The week dropdown lets Marissa build/publish a menu for any of the next several weeks, not just this
     // one. menuWeeksCache holds the server's view (which weeks are published/locked) for the status badge.
     let menuWeeksCache = [];
+    let orderableWeekYmd = "";   // the week the picker should default/snap to (past weeks are reference only)
     const ymdOf = w => String(w.week_of).replace(/-/g, "");
 
     async function renderMenuWeekPicker() {
@@ -3860,6 +3861,7 @@
         if (!res.ok) { document.getElementById("menu-week-bar").style.display = "none"; return; }
         const data = await res.json();
         menuWeeksCache = data.weeks || [];
+        orderableWeekYmd = String(data.orderable_week || "").replace(/-/g, "");
       } catch { return; }
       if (!menuWeeksCache.length) return;
       document.getElementById("menu-week-bar").style.display = "";
@@ -3869,7 +3871,9 @@
       // Only snap forward off a GENUINELY PAST week (already delivered — older than this cycle's cook week).
       const cookWeek = getWeekStr();
       if (!menuWeeksCache.some(w => ymdOf(w) === menuBuildWeek) && menuBuildWeek < cookWeek) {
-        menuBuildWeek = ymdOf(menuWeeksCache[0]);
+        // Snap to the ORDERABLE week, not weeks[0]. The list now leads with read-only past weeks
+        // for reference, so weeks[0] would drop you into a week that has already been delivered.
+        menuBuildWeek = orderableWeekYmd || ymdOf(menuWeeksCache[0]);
         seedWeekIfNeeded();
       }
       // If the build week is the locked cook week (not in the orderable list), prepend it so it stays
@@ -3879,11 +3883,20 @@
         const iso = `${menuBuildWeek.slice(0,4)}-${menuBuildWeek.slice(4,6)}-${menuBuildWeek.slice(6,8)}`;
         weeks = [{ week_of: iso, locked: true, _cook: true }, ...weeks];
       }
+      // Weeks are NAMED by the Monday they go live, not the Sunday they deliver: week_of 2026-09-06
+      // is "Week of Aug 31". Storage still keys on the Sunday; this is display only. The server sends
+      // label_week_of, and we derive it locally for the prepended cook week which never came from it.
       sel.innerHTML = weeks.map((w) => {
-        const d = new Date(w.week_of + "T12:00:00");
+        const labelIso = w.label_week_of || (() => {
+          const d = new Date(w.week_of + "T12:00:00"); d.setDate(d.getDate() - 6);
+          return d.toISOString().slice(0, 10);
+        })();
+        const d = new Date(labelIso + "T12:00:00");
         const nice = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
         const label = w._cook ? `🍳 Cooking now · ${nice}` : `Week of ${nice}`;
-        const tag = w.locked ? " · 🔒 locked" : w.published ? " · ✓ published" : " · draft";
+        const tag = w.past ? " · 👁 view only"
+                  : w.locked ? " · 🔒 locked"
+                  : w.published ? " · ✓ published" : " · draft";
         return `<option value="${ymdOf(w)}">${label}${tag}</option>`;
       }).join("");
       sel.value = menuBuildWeek;
@@ -3897,14 +3910,32 @@
       if (!el) return;
       if (btn) btn.style.display = "none";
       const w = menuWeeksCache.find(x => ymdOf(x) === menuBuildWeek);
+      setMenuEditable(!(w && w.past));
       if (!w)                          { el.textContent = ""; el.className = "menu-week-status"; return; }
-      if (w.locked)                    { el.textContent = "🔒 Kitchen locked — this menu is frozen"; el.className = "menu-week-status locked"; }
+      if (w.past)                      { el.textContent = `👁 Already delivered (${w.meal_count} meals) - view only`; el.className = "menu-week-status locked"; }
+      else if (w.locked)               { el.textContent = "🔒 Kitchen locked — this menu is frozen"; el.className = "menu-week-status locked"; }
       else if (w.status === "live")    { el.textContent = `✓ Live for customers (${w.meal_count} meals) — edits stay live`; el.className = "menu-week-status published"; }
       else if (w.status === "staged")  { el.textContent = `⏳ Staged (${w.meal_count} meals) — NOT visible to customers yet`; el.className = "menu-week-status draft"; if (btn) btn.style.display = ""; }
       else                             { el.textContent = "Draft — build it, then Finalize"; el.className = "menu-week-status draft"; }
     }
 
+    // A delivered week is reference only. Finalize / Confirm / meal editing all go dead so nobody can
+    // rewrite a menu the kitchen already cooked and shipped. Marissa, 2026-08-31.
+    function setMenuEditable(on) {
+      const fin = document.querySelector(".menu-topbar-btn.finalize");
+      if (fin) { fin.disabled = !on; fin.style.opacity = on ? "" : "0.4"; fin.style.pointerEvents = on ? "" : "none"; }
+      const golive = document.getElementById("menu-golive-btn");
+      if (!on && golive) golive.style.display = "none";
+      const grid = document.getElementById("menu-pills") || document.getElementById("menu-main");
+      if (grid) { grid.style.opacity = on ? "" : "0.75"; grid.style.pointerEvents = on ? "" : "none"; }
+    }
+    function isPastWeekSelected() {
+      const w = menuWeeksCache.find(x => ymdOf(x) === menuBuildWeek);
+      return !!(w && w.past);
+    }
+
     async function confirmGoLive() {
+      if (isPastWeekSelected()) { showToast("That week has already been delivered - view only."); return; }
       const wk = menuBuildWeek;
       const wkPretty = `${wk.slice(0,4)}-${wk.slice(4,6)}-${wk.slice(6,8)}`;
       if (!confirm(`Make the week of ${wkPretty} LIVE for customers to order?\n\nThis publishes the staged menu so customers can see + order it.\n(Customers are not texted yet — that turns on once A2P + email are fixed.)`)) return;
@@ -4665,6 +4696,7 @@
 
     // ── FINALIZE MENU ──
     async function finalizeMenu() {
+      if (isPastWeekSelected()) { showToast("That week has already been delivered - view only."); return; }
       const confirmed = menuMeals().filter(m => m.status === "confirmed");
       if (confirmed.length === 0) {
         showToast("Confirm at least one meal before finalizing.");

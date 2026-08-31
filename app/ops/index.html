@@ -223,6 +223,15 @@
       color: #7a7270;
     }
 
+    /* ── PER-MEAL ORDER TOTALS (Orders tab) ── */
+    .order-meal-totals { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+    .omt-chip {
+      display: inline-flex; align-items: baseline; gap: 5px;
+      background: #f5f2ee; border: 1px solid #e8e4df; border-radius: 999px;
+      padding: 5px 11px; font-size: .8rem; font-weight: 600; color: #4a4440;
+    }
+    .omt-chip b { font-size: .95rem; font-weight: 900; color: #ff6b35; font-variant-numeric: tabular-nums; }
+
     /* ── INGREDIENTS BY MEAL (bottom of the Ingredients tab) ── */
     .ing-bymeal { padding: 0 16px 24px; }
     .ing-bymeal-head {
@@ -2268,6 +2277,9 @@
       <div class="orders-list-wrap">
         <div class="orders-section-heading">Orders This Week</div>
         <div class="order-count" id="order-count"></div>
+        <!-- How many of each dish the week adds up to (Marissa, 2026-08-31). The count line above is
+             customers + total meals; this is the per-dish split, which is what the cook needs. -->
+        <div class="order-meal-totals" id="order-meal-totals"></div>
         <div id="order-list"></div>
       </div>
 
@@ -3476,9 +3488,27 @@
         ? "No orders yet."
         : `${all.length} customer${all.length !== 1 ? "s" : ""} · ${totalMeals} total meal${totalMeals !== 1 ? "s" : ""}`;
 
+      const mealTotalsEl = document.getElementById("order-meal-totals");
       if (all.length === 0) {
+        if (mealTotalsEl) mealTotalsEl.innerHTML = "";
         list.innerHTML = '<div class="orders-empty">No orders yet — pull from Brycen\'s site or add one manually.</div>';
         return;
+      }
+
+      // Per-dish totals for the week, biggest cook first.
+      if (mealTotalsEl) {
+        const escM = t => String(t == null ? "" : t)
+          .replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+        const byMeal = {};
+        all.forEach(o => (o.meals || []).forEach(m => {
+          const n = (m.meal_name || "").trim();
+          if (!n) return;
+          byMeal[n] = (byMeal[n] || 0) + (Number(m.quantity) || 0);
+        }));
+        const rows = Object.entries(byMeal).filter(([, q]) => q > 0).sort((a, b) => b[1] - a[1]);
+        mealTotalsEl.innerHTML = rows.length
+          ? rows.map(([n, q]) => `<span class="omt-chip"><b>${q}</b> ${escM(n)}</span>`).join("")
+          : "";
       }
 
       // Flag ordered meals that will not be counted in ingredient quantities.

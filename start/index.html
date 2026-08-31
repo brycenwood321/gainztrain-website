@@ -134,6 +134,31 @@
               <label for="smsOptIn" style="font-size:.78rem;color:var(--gray);font-weight:400;line-height:1.45;">I agree to receive order &amp; delivery updates and occasional promotional texts from <b>Gainz Train</b> at this number. Consent is not a condition of purchase. Msg frequency varies. Msg &amp; data rates may apply. Reply <b>STOP</b> to cancel, <b>HELP</b> for help. <a href="/privacy-policy/" target="_blank" style="text-decoration:underline;">Privacy Policy</a></label>
             </div>
           </div>
+          <!-- Goal + sex are REQUIRED (Marissa, 2026-08-31). They set portion size in the kitchen, and
+               21 of 27 orders on the week of Aug 30 had neither, so those customers were silently
+               portioned as maintain_male, the LARGEST portion. Asking here is the only way the
+               kitchen and the packing label carry a real number instead of a fallback. -->
+          <div id="goalRow">
+            <div class="row2">
+              <div>
+                <label for="sex">Portion size</label>
+                <select id="sex" required>
+                  <option value="">Choose one</option>
+                  <option value="female">Standard (115g protein)</option>
+                  <option value="male">Large (170g protein)</option>
+                </select>
+              </div>
+              <div>
+                <label for="goal">Your goal</label>
+                <select id="goal" required>
+                  <option value="">Choose one</option>
+                  <option value="cut">Lean out</option>
+                  <option value="maintain">Maintain</option>
+                  <option value="build">Build muscle</option>
+                </select>
+              </div>
+            </div>
+          </div>
           <label for="password" id="pwLabel">Password</label>
           <input id="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
           <div id="pwForgot" class="hidden" style="margin-top:.45rem;"><a id="forgotLink" style="cursor:pointer;text-decoration:underline;font-size:.85rem;color:var(--gray);">Forgot your password? Email me a login link</a></div>
@@ -323,7 +348,12 @@
             if(password.length<8){showMsg('Choose a password of at least 8 characters.');reset();return;}
             const heard=$('heard').value;
             if(!heard){showMsg('One last thing — tell us how you heard about us.');reset();return;}
+            // Portion size + goal drive how much food the kitchen cooks for this person.
+            const sex=$('sex').value, goal=$('goal').value;
+            if(!sex){showMsg('Pick a portion size so the kitchen knows how much to cook for you.');reset();return;}
+            if(!goal){showMsg('Pick your goal so we can portion your meals.');reset();return;}
             const reg=await api('/api/auth/register',{method:'POST',body:JSON.stringify({email,password,first_name:firstName,last_name:lastName,phone,city,
+              sex,goal,
               sms_opt_in:!!phone&&$('smsOptIn').checked,
               heard_about:heard,heard_detail:$('heardDetail').value.trim(),attribution:readAttr()})});
             if(reg.status===409){

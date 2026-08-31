@@ -13,6 +13,9 @@ import { rateLimit, clientIp } from '../../_lib/ratelimit.js';
 import { orderableWeek } from '../../_lib/menu.js';
 import { capiEvent } from '../../_lib/capi.js';
 
+const GOALS = new Set(['cut', 'maintain', 'build']);
+const SEXES = new Set(['male', 'female']);
+
 export async function onRequestPost(context) {
   const { request, env } = context;
   const body = await readJson(request);
@@ -35,6 +38,14 @@ export async function onRequestPost(context) {
   if (!phone) return fail(400, 'invalid_phone', 'Enter a valid phone number.');
   // City is required for every new account, pickup or delivery.
   if (!city) return fail(400, 'city_required', 'Enter your city.');
+  // Goal + sex are REQUIRED (Marissa, 2026-08-31). They set PORTION SIZE in the kitchen. Before this
+  // they were not collected at all, so 21 of 27 orders on the week of Aug 30 carried neither and were
+  // silently portioned as maintain_male, the largest portion, and the packing label printed a default
+  // that looked like real data. Same vocabulary as /api/account/goal so the two cannot drift.
+  const sex = str(body.sex).toLowerCase();
+  const goal = str(body.goal).toLowerCase();
+  if (!SEXES.has(sex)) return fail(400, 'sex_required', 'Choose a portion size.');
+  if (!GOALS.has(goal)) return fail(400, 'goal_required', 'Choose your goal.');
 
   const existing = await one(env.DB, `SELECT id FROM customers WHERE email = ?`, email);
   if (existing) return fail(409, 'email_exists', 'An account with that email already exists — try logging in.');
@@ -47,9 +58,9 @@ export async function onRequestPost(context) {
   try {
     await run(
       env.DB,
-      `INSERT INTO customers (id, email, first_name, last_name, phone, city, role, sms_marketing_consent, sms_consent_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'customer', ?, ?, ?, ?)`,
-      id, email, firstName, lastName, phone, city, smsOptIn ? 1 : 0, smsOptIn ? now : null, now, now,
+      `INSERT INTO customers (id, email, first_name, last_name, phone, city, sex, goal, role, sms_marketing_consent, sms_consent_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'customer', ?, ?, ?, ?)`,
+      id, email, firstName, lastName, phone, city, sex, goal, smsOptIn ? 1 : 0, smsOptIn ? now : null, now, now,
     );
   } catch {
     // UNIQUE(email) race: another request registered the same email between our check + insert.

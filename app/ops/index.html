@@ -2436,23 +2436,6 @@
       </div>
     </div>
 
-    <!-- End-of-prep sweep. Per-customer messages already go out automatically as each pack finishes;
-         these catch anyone the scanner missed (a lost label, packing split across two phones, a
-         network blip). Both are safe to press twice - the server refuses to move a status backwards
-         and notify() dedups, so nobody gets messaged the same thing twice. -->
-    <div class="notify-panel">
-      <div class="notify-head">Tell customers their food is ready</div>
-      <p class="notify-sub">
-        Scanning a customer's last meal already messages them. Press these when prep is finished to
-        catch anyone the scanner missed. Safe to press more than once.
-      </p>
-      <div class="notify-actions">
-        <button type="button" class="notify-btn" id="notify-pickup-btn">🥡 Notify pickup customers</button>
-        <button type="button" class="notify-btn secondary" id="notify-delivery-btn">🚚 Deliveries are on the way</button>
-      </div>
-      <div class="notify-result" id="notify-result"></div>
-    </div>
-
     <!-- Main body -->
     <div class="assembly-body">
 
@@ -2528,6 +2511,24 @@
 
       </div><!-- /assembly-legacy-scan -->
 
+    </div>
+
+    <!-- End-of-prep sweep, at the BOTTOM because it is the last thing you do (Marissa, 2026-08-31).
+         ⚠️ These buttons are now the ONLY thing that tells customers their food is ready. The
+         per-customer auto-message fired from notifyPackComplete(), which only ever ran off a SCAN,
+         and scanning is hidden while PACK_MODE is on. The old copy said messages had already gone
+         out automatically, which would have left customers waiting on a text nobody sent. -->
+    <div class="notify-panel">
+      <div class="notify-head">Tell customers their food is ready</div>
+      <p class="notify-sub">
+        Nobody is messaged automatically while you are bagging from the pack list. Press these once
+        prep is finished and everything is bagged. Safe to press more than once.
+      </p>
+      <div class="notify-actions">
+        <button type="button" class="notify-btn" id="notify-pickup-btn">🥡 Notify pickup customers</button>
+        <button type="button" class="notify-btn secondary" id="notify-delivery-btn">🚚 Deliveries are on the way</button>
+      </div>
+      <div class="notify-result" id="notify-result"></div>
     </div>
 
     <!-- Scan bar: phone camera (primary), or type a meal ID (fallback). A USB scanner gun also still works.

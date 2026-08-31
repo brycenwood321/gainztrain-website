@@ -84,107 +84,57 @@
       width: 100%;
     }
 
-    /* ── LABEL STYLES ── LANDSCAPE meal tag on the Brother DK-1201 (physical die-cut 29mm × 90mm).
-       On screen we show it landscape (90mm × 29mm) so it's readable; in @media print it's rotated 90°
-       to fit the physical label. Layout: QR on the LEFT, then Name / Meal / P C V line to the right. */
+    /* ── LABEL STYLES ── ONE PACKING SLIP PER CLIENT on Brother DK-2251 (62mm CONTINUOUS tape).
+       No rotation: the tape feeds 62mm across the head and we choose the length, which is what makes
+       a variable-length list the right fit here. Length is set at print time from the client with the
+       most lines (see renderAll), so a 3 line label and a 6 line label are never clipped. */
     .label {
-      width: 340px;    /* 90mm landscape at 96dpi */
-      height: 110px;   /* 29mm */
+      width: 235px;              /* 62mm at 96dpi, for the on-screen preview */
       background: #fff;
       border: 1.5px solid #d4d4d8;
       border-radius: 4px;
-      position: relative;
-      overflow: hidden;
-      font-family: Arial, Helvetica, sans-serif; /* prints cleanly on thermal */
-    }
-
-    .label-rot {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      gap: 3mm;
-      padding: 2mm 2.5mm;
+      padding: 3mm;
       box-sizing: border-box;
+      font-family: Arial, Helvetica, sans-serif;   /* prints cleanly on thermal */
+      color: #000;
     }
+    .lbl-head { border-bottom: 0.5mm solid #000; padding-bottom: 1.5mm; margin-bottom: 2mm; }
+    .lbl-name { font-size: 15px; font-weight: 900; text-transform: uppercase; line-height: 1.05; word-break: break-word; }
+    .lbl-meta { font-size: 10px; font-weight: 800; letter-spacing: .04em; margin-top: 1mm; }
+    .lbl-date { font-size: 10px; font-weight: 700; letter-spacing: .03em; margin-top: 0.6mm; }
 
-    /* QR on the left, fixed square (quiet-zone from the white label). */
-    .lbl-qr { flex: 0 0 auto; background: #fff; line-height: 0; }
-    .lbl-qr canvas,
-    .lbl-qr img { display: block; width: 25mm !important; height: 25mm !important; }
+    .lbl-lines { display: flex; flex-direction: column; gap: 1.4mm; }
+    .lbl-line { display: flex; align-items: flex-start; gap: 2mm; }
+    /* Big enough to tick with a pen, in gloves, without clipping the neighbouring line. */
+    .lbl-box { flex: 0 0 auto; width: 4.2mm; height: 4.2mm; border: 0.45mm solid #000; border-radius: 0.6mm; margin-top: 0.3mm; }
+    .lbl-qty { flex: 0 0 auto; min-width: 4mm; font-size: 12px; font-weight: 900; line-height: 1.2; }
+    .lbl-meal { flex: 1; font-size: 11px; font-weight: 700; line-height: 1.2; text-transform: uppercase; word-break: break-word; }
+    .lbl-size { font-size: 9px; font-weight: 600; white-space: nowrap; }
 
-    /* Text column to the right: name, meal, macros line (descending). */
-    .lbl-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
-    .lbl-name { font-size: 15px; font-weight: 900; line-height: 1.05; color: #000; }
-    .lbl-meal { font-size: 10px; font-weight: 600; color: #333; line-height: 1.15; margin-top: 1mm; }
-    .lbl-macros { display: flex; gap: 3.5mm; font-size: 11px; font-weight: 700; color: #000; margin-top: 1.5mm; }
-    .lbl-macros b { font-weight: 900; }
-    /* Prepped-on date. Deliberately IDENTICAL to .lbl-meal (size/weight/colour/font) — the old style was
-       7px light-grey monospace, which a thermal printer dithers into something barely readable. */
-    .lbl-date { font-size: 10px; font-weight: 600; color: #333; line-height: 1.15; margin-top: 1mm; }
-
-    /* ── PRINT STYLES ── */
+    /* ── PRINT STYLES ──
+       Lock the print surface to ONE label width. iOS Safari lays the page out at its content width
+       then scales it to the paper, so anything wider than 62mm shrinks every label to a sliver.
+       In the print dialog pick the DK-2251 62mm stock, margins None, scale 100%, headers/footers OFF.
+       Print from CHROME, not Safari. */
     @media print {
-      /* Lock the whole print surface to ONE label width. iOS Safari lays the page out at its content
-         width then scales it to the paper — any element wider than 29mm (e.g. the header bar) shrinks
-         every label to a tiny sliver. Constraining html/body/grid to 29mm makes it print 1:1. */
-      html, body {
-        width: 29mm;
-        background: #fff;
-        padding: 0;
-        margin: 0;
-      }
-
-      /* Hide EVERYTHING that isn't a label so nothing forces the page wide. */
+      html, body { width: 62mm; background: #fff; padding: 0; margin: 0; }
       .labels-topbar, .screen-header { display: none !important; }
-
-      .label-grid {
-        display: block;
-        width: 29mm;
-        max-width: 29mm;
-        margin: 0;
-        padding: 0;
-        gap: 0;
-      }
-
-      /*
-        One physical Brother DK-1201 label per page (29mm × 90mm). The content is authored landscape
-        (90mm × 29mm) and rotated 90° to fit. In the print dialog pick the DK-1201 label size, margins
-        None, scale 100%, headers/footers OFF.
-      */
+      .label-grid { display: block; width: 62mm; max-width: 62mm; margin: 0; padding: 0; gap: 0; }
       .label {
-        width: 29mm;
-        height: 90mm;
+        width: 62mm;
         border: none;
         border-radius: 0;
-        padding: 0;
         page-break-after: always;
         break-after: page;
         margin: 0;
+        overflow: hidden;
       }
-
-      /* Rotate the landscape content 90° and center it in the 29×90mm page. */
-      .label-rot {
-        inset: auto;
-        top: 50%;
-        left: 50%;
-        width: 90mm;
-        height: 29mm;
-        transform: translate(-50%, -50%) rotate(90deg);
-        padding: 2mm 2.5mm;
-      }
-
-      .label:last-child {
-        page-break-after: avoid;
-        break-after: avoid;
-      }
-
-      @page {
-        size: 29mm 90mm;
-        margin: 0;
-      }
+      .label:last-child { page-break-after: avoid; break-after: avoid; }
+      @page { size: 62mm 65mm; margin: 0; }
     }
   </style>
+  <!-- Set at print time from the longest label, so the tape length always fits. -->
+  <style id="pageSize">@media print { @page { size: 62mm 65mm; margin: 0; } }</style>
 </head>
 <body>
 
@@ -264,34 +214,29 @@
       }
     };
 
-    // ── BUILD FLAT LIST OF INDIVIDUAL MEAL LABELS ──
-    // Reads meal IDs that were stored when the order was saved — never regenerates them.
+    // ── BUILD ONE LABEL PER CLIENT (2026-08-31) ──
+    // Was one label per MEAL: 262 labels for the week of Aug 30, and about an hour of the prep
+    // window spent sticking them on containers. The kitchen cooks a dish in bulk and piles it, then
+    // bags client by client, so the label that helps is a PACKING SLIP for one person: who it is,
+    // how many meals, and a tick box per line to mark off as each goes in the bag.
     function buildLabels(orders, prepDateStr) {
-      const labels = [];
       const preppedOn = formatPrepDate(prepDateStr);
-
-      orders.forEach(order => {
-        const macros = (MACROS[order.gender] || {})[order.goal] || { protein: "?", carbs: "?", veggies: "?" };
-        const firstName = order.first_name || "";
+      return orders.map(order => {
         const lastInitial = order.last_name ? order.last_name[0] + "." : "";
-        const totalMeals = order.meals.reduce((sum, m) => sum + m.quantity, 0);
-
-        order.meals.forEach(meal => {
-          const ids = meal.meal_ids || [];
-          for (let i = 0; i < meal.quantity; i++) {
-            labels.push({
-              mealId: ids[i] || "ID-MISSING",
-              name: `${firstName} ${lastInitial}`,
-              mealName: meal.meal_name,
-              macros,
-              fulfillment: order.fulfillment,
-              preppedOn
-            });
-          }
-        });
-      });
-
-      return labels;
+        const lines = (order.meals || [])
+          .filter(m => (Number(m.quantity) || 0) > 0)
+          .map(m => ({ qty: Number(m.quantity) || 0, mealName: m.meal_name }));
+        return {
+          name: `${order.first_name || ""} ${lastInitial}`.trim() || "Unnamed",
+          preppedOn,
+          totalMeals: lines.reduce((sum, l) => sum + l.qty, 0),
+          // Portions are gender-only, but the kitchen reads the goal off the label, so show the same
+          // default the rest of the system falls back to rather than leaving a blank.
+          size: String(order.goal || "Maintain").toUpperCase(),
+          fulfillment: order.fulfillment,
+          lines,
+        };
+      }).filter(l => l.lines.length);
     }
 
     // ── FORMAT DATE FOR DISPLAY ──
@@ -316,29 +261,29 @@
       return `${year}-${month}-${day}`;
     }
 
-    // ── RENDER ONE LABEL ──
-    function renderLabel(label, idx) {
+    // ── RENDER ONE CLIENT LABEL ──
+    function renderLabel(label) {
       const div = document.createElement("div");
       div.className = "label";
-
+      const esc = t => String(t == null ? "" : t)
+        .replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
       div.innerHTML = `
-        <div class="label-rot">
-          <div class="lbl-qr" id="qr-${idx}"></div>
-          <div class="lbl-info">
-            <div class="lbl-name">${label.name}</div>
-            <div class="lbl-meal">${label.mealName}</div>
-            <div class="lbl-macros">
-              <span>P <b>${label.macros.protein}</b>g</span>
-              <span>C <b>${label.macros.carbs}</b>g</span>
-              <span>V <b>${label.macros.veggies}</b>g</span>
-            </div>
-            <!-- The GT meal ID is no longer PRINTED (the QR scanner replaced reading it by eye), but it is
-                 still encoded in the QR below, which is what Assembly decodes. -->
-            <div class="lbl-date">${label.preppedOn}</div>
-          </div>
+        <div class="lbl-head">
+          <div class="lbl-name">${esc(label.name)}</div>
+          <div class="lbl-meta">${label.totalMeals} MEAL${label.totalMeals === 1 ? "" : "S"}
+            &middot; ${esc(label.fulfillment === "delivery" ? "DELIVERY" : "PICKUP")}</div>
+          <div class="lbl-date">PREPPED ${esc(label.preppedOn)}</div>
+        </div>
+        <div class="lbl-lines">
+          ${label.lines.map(l => `
+            <div class="lbl-line">
+              <span class="lbl-box"></span>
+              <span class="lbl-qty">${l.qty}</span>
+              <span class="lbl-meal">${esc(l.mealName)}
+                <span class="lbl-size">(${esc(label.size)})</span></span>
+            </div>`).join("")}
         </div>
       `;
-
       return div;
     }
 
@@ -361,27 +306,23 @@
         return;
       }
 
-      normalizeMealIds(orders);
       const labels = buildLabels(orders, prepDateStr);
-      const totalMeals = labels.length;
-      summary.textContent = `${orders.length} customer${orders.length !== 1 ? "s" : ""} · ${totalMeals} label${totalMeals !== 1 ? "s" : ""} to print`;
+      const totalMeals = labels.reduce((sum, l) => sum + l.totalMeals, 0);
+      summary.textContent = `${labels.length} label${labels.length !== 1 ? "s" : ""} to print `
+        + `&middot; ${totalMeals} meals across ${orders.length} customer${orders.length !== 1 ? "s" : ""}`;
+      summary.innerHTML = summary.textContent;
 
-      labels.forEach((label, idx) => {
-        grid.appendChild(renderLabel(label, idx));
+      labels.forEach(label => grid.appendChild(renderLabel(label)));
 
-        // Generate the QR after the element is in the DOM. Wrapped so one bad QR can't throw out of the
-        // forEach and halt the whole sheet. Encodes just the mealId — the Assembly tab decodes it and
-        // The QR now encodes a URL (…/m/<mealId>): the Assembly scanner pulls the mealId back out (works
-        // as before), but a CUSTOMER who scans it lands on a macros page instead of a meaningless code.
-        try {
-          new QRCode(document.getElementById(`qr-${idx}`), {
-            text: "https://gainztrainprep.com/m/" + encodeURIComponent(label.mealId),
-            width: 150,
-            height: 150,
-            correctLevel: QRCode.CorrectLevel.M
-          });
-        } catch (e) { /* keep rendering the rest of the labels */ }
-      });
+      // DK-2251 is CONTINUOUS tape: 62mm across, and we choose the length. Every label in a run gets
+      // the same length, sized to the TALLEST one actually rendered, so nothing is ever clipped.
+      // Measured rather thancounted from line count: a long meal name wraps to two lines (PROTEIN
+      // BAKED ZITI (MAINTAIN) does), and a per-line formula silently loses the bottom of the list.
+      // The preview renders at the same 62mm width as the print, so the measurement transfers.
+      const tallestPx = [...grid.children].reduce((m, el) => Math.max(m, el.scrollHeight), 0);
+      const heightMm = Math.max(40, Math.ceil((tallestPx / 96) * 25.4) + 4);   // +4mm headroom
+      document.getElementById("pageSize").textContent =
+        `@media print { @page { size: 62mm ${heightMm}mm; margin: 0; } .label { height: ${heightMm}mm; } }`;
     }
 
     // Clear the old DK-2251 tape preference so a device that once picked 62mm isn't carrying dead state.

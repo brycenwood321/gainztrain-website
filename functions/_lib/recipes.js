@@ -1,18 +1,132 @@
-// recipes.js — turns locked meal selections into a shopping list + cook batches, using data/recipes.json.
-// Mirrors publish-menu's "fetch the JSON file live" pattern (no D1 table, no migration). Pure functions
-// so both the shopping-list endpoint and the kitchen-prep batches share one source of truth.
+// recipes.js: turns locked meal selections into a shopping list + cook batches. Reads the OWNER-EDITABLE
+// meal + ingredient libraries out of ops_kv (see loadRecipes), so what the dashboard shows and what the
+// kitchen buys can never drift apart again. Pure functions so shopping-list and kitchen-prep share them.
 //
 // grams_cooked in recipes.json = what the kitchen portions into a container. Raw purchase weight =
 // grams_cooked / ingredient.yield_factor. Per-customer goal×sex scales grams via profiles[goal_sex].
 
+import { one } from './db.js';
+
 const CATS = ['protein', 'carb', 'produce', 'pantry'];
 const LB = 453.592;
 
-export async function loadRecipes(request) {
+// ── ONE RECIPE LIST (2026-08-31) ───────────────────────────────────────────────────────────────
+// There used to be TWO. This file read the static data/recipes.json (8 recipes, editable only by a
+// developer), while the ops dashboard read `meal_library` in ops_kv (14 meals, editable by owners).
+// They drifted, silently. Marissa and Jayson added BBQ Chicken, Beef Broccoli Rice and Yogurt
+// Parfait in the dashboard, saw them save, and the shopping list never bought a gram of any of
+// them: 4 of the 6 meals on the week of 2026-09-06 contributed NOTHING. Same trap as the old
+// menus.json split. The editable library is now the source of truth and the static file is
+// demoted to a PRICE TABLE, because ingredient_library carries no cost_per_kg yet.
+//
+// The library's numbers are also the correct ones. Its math reproduces the signed-off worked
+// example exactly (Fiesta Chicken, 8 female + 10 male: 10 x 162g + 8 x 105g = 2,460g cooked
+// chicken, raw 2,460 x 1.8 shrinkage = 4,428g). The static file disagreed on BOTH counts: it had
+// no batch pooling, and chicken yield_factor 0.75 (raw = cooked / 0.75 = 1.33x) against the
+// library's confirmed 1.8x. It was under-buying chicken by about a quarter on every meal it did
+// know about, on top of the meals it did not.
+const CAT_MAP = { protein: 'protein', carbs: 'carb', veggies: 'produce', misc: 'pantry' };
+// Portion targets are GENDER ONLY (Marissa, 2026-07-14). Goal does not change grams. Male is the
+// 1.0 baseline so profiles below express female as a per-category ratio of it.
+const TARGETS = {
+  male:   { protein: 170, carbs: 140, veggies: 100 },
+  female: { protein: 115, carbs: 100, veggies: 60 },
+};
+const GENDER_PROFILES = {
+  male:   { protein: 1, carb: 1, produce: 1, pantry: 1, fat: 1 },
+  female: {
+    protein: TARGETS.female.protein / TARGETS.male.protein,
+    carb:    TARGETS.female.carbs   / TARGETS.male.carbs,
+    produce: TARGETS.female.veggies / TARGETS.male.veggies,
+    pantry: 1, fat: 1,
+  },
+};
+export const slugifyName = (s) => String(s == null ? '' : s).toLowerCase().trim()
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+async function loadStaticRecipes(request) {
   const res = await fetch(new URL('/data/recipes.json', request.url));
   if (!res.ok) throw new Error(`recipes.json returned ${res.status}`);
   const data = await res.json();
   return { ingredients: data.ingredients || {}, recipes: data.recipes || {}, profiles: data.profiles || {} };
+}
+
+async function opsKv(env, key) {
+  try {
+    const row = await one(env.DB, `SELECT value_json FROM ops_kv WHERE key = ?`, key);
+    if (!row || !row.value_json) return null;
+    const v = JSON.parse(row.value_json);
+    return Array.isArray(v) && v.length ? v : null;
+  } catch { return null; }
+}
+
+// Convert the dashboard's editable libraries into the shape the compute functions below already use.
+// Dashboard model: each ingredient carries a PERCENTAGE of its category's gram target, and batched
+// categories pool their targets before the split. Misc items (pct null) are eyeballed and weigh
+// nothing, which is why they contribute 0 grams here rather than a guess.
+function libraryToRecipes(meals, ingredients, priceLib) {
+  const priceByName = {};
+  for (const [, ing] of Object.entries(priceLib.ingredients || {})) {
+    if (ing && ing.name) priceByName[normalizeName(ing.name)] = ing;
+  }
+  const outIng = {};
+  for (const ing of ingredients) {
+    if (!ing || !ing.name) continue;
+    const priced = priceByName[normalizeName(ing.name)];
+    const shrink = Number(ing.shrinkage) > 0 ? Number(ing.shrinkage) : 1;
+    outIng[slugifyName(ing.name)] = {
+      name: ing.name,
+      category: 'pantry',                 // overwritten per use below from the meal's own category
+      yield_factor: 1 / shrink,           // server divides by this; library multiplies by shrinkage
+      cost_per_kg: priced && typeof priced.cost_per_kg === 'number' ? priced.cost_per_kg : null,
+      is_misc: !!ing.is_misc,
+      unit: ing.unit || null,
+      package_size: ing.package_size == null ? null : Number(ing.package_size),
+      package_size_unit: ing.package_size_unit || null,
+    };
+  }
+  const outRecipes = {};
+  for (const meal of meals) {
+    if (!meal || !meal.name) continue;
+    const batched = meal.mode === 'batch' && Array.isArray(meal.batch_categories) ? meal.batch_categories : [];
+    const batchTotal = batched.reduce((s, c) => s + (TARGETS.male[c] || 0), 0);
+    const items = [];
+    for (const line of (meal.ingredients || [])) {
+      if (!line || !line.item) continue;
+      const slug = slugifyName(line.item);
+      const cat = CAT_MAP[line.category] || 'pantry';
+      if (outIng[slug]) outIng[slug].category = cat;
+      const pct = Number(line.pct);
+      if (!Number.isFinite(pct) || pct <= 0) continue;   // misc / eyeball: no weight to buy by
+      // Grams are resolved PER SEX here rather than left to a per-category multiplier downstream.
+      // On a batched meal the pooled denominator is that sex's own targets, so Fiesta Chicken's
+      // 60% chicken is 60% of male 170+100=270 (162g) but 60% of female 115+60=175 (105g). A single
+      // protein-category ratio would have given 110g, over-buying every batched meal by ~5%.
+      const gramsFor = (sex) => {
+        const t = TARGETS[sex];
+        const denom = batched.includes(line.category)
+          ? batched.reduce((s, c) => s + (t[c] || 0), 0)
+          : (t[line.category] || 0);
+        return denom ? (denom * pct) / 100 : 0;
+      };
+      const male = gramsFor('male');
+      if (!male) continue;
+      items.push({ ingredient: slug, grams_cooked: male, grams_by_sex: { male, female: gramsFor('female') } });
+    }
+    outRecipes[slugifyName(meal.name)] = { names: [meal.name], items };
+  }
+  return { ingredients: outIng, recipes: outRecipes, profiles: {
+    maintain_male: GENDER_PROFILES.male, cut_male: GENDER_PROFILES.male, build_male: GENDER_PROFILES.male,
+    maintain_female: GENDER_PROFILES.female, cut_female: GENDER_PROFILES.female, build_female: GENDER_PROFILES.female,
+  } };
+}
+
+export async function loadRecipes(request, env) {
+  const staticLib = await loadStaticRecipes(request);   // prices, and the fallback if D1 is unreachable
+  if (!env || !env.DB) return staticLib;
+  const [meals, ingredients] = await Promise.all([opsKv(env, 'meal_library'), opsKv(env, 'ingredient_library')]);
+  if (!meals || !ingredients) return staticLib;         // never leave the kitchen with no list at all
+  return libraryToRecipes(meals, ingredients, staticLib);
 }
 
 export function normalizeName(s) {
@@ -56,12 +170,32 @@ export function computeShoppingList(rows, slugByPosition, lib, bufferPct = 10) {
   for (const row of rows) {
     const slug = slugByPosition[row.meal_position];
     const res = resolveRecipe({ name: row.meal_name, slug }, recipes);
-    if (!res) { unmatched.push({ name: row.meal_name, position: row.meal_position, qty: row.qty }); continue; }
+    if (!res) { unmatched.push({ name: row.meal_name, position: row.meal_position, qty: row.qty, reason: 'no recipe found' }); continue; }
+    // ⚠️ A recipe that EXISTS but has no items is the dangerous case, and it is
+    // why the shopping list has under-bought every week Protein Baked Ziti is on
+    // the menu. `protein-ziti` resolves fine, so it never landed in `unmatched`,
+    // then the items loop below ran zero times and it contributed no ingredients
+    // at all. The list came out looking complete while being short a whole meal.
+    //
+    // A missing recipe was already loud. An EMPTY one was silent, which is worse.
+    // Do not "fix" this by inventing quantities: a plausible wrong shopping list
+    // is more damaging than a visible gap, because nobody checks a list that
+    // looks right. Jayson owns the real recipe.
+    if (!res.recipe || !(res.recipe.items || []).length) {
+      unmatched.push({ name: row.meal_name, position: row.meal_position, qty: row.qty,
+                       reason: 'recipe exists but has NO ingredients, so this meal buys nothing' });
+      continue;
+    }
     const pkey = profileKey(row.goal, row.sex);
     for (const item of (res.recipe.items || [])) {
       const ing = ingredients[item.ingredient];
       const cat = (ing && ing.category) || 'pantry';
-      const g = (item.grams_cooked || 0) * (row.qty || 0) * mult(profiles, pkey, cat);
+      // grams_by_sex is already resolved against that sex's own targets (and batch pooling), so it
+      // must NOT be scaled again by the category multiplier. The multiplier path stays for the
+      // static-file fallback, which only carries a single baseline gram figure per item.
+      const g = item.grams_by_sex
+        ? (item.grams_by_sex[row.sex === 'female' ? 'female' : 'male'] || 0) * (row.qty || 0)
+        : (item.grams_cooked || 0) * (row.qty || 0) * mult(profiles, pkey, cat);
       cooked[item.ingredient] = (cooked[item.ingredient] || 0) + g;
       (usedIn[item.ingredient] = usedIn[item.ingredient] || new Set()).add(row.meal_name);
     }
@@ -129,7 +263,12 @@ export function computeBatches(rows, slugByPosition, lib) {
     for (const item of (res.recipe.items || [])) {
       const ing = ingredients[item.ingredient];
       const cat = (ing && ing.category) || 'pantry';
-      const g = (item.grams_cooked || 0) * (row.qty || 0) * mult(profiles, pkey, cat);
+      // grams_by_sex is already resolved against that sex's own targets (and batch pooling), so it
+      // must NOT be scaled again by the category multiplier. The multiplier path stays for the
+      // static-file fallback, which only carries a single baseline gram figure per item.
+      const g = item.grams_by_sex
+        ? (item.grams_by_sex[row.sex === 'female' ? 'female' : 'male'] || 0) * (row.qty || 0)
+        : (item.grams_cooked || 0) * (row.qty || 0) * mult(profiles, pkey, cat);
       m.comp[item.ingredient] = (m.comp[item.ingredient] || 0) + g;
     }
   }

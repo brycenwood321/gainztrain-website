@@ -44,7 +44,7 @@ export async function onRequestGet(context) {
   try { (JSON.parse(wm?.meals_json || '[]') || []).forEach((m) => { if (m && m.position != null) slugByPosition[m.position] = m.slug; }); } catch { /* ignore */ }
 
   let lib;
-  try { lib = await loadRecipes(request); }
+  try { lib = await loadRecipes(request, env); }
   catch (e) { return ok({ week_of: week, recipes_loaded: false, error: String(e).slice(0, 120), totals: { orders: totals?.orders || 0, meals: totals?.meals || 0 }, categories: [], unmatched: [] }); }
 
   const { categories, unmatched, cost } = computeShoppingList(rows, slugByPosition, lib, buffer);

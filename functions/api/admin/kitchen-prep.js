@@ -73,7 +73,7 @@ export async function onRequestGet(context) {
 
   let batches = [], unmatched = [], recipesLoaded = false;
   try {
-    const lib = await loadRecipes(request);
+    const lib = await loadRecipes(request, env);
     recipesLoaded = true;
     const r = computeBatches(rows, slugByPosition, lib);
     batches = r.batches; unmatched = r.unmatched;

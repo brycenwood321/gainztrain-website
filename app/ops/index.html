@@ -223,6 +223,72 @@
       color: #7a7270;
     }
 
+    /* ── PACK LIST (primary assembly flow since 2026-08-31) ──
+       Tap targets are deliberately oversized: this is used on a phone, in a kitchen, in gloves. */
+    .pack-seg { display: flex; gap: 6px; margin-bottom: 14px; }
+    .pack-seg button {
+      flex: 1; appearance: none; border: 1px solid #e8e4df; background: #fff; color: #4a4440;
+      font: inherit; font-weight: 800; font-size: .82rem; letter-spacing: .09em; text-transform: uppercase;
+      padding: 13px 8px; border-radius: 9px; cursor: pointer;
+    }
+    .pack-seg button[aria-pressed="true"] { background: #ff6b35; border-color: #ff6b35; color: #1a1614; }
+    .pack-seg button:focus-visible { outline: 2px solid #1a1614; outline-offset: 2px; }
+
+    .pack-ghead {
+      display: flex; align-items: center; gap: 9px; width: 100%; margin: 20px 0 9px; padding: 4px 0;
+      background: none; border: 0; font: inherit; text-align: left; font-size: .7rem; font-weight: 800;
+      letter-spacing: .16em; text-transform: uppercase; color: #7a7270;
+    }
+    button.pack-ghead { cursor: pointer; }
+    button.pack-ghead:focus-visible { outline: 2px solid #ff6b35; outline-offset: 3px; border-radius: 5px; }
+    .pack-ghead .rule { flex: 1; height: 1px; background: #e8e4df; }
+    .pack-ghead .chev {
+      flex: 0 0 auto; width: 15px; height: 15px; stroke: currentColor; stroke-width: 3; fill: none;
+      stroke-linecap: round; stroke-linejoin: round; transition: transform .2s ease;
+    }
+    .pack-ghead[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+    .pack-ghead.gdone { color: #16a34a; }
+    .pack-gbody[hidden] { display: none; }
+
+    .pack-pill { background: #fff; border: 1px solid #e8e4df; border-radius: 13px; margin-bottom: 10px; overflow: hidden; }
+    .pack-pill.done { opacity: .5; }
+    .pack-phead {
+      display: flex; align-items: baseline; gap: 9px; padding: 12px 14px 10px;
+      border-bottom: 1px solid #e8e4df; background: #f5f2ee;
+    }
+    .pack-name { font-weight: 900; font-size: 1.06rem; text-transform: uppercase; flex: 1; overflow-wrap: anywhere; }
+    .pack-tag {
+      font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+      color: #7a7270; font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .pack-pill.done .pack-phead { background: #eaf7ee; }
+    .pack-pill.done .pack-tag { color: #16a34a; }
+
+    .pack-row {
+      display: flex; align-items: center; gap: 13px; width: 100%; text-align: left;
+      padding: 15px 14px; min-height: 60px; background: none; border: 0; border-top: 1px solid #e8e4df;
+      font: inherit; color: #1a1614; cursor: pointer;
+    }
+    .pack-row:first-of-type { border-top: 0; }
+    .pack-row:focus-visible { outline: 2px solid #ff6b35; outline-offset: -3px; }
+    .pack-box {
+      flex: 0 0 auto; width: 29px; height: 29px; border-radius: 7px; border: 2.5px solid #4a4440;
+      display: grid; place-items: center; transition: background .12s, border-color .12s;
+    }
+    .pack-box svg {
+      width: 19px; height: 19px; stroke: #fff; stroke-width: 3.4; fill: none;
+      stroke-linecap: round; stroke-linejoin: round; opacity: 0;
+    }
+    .pack-qty { flex: 0 0 auto; min-width: 31px; font-weight: 900; font-size: 1.28rem; font-variant-numeric: tabular-nums; color: #ff6b35; }
+    .pack-lbl { flex: 1; font-weight: 700; font-size: 1rem; line-height: 1.24; overflow-wrap: anywhere; }
+    .pack-size { display: block; font-size: .67rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; color: #7a7270; margin-top: 3px; }
+    .pack-row.on .pack-box { background: #16a34a; border-color: #16a34a; }
+    .pack-row.on .pack-box svg { opacity: 1; }
+    .pack-row.on .pack-qty { color: #16a34a; }
+    .pack-row.on .pack-lbl { text-decoration: line-through; text-decoration-thickness: 2px; color: #7a7270; }
+    .pack-empty { padding: 40px 16px; text-align: center; color: #7a7270; font-size: .95rem; }
+    @media (prefers-reduced-motion: reduce) { .pack-ghead .chev, .pack-box { transition: none; } }
+
     /* ── ACTIVE SCAN CARD ── */
     .scan-card {
       background: linear-gradient(135deg, #cc5520, #ff6b35);
@@ -2297,6 +2363,22 @@
     <!-- Main body -->
     <div class="assembly-body">
 
+      <!-- ── PACK LIST (2026-08-31) ── Replaces per-meal scanning as the primary assembly flow.
+           Labels went from one-per-meal to one-per-CLIENT, so there is nothing to scan any more:
+           staff cook a dish in bulk, then bag client by client. Two groupings of the SAME line
+           items (a line = one client's order of one meal), so a tick in either view shows in both.
+           The camera scanner below is HIDDEN, NOT deleted - flip PACK_MODE to false to get it back
+           when volume makes per-meal tracking worth the labelling time again. -->
+      <div id="pack-view">
+        <div class="pack-seg">
+          <button type="button" id="pack-by-client" aria-pressed="true">By client</button>
+          <button type="button" id="pack-by-meal" aria-pressed="false">By meal</button>
+        </div>
+        <div id="pack-list"></div>
+      </div>
+
+      <div id="assembly-legacy-scan" hidden>
+
       <!-- Primary scan action, above the scanned-meal card -->
       <button id="camera-btn" class="cam-open-btn cam-open-btn-top">📷 Scan with camera</button>
 
@@ -2351,10 +2433,13 @@
         <div id="log-items"></div>
       </div>
 
+      </div><!-- /assembly-legacy-scan -->
+
     </div>
 
-    <!-- Scan bar: phone camera (primary), or type a meal ID (fallback). A USB scanner gun also still works. -->
-    <div class="manual-scan-bar">
+    <!-- Scan bar: phone camera (primary), or type a meal ID (fallback). A USB scanner gun also still works.
+         Hidden alongside the scanner while PACK_MODE is on. -->
+    <div class="manual-scan-bar" id="manual-scan-bar">
       <label>Type a meal ID:</label>
       <input type="text" id="manual-input" placeholder="Paste a meal ID + Enter" autocomplete="off" />
       <button id="manual-btn">Scan</button>
@@ -2546,6 +2631,7 @@
         if (serverVal.length > 0) {
           localStorage.setItem("gainztrain_orders", JSON.stringify(serverVal));
           if (typeof renderOrders === "function") renderOrders();
+          if (typeof renderAssembly === "function") renderAssembly();  // pack list reads the same orders
         } else {
           const local = loadOrders();
           if (local.length) { try { pushSharedStore(key, local); } catch {} }
@@ -2561,6 +2647,181 @@
     function saveScanned(scanned) {
       localStorage.setItem("gainztrain_scanned", JSON.stringify(scanned));
     }
+
+    // ── PACK LIST ─────────────────────────────────────────────────────────────────────────────
+    // PACK_MODE=true hides the per-meal camera scanner and drives assembly off a tick list instead.
+    // Set it to false to restore the scanner wholesale; none of that code was removed.
+    const PACK_MODE = true;
+    const PACK_LS = "gainztrain_packed";
+    let packView = "client";
+    const packCollapsed = new Set();   // section ids folded by hand or by auto-fold
+    const packWasDone = {};            // previous done-state per section, so auto-fold fires once
+
+    // A line item is ONE CLIENT'S ORDER OF ONE MEAL. Both groupings render the same keys, which is
+    // what makes a tick in the client view show up in the meal view and vice versa.
+    const packKey = (cid, mealName) => `${cid}::${mealName}`;
+    const packWeekKey = () => "packed_" + getWeekStr();
+
+    function loadPacked() {
+      try { return new Set(JSON.parse(localStorage.getItem(PACK_LS) || "[]")); }
+      catch { return new Set(); }
+    }
+    // Shared, not per-device: two staff bagging on two phones must see one set of ticks.
+    function savePacked(set) {
+      const arr = [...set];
+      localStorage.setItem(PACK_LS, JSON.stringify(arr));
+      try { pushSharedStore(packWeekKey(), arr); } catch { /* offline, local copy still holds */ }
+    }
+    async function hydratePacked() {
+      try {
+        const res = await fetch("/api/admin/ops-store?key=" + packWeekKey(), { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data.value) && data.value.length) {
+          localStorage.setItem(PACK_LS, JSON.stringify(data.value));
+          renderAssembly();
+        }
+      } catch { /* offline, keep the local copy */ }
+    }
+
+    const PACK_CHECK = '<svg viewBox="0 0 24 24"><polyline points="4,12.5 9.5,18 20,6.5"/></svg>';
+    const PACK_CHEV  = '<svg class="chev" viewBox="0 0 24 24"><polyline points="6,9 12,16 18,9"/></svg>';
+    const packEsc = s => String(s == null ? "" : s)
+      .replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    // Portions are gender-only today, but the kitchen reads the goal off the label, so show the same
+    // default the rest of the system falls back to rather than an empty gap.
+    const packSize = o => String(o.goal || "Maintain").toUpperCase();
+    const packName = o => `${o.first_name || ""} ${o.last_name ? o.last_name[0] + "." : ""}`.trim() || "Unnamed";
+
+    function packRow(cid, mealName, qty, label, size, packed) {
+      return '<button type="button" class="pack-row' + (packed ? " on" : "") + '" data-cid="' + packEsc(cid)
+        + '" data-meal="' + packEsc(mealName) + '" aria-pressed="' + !!packed + '">'
+        + '<span class="pack-box">' + PACK_CHECK + '</span>'
+        + '<span class="pack-qty">' + qty + '</span>'
+        + '<span class="pack-lbl">' + packEsc(label) + '<span class="pack-size">' + packEsc(size) + '</span></span></button>';
+    }
+    function packPill(name, tag, rows, isDone) {
+      return '<div class="pack-pill' + (isDone ? " done" : "") + '"><div class="pack-phead">'
+        + '<span class="pack-name">' + packEsc(name) + '</span>'
+        + '<span class="pack-tag">' + packEsc(isDone ? "BAGGED" : tag) + '</span></div>' + rows + '</div>';
+    }
+
+    function renderAssembly() {
+      if (!PACK_MODE) return;
+      const host = document.getElementById("pack-list");
+      if (!host) return;
+      const orders = loadOrders().filter(o => o && Array.isArray(o.meals) && o.meals.length);
+      const packed = loadPacked();
+      const qtyOf = m => Number(m.quantity) || 0;
+
+      if (!orders.length) {
+        host.innerHTML = '<div class="pack-empty">No orders loaded. Use <strong>Pull Orders</strong> on the Orders tab first.</div>';
+        packProgress(0, 0);
+        return;
+      }
+
+      let html = "";
+      if (packView === "client") {
+        [["pickup", "Pickup"], ["delivery", "Delivery"]].forEach(([method, title]) => {
+          const grp = orders.filter(o => (o.fulfillment === "delivery" ? "delivery" : "pickup") === method);
+          if (!grp.length) return;
+          const finished = o => o.meals.every(m => packed.has(packKey(o.customer_id, m.meal_name)));
+          grp.sort((a, b) => (finished(a) - finished(b)) || packName(a).localeCompare(packName(b)));
+
+          // Fold the whole section the moment its last client is bagged; unfold if one is undone.
+          const allDone = grp.every(finished);
+          if (allDone && !packWasDone[method]) packCollapsed.add(method);
+          if (!allDone && packWasDone[method]) packCollapsed.delete(method);
+          packWasDone[method] = allDone;
+
+          const open = !packCollapsed.has(method);
+          const label = allDone
+            ? `${title} &middot; all ${grp.length} bagged`
+            : `${title} &middot; ${grp.filter(o => !finished(o)).length} of ${grp.length} left`;
+          html += '<button type="button" class="pack-ghead' + (allDone ? " gdone" : "") + '" data-group="'
+            + method + '" aria-expanded="' + open + '"><span>' + label + '</span>'
+            + '<span class="rule"></span>' + PACK_CHEV + '</button>';
+          html += '<div class="pack-gbody"' + (open ? "" : " hidden") + '>';
+          grp.forEach(o => {
+            const total = o.meals.reduce((s, m) => s + qtyOf(m), 0);
+            const left = o.meals.filter(m => !packed.has(packKey(o.customer_id, m.meal_name))).reduce((s, m) => s + qtyOf(m), 0);
+            const rows = o.meals.map(m => packRow(o.customer_id, m.meal_name, qtyOf(m), m.meal_name,
+              packSize(o), packed.has(packKey(o.customer_id, m.meal_name)))).join("");
+            html += packPill(packName(o), `${left} OF ${total} LEFT`, rows, left === 0);
+          });
+          html += "</div>";
+        });
+      } else {
+        const byMeal = new Map();
+        orders.forEach(o => o.meals.forEach(m => {
+          if (!byMeal.has(m.meal_name)) byMeal.set(m.meal_name, []);
+          byMeal.get(m.meal_name).push({ o, q: qtyOf(m) });
+        }));
+        const arr = [...byMeal.entries()].map(([meal, list]) => {
+          const total = list.reduce((s, x) => s + x.q, 0);
+          const left = list.filter(x => !packed.has(packKey(x.o.customer_id, meal))).reduce((s, x) => s + x.q, 0);
+          return { meal, list, total, left };
+        });
+        arr.sort((a, b) => ((a.left === 0) - (b.left === 0)) || b.total - a.total);
+        html += '<div class="pack-ghead"><span>By meal &middot; ' + arr.length + ' dishes</span><span class="rule"></span></div>';
+        arr.forEach(({ meal, list, total, left }) => {
+          list.sort((a, b) => (packed.has(packKey(a.o.customer_id, meal)) - packed.has(packKey(b.o.customer_id, meal)))
+            || packName(a.o).localeCompare(packName(b.o)));
+          const rows = list.map(x => packRow(x.o.customer_id, meal, x.q, packName(x.o), packSize(x.o),
+            packed.has(packKey(x.o.customer_id, meal)))).join("");
+          html += packPill(meal, `${left} OF ${total} LEFT`, rows, left === 0);
+        });
+      }
+      host.innerHTML = html;
+
+      let total = 0, done = 0;
+      orders.forEach(o => o.meals.forEach(m => {
+        total += qtyOf(m);
+        if (packed.has(packKey(o.customer_id, m.meal_name))) done += qtyOf(m);
+      }));
+      packProgress(done, total);
+      const byClient = document.getElementById("pack-by-client");
+      const byMealBtn = document.getElementById("pack-by-meal");
+      if (byClient) byClient.setAttribute("aria-pressed", packView === "client");
+      if (byMealBtn) byMealBtn.setAttribute("aria-pressed", packView === "meal");
+    }
+
+    // Reuse the existing progress header so the top of the tab still means something.
+    function packProgress(done, total) {
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      set("count-done", done);
+      set("count-remaining", Math.max(0, total - done));
+      set("count-total", total);
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      set("progress-pct", pct + "%");
+      const fill = document.getElementById("progress-fill");
+      if (fill) fill.style.width = pct + "%";
+    }
+
+    function applyPackMode() {
+      if (!PACK_MODE) return;
+      const legacy = document.getElementById("assembly-legacy-scan");
+      const bar = document.getElementById("manual-scan-bar");
+      if (legacy) legacy.hidden = true;
+      if (bar) bar.style.display = "none";
+    }
+
+    document.addEventListener("click", (e) => {
+      const head = e.target.closest && e.target.closest(".pack-ghead[data-group]");
+      if (head) {
+        const g = head.dataset.group;
+        packCollapsed.has(g) ? packCollapsed.delete(g) : packCollapsed.add(g);
+        renderAssembly();
+        return;
+      }
+      const row = e.target.closest && e.target.closest(".pack-row");
+      if (!row) return;
+      const key = packKey(row.dataset.cid, row.dataset.meal);
+      const packed = loadPacked();
+      packed.has(key) ? packed.delete(key) : packed.add(key);
+      savePacked(packed);
+      renderAssembly();
+    });
 
     // ── BUILD MEAL MAP ──
     // Reads meal IDs that were stored when the order was saved — never regenerates them.
@@ -4787,6 +5048,11 @@
 
         if (tab.dataset.tab !== "assembly") stopCameraScan();  // release the camera when leaving Assembly
 
+        if (tab.dataset.tab === "assembly") {
+          renderAssembly();
+          hydratePacked();   // pick up ticks another phone made while this one was on a different tab
+        }
+
         if (tab.dataset.tab === "orders") {
           renderOrders();
           hydratePrepOrders();   // pull in orders/edits other staff devices made
@@ -5681,6 +5947,17 @@
     // Pull the shared meal library + custom ingredients from the server (durable + team-wide).
     hydrateSharedStores();
     hydratePrepOrders();   // pull the shared order list (manual adds + edits from any staff device)
+
+    // ── PACK LIST STARTUP ──
+    applyPackMode();       // hide the scanner + manual scan bar while PACK_MODE is on
+    renderAssembly();
+    hydratePacked();       // pull ticks other staff devices already made this week
+    {
+      const bc = document.getElementById("pack-by-client");
+      const bm = document.getElementById("pack-by-meal");
+      if (bc) bc.addEventListener("click", () => { packView = "client"; renderAssembly(); });
+      if (bm) bm.addEventListener("click", () => { packView = "meal"; renderAssembly(); });
+    }
 
     // If there were already scanned items (page refresh), show the last one
     if (scanned.length > 0 && scanned.length < allMealIds.length) {

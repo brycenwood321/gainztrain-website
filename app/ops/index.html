@@ -223,6 +223,47 @@
       color: #7a7270;
     }
 
+
+    /* ── ASSEMBLY IN DARK (Marissa liked the prototype's look, 2026-08-31) ──
+       Scoped to #tab-assembly ONLY: every other tab stays on the light system. Same palette the
+       prototype used, which is the GT dark bar (#1a1614 family) extended down the whole panel, so
+       it reads as the same product rather than a second theme. Also easier on the eyes in a kitchen. */
+    #tab-assembly { background: #141110; color: #f7f4f1; }
+
+    /* progress header */
+    #tab-assembly .progress-section { background: #201b19; border-color: #37302c; }
+    #tab-assembly .progress-stat .stat-value { color: #f7f4f1; }
+    #tab-assembly .progress-stat .stat-value.green { color: #ff6b35; }
+    #tab-assembly .progress-stat .stat-label { color: #9a908c; }
+    #tab-assembly .progress-bar-track { background: #37302c; }
+    #tab-assembly .progress-pct { color: #c8bfb9; }
+
+    /* notify panel */
+    #tab-assembly .notify-panel { background: #201b19; border-color: #37302c; }
+    #tab-assembly .notify-head { color: #f7f4f1; }
+    #tab-assembly .notify-sub, #tab-assembly .notify-result { color: #9a908c; }
+    #tab-assembly .notify-btn.secondary { background: #2a2422; color: #f7f4f1; border-color: #37302c; }
+
+    /* pack list */
+    #tab-assembly .pack-seg button { background: #241f1c; border-color: #3a322e; color: #c8bfb9; }
+    #tab-assembly .pack-seg button[aria-pressed="true"] { background: #ff6b35; border-color: #ff6b35; color: #1a1614; }
+    #tab-assembly .pack-seg button:focus-visible { outline-color: #fff; }
+    #tab-assembly .pack-ghead { color: #9a908c; }
+    #tab-assembly .pack-ghead .rule { background: #37302c; }
+    #tab-assembly .pack-ghead.gdone { color: #16a34a; }
+    #tab-assembly .pack-pill { background: #201b19; border-color: #37302c; }
+    #tab-assembly .pack-phead { background: #2a2422; border-bottom-color: #37302c; }
+    #tab-assembly .pack-name { color: #f7f4f1; }
+    #tab-assembly .pack-tag { color: #9a908c; }
+    #tab-assembly .pack-pill.done .pack-phead { background: #14301f; }
+    #tab-assembly .pack-pill.done .pack-tag { color: #16a34a; }
+    #tab-assembly .pack-row { color: #f7f4f1; border-top-color: #37302c; }
+    #tab-assembly .pack-box { border-color: #c8bfb9; }
+    #tab-assembly .pack-row.on .pack-box { background: #16a34a; border-color: #16a34a; }
+    #tab-assembly .pack-size { color: #9a908c; }
+    #tab-assembly .pack-row.on .pack-lbl { color: #9a908c; }
+    #tab-assembly .pack-empty { color: #9a908c; }
+
     /* Tabs retired from the bar but kept in the file. Assembly's pack list made Pickup redundant, and
        Activity moved under Overview. Delete this class from an element to bring its tab back. */
     .tab-hidden { display: none !important; }
@@ -3110,10 +3151,21 @@
       const p = (n) => String(n).padStart(2, "0");
       return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`;
     }
+    // ── WEEK NAMING (2026-08-31) ──
+    // A week is NAMED by the Monday it goes live, which is 6 days before the Sunday it delivers.
+    // week_of storage, ops_kv keys, Stripe and the customer site all still use the SUNDAY; this is
+    // display only, so nothing downstream can be affected by it. Accepts ISO or YYYYMMDD.
+    function weekLabel(isoOrYmd) {
+      const raw = String(isoOrYmd == null ? "" : isoOrYmd).replace(/-/g, "");
+      if (!/^\d{8}$/.test(raw)) return String(isoOrYmd == null ? "" : isoOrYmd);
+      const d = new Date(`${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}T12:00:00`);
+      if (isNaN(d)) return String(isoOrYmd);
+      d.setDate(d.getDate() - 6);
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    }
     function prettyWeek(iso) {
-      try {
-        return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-      } catch (e) { return iso; }
+      const lab = weekLabel(iso);
+      return lab === String(iso) ? String(iso) : `the week of ${lab}`;
     }
     const SWEEP = {
       pickup:   { status: 'pickup_ready',     btn: 'notify-pickup-btn',   verb: 'their food is ready for pickup' },
@@ -3457,14 +3509,14 @@
         const pulled  = data.orders || [];
 
         if (pulled.length === 0) {
-          status.textContent = `No orders found for week of ${weekDate}.`;
+          status.textContent = `No orders found for the week of ${weekLabel(weekDate)}.`;
           btn.disabled = false; btn.textContent = "⬇ Pull Orders";
           return;
         }
 
         const totalMeals = pulled.reduce((sum, o) => sum + o.meals.reduce((s, m) => s + m.quantity, 0), 0);
         const confirmed  = confirm(
-          `Pull ${pulled.length} customer${pulled.length !== 1 ? "s" : ""} · ${totalMeals} meals for week of ${weekDate}?\n\n` +
+          `Pull ${pulled.length} customer${pulled.length !== 1 ? "s" : ""} · ${totalMeals} meals for the week of ${weekLabel(weekDate)}?\n\n` +
           `This will replace all existing orders and clear scan history.`
         );
         if (!confirmed) { btn.disabled = false; btn.textContent = "⬇ Pull Orders"; return; }
@@ -4008,7 +4060,7 @@
       if (isPastWeekSelected()) { showToast("That week has already been delivered - view only."); return; }
       const wk = menuBuildWeek;
       const wkPretty = `${wk.slice(0,4)}-${wk.slice(4,6)}-${wk.slice(6,8)}`;
-      if (!confirm(`Make the week of ${wkPretty} LIVE for customers to order?\n\nThis publishes the staged menu so customers can see + order it.\n(Customers are not texted yet — that turns on once A2P + email are fixed.)`)) return;
+      if (!confirm(`Make the week of ${weekLabel(wk)} LIVE for customers to order?\n\nThis publishes the staged menu so customers can see + order it.\n(Customers are not texted yet — that turns on once A2P + email are fixed.)`)) return;
       const btn = document.getElementById("menu-golive-btn");
       const orig = btn ? btn.textContent : "";
       if (btn) { btn.disabled = true; btn.textContent = "Going live…"; }

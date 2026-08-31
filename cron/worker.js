@@ -20,7 +20,13 @@
 const BASE = 'https://gainztrainprep.com';
 
 // JS weekday constants (Date#getUTCDay).
-const WED = 3, FRI = 5, SAT = 6, MON = 1;
+const WED = 3, FRI = 5, SAT = 6, MON = 1, SUN = 0;
+
+// YYYY-MM-DD for a Date, in UTC. Used to hand the pickup reminder an EXPLICIT week rather than
+// letting the endpoint fall back to upcomingSunday(). That default is correct at 13:00 UTC on a
+// Sunday (getUTCDay() is 0, so it returns today), but "correct because of the hour we happen to
+// fire at" is exactly the kind of thing that breaks when someone moves a trigger. Send the date.
+const isoDate = (d) => d.toISOString().slice(0, 10);
 
 // Fire an admin endpoint AND check the result — a 401 (token drift) / 404 (no menu) / 500 must NOT pass
 // silently or a whole week's cook/reminders is skipped with no trace. Surfaces in `wrangler tail` + the
@@ -81,6 +87,19 @@ export default {
       // 'pending' instead of 'locked' (Jeferson) — i.e. money in, no food out — while Jayson can still
       // act on it. The post-billing pass at 17:00 UTC catches the money-out-no-money direction.
       if (day === SAT) ctx.waitUntil(hit(env, '/api/admin/payment-order-audit'));
+      // Sunday-only: PICKUP REMINDER, ~7am MDT / 6am MST, three hours before the 10:00-10:45 window.
+      // This replaces ~/Library/Scripts/BrycenHQ/gt_pickup_reminder.py, which was deliberately
+      // one-shot for 2026-08-23 and therefore sent NOTHING on 08-30 or any Sunday after. Brycen
+      // asked for a standing weekly job on 2026-08-31, which overrides that script's stated reason
+      // for being one-shot ("customer messages going out with no human in the loop").
+      //
+      // The endpoint is idempotent per customer per week per event via its dedupKey, so a retry or a
+      // double fire cannot re-blast anyone. It is NOT self-verifying though: the old script's real
+      // value was reading comms-audit afterwards and exiting non-zero when the two disagreed. That
+      // check does not exist here yet. See the comms watchdog item in the plan.
+      if (day === SUN) {
+        ctx.waitUntil(hit(env, `/api/admin/pickup-notice?event=reminder&week=${isoDate(new Date(event.scheduledTime))}`));
+      }
       // Monday-only:
       //   - prune the in-app feed (>120d)
       //   - MENU FAILSAFE: if no owner confirmed this week's menu, auto-publish it (a staged menu is

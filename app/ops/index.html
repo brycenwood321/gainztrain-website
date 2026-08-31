@@ -223,6 +223,15 @@
       color: #7a7270;
     }
 
+    /* Tabs retired from the bar but kept in the file. Assembly's pack list made Pickup redundant, and
+       Activity moved under Overview. Delete this class from an element to bring its tab back. */
+    .tab-hidden { display: none !important; }
+    .ownv-merged-head {
+      font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+      color: #7a7270; padding: 4px 16px 0; margin-top: 8px; border-top: 1px solid #e8e4df;
+      padding-top: 18px;
+    }
+
     /* ── PER-MEAL ORDER TOTALS (Orders tab) ── */
     .order-meal-totals { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
     .omt-chip {
@@ -2166,12 +2175,12 @@
     <div class="tab owner-only" data-tab="overview">Overview</div>
     <div class="tab active" data-tab="orders">Orders</div>
     <div class="tab" data-tab="assembly">Assembly</div>
-    <div class="tab" data-tab="pickup">Pickup</div>
+    <div class="tab tab-hidden" data-tab="pickup">Pickup</div>
     <div class="tab" data-tab="delivery">Delivery</div>
     <div class="tab owner-only" data-tab="menu">Menu</div>
     <div class="tab" data-tab="ingredients">Ingredients</div>
     <div class="tab" data-tab="customers">Customers</div>
-    <div class="tab owner-only" data-tab="activity">Activity</div>
+    <div class="tab owner-only tab-hidden" data-tab="activity">Activity</div>
     <div class="tab owner-only" data-tab="marketing">Marketing</div>
     <div class="tab owner-only" data-tab="analytics">Analytics</div>
     <div class="tab owner-only" data-tab="settings">Settings</div>
@@ -2188,12 +2197,12 @@
     <a data-goto="overview" class="owner-only">Overview</a>
     <a data-goto="orders" class="active">Orders</a>
     <a data-goto="assembly">Assembly</a>
-    <a data-goto="pickup">Pickup</a>
+    <a data-goto="pickup" class="tab-hidden">Pickup</a>
     <a data-goto="delivery">Delivery</a>
     <a data-goto="menu" class="owner-only">Menu</a>
     <a data-goto="ingredients">Ingredients</a>
     <a data-goto="customers">Customers</a>
-    <a data-goto="activity" class="owner-only">Activity</a>
+    <a data-goto="activity" class="owner-only tab-hidden">Activity</a>
     <a data-goto="marketing" class="owner-only">Marketing</a>
     <a data-goto="analytics" class="owner-only">Analytics</a>
     <a data-goto="settings" class="owner-only">Settings</a>
@@ -2201,9 +2210,15 @@
   </div>
 
   <!-- ── OWNER-ONLY TABS (ported from the business dashboard, rendered in this dashboard's style) ── -->
-  <div class="tab-panel" id="tab-overview"><div class="owner-view" id="ov-view"><div class="ownv-loading">Loading…</div></div></div>
+  <!-- Overview now carries the activity feed underneath it (Marissa, 2026-08-31): Activity did not earn
+       a tab of its own. #act-view simply MOVED here, so ownRenderActivity() renders into it unchanged. -->
+  <div class="tab-panel" id="tab-overview">
+    <div class="owner-view" id="ov-view"><div class="ownv-loading">Loading…</div></div>
+    <div class="ownv-merged-head">Recent activity</div>
+    <div class="owner-view" id="act-view"><div class="ownv-loading">Loading…</div></div>
+  </div>
   <div class="tab-panel" id="tab-customers"><div class="owner-view" id="cust-view"><div class="ownv-loading">Loading…</div></div></div>
-  <div class="tab-panel" id="tab-activity"><div class="owner-view" id="act-view"><div class="ownv-loading">Loading…</div></div></div>
+
   <div class="tab-panel" id="tab-marketing"><div class="owner-view" id="mkt-view"><div class="ownv-loading">Loading…</div></div></div>
   <div class="tab-panel" id="tab-analytics"><div class="owner-view" id="anl-view"><div class="ownv-loading">Loading…</div></div></div>
   <div class="tab-panel" id="tab-settings"><div class="owner-view" id="set-view"><div class="ownv-loading">Loading…</div></div></div>
@@ -5173,7 +5188,11 @@
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
         document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
         tab.classList.add("active");
-        document.getElementById("tab-" + tab.dataset.tab).classList.add("active");
+        // Guarded: a retired tab (Activity) keeps its hidden button but no longer has a panel, so a
+        // programmatic switch must not throw on a missing element.
+        const panel = document.getElementById("tab-" + tab.dataset.tab);
+        if (!panel) return;
+        panel.classList.add("active");
 
         // Keep the mobile UI in sync: the current-tab label + the highlighted item in the stacked menu.
         const label = tab.textContent.trim();
@@ -5214,9 +5233,8 @@
           initDeliveryTab();
         }
         // Owner-only tabs (rendered by the ported business-dashboard code).
-        if (tab.dataset.tab === "overview")  ownRenderOverview();
+        if (tab.dataset.tab === "overview")  { ownRenderOverview(); ownRenderActivity(); }
         if (tab.dataset.tab === "customers") ownRenderCustomers();
-        if (tab.dataset.tab === "activity")  ownRenderActivity();
         if (tab.dataset.tab === "marketing") ownRenderMarketing();
         if (tab.dataset.tab === "analytics") ownRenderAnalytics();
         if (tab.dataset.tab === "settings")  ownRenderSettings();

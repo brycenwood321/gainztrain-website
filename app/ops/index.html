@@ -223,6 +223,20 @@
       color: #7a7270;
     }
 
+    /* ── INGREDIENTS BY MEAL (bottom of the Ingredients tab) ── */
+    .ing-bymeal { padding: 0 16px 24px; }
+    .ing-bymeal-head {
+      font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+      color: #7a7270; margin: 22px 0 10px;
+    }
+    .ing-bymeal-card { background: #fff; border: 1px solid #e8e4df; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+    .ing-bymeal-title { font-weight: 900; font-size: .98rem; text-transform: uppercase; margin-bottom: 8px; }
+    .ing-bymeal-count { font-weight: 700; font-size: .7rem; letter-spacing: .06em; color: #7a7270; margin-left: 8px; }
+    .ing-bymeal-row { display: flex; gap: 10px; padding: 5px 0; border-top: 1px solid #f0ece7; font-size: .9rem; }
+    .ing-bymeal-row:first-of-type { border-top: 0; }
+    .ing-bymeal-qty { flex: 0 0 auto; min-width: 78px; font-weight: 800; color: #ff6b35; font-variant-numeric: tabular-nums; }
+    .ing-bymeal-name { flex: 1; font-weight: 600; color: #1a1614; }
+
     /* ── PACK LIST (primary assembly flow since 2026-08-31) ──
        Tap targets are deliberately oversized: this is used on a phone, in a kitchen, in gloves. */
     .pack-seg { display: flex; gap: 6px; margin-bottom: 14px; }
@@ -1997,6 +2011,13 @@
       .tab-current { display: inline-block; }
       .progress-section { padding: 14px !important; }
       .assembly-body { padding: 12px !important; }
+      /* Ingredients on a phone: tappable ingredient list FIRST, then the don't-forget checklist,
+         then the per-meal breakdown. Source order has the sidebar first for the desktop two-column
+         layout, so reorder rather than move the markup. Marissa, 2026-08-31. */
+      .ingredients-body { display: flex !important; flex-direction: column !important; }
+      .ingredients-main { order: 1 !important; }
+      .ingredients-sidebar { order: 2 !important; }
+      .ing-bymeal { padding-left: 12px; padding-right: 12px; }
       /* Orders: stack the form + list, drop the fixed 460px width, single-column fields. */
       .orders-body { flex-direction: column; padding: 14px !important; gap: 16px; }
       .orders-form-wrap { flex: 1 1 auto !important; width: 100%; }
@@ -2295,6 +2316,10 @@
       </div>
 
     </div>
+
+    <!-- Per-meal breakdown (Marissa, 2026-08-31). The list above is what you BUY in total; this is what
+         each dish consumes, which is what you need standing at the stove deciding how much to cook. -->
+    <div class="ing-bymeal" id="ing-bymeal"></div>
 
     <!-- Owner-only: editable ingredient library (shrinkage + purchase units live here now, not in code) -->
     <div class="ing-lib owner-only" id="ing-lib-panel">
@@ -4774,6 +4799,29 @@
     }
 
     // Aggregate ingredients from confirmed menu meals × gender-based order quantities
+    // cooked grams -> raw (shrinkage) -> purchase units -> pack estimate, all from the ingredient library.
+    function deriveIngQty(p) {
+      if (p.isMisc) return p;
+      const shrink = ingShrinkage(p.name);
+      p.shrink   = shrink;
+      p.cookedGr = Math.round(p.cookedG);
+      if (shrink != null && p.cookedG > 0) {
+        p.rawG = Math.round(p.cookedG * shrink);
+        const u = getIngUnit(p.name);
+        if (u) {
+          p.unit    = u.unit;
+          p.unitQty = p.rawG / u.g;
+          const rec = ingRec(p.name);
+          if (rec && rec.package_size) {
+            p.packs    = Math.ceil(p.unitQty / rec.package_size);
+            p.packSize = rec.package_size;
+            p.packUnit = rec.package_size_unit || u.unit;
+          }
+        }
+      }
+      return p;
+    }
+
     function buildIngredientPills() {
       const menu = loadCurrentMenu();
       if (!menu) return [];
@@ -4796,6 +4844,7 @@
       const M = MACROS["M"]["Maintain"]; // { protein:170, carbs:140, veggies:100 }
 
       const ingMap = {};
+      const perMeal = {};   // meal name -> { meal, totalOrders, items }
 
       confirmedMeals.forEach(meal => {
         if (!meal.ingredients || meal.ingredients.length === 0) return;
@@ -4804,6 +4853,13 @@
 
         // Cooking mode: batched categories share ONE combined grams pool; each ingredient's % is a share
         // of that pool. Separate categories split their own macro-target grams among their ingredients.
+        const ordersForMeal = sv ? (sv.female + sv.male) : 0;
+        perMeal[meal.name] = { meal: meal.name, totalOrders: ordersForMeal, items: {} };
+        const pmAdd = (item, cookedG, isMisc) => {
+          const t = perMeal[meal.name].items;
+          if (!t[item]) t[item] = { name: item, cookedG: 0, isMisc: !!isMisc };
+          t[item].cookedG += cookedG;
+        };
         const batch = (meal.mode === "batch" && Array.isArray(meal.batch_categories)) ? meal.batch_categories : [];
         // Count measured ingredients per group for the even-split FALLBACK (used only when % is missing).
         const groupCount = {};   // groupKey → count
@@ -4823,7 +4879,7 @@
           if (ing.category === "misc") {
             // Misc/eyeball: no quantity math — just record which ordered meals include it, with counts.
             const ordCount = sv ? (sv.female + sv.male) : 0;
-            if (ordCount > 0) ingMap[ing.item].usedIn.push({ meal: meal.name, orders: ordCount });
+            if (ordCount > 0) { ingMap[ing.item].usedIn.push({ meal: meal.name, orders: ordCount }); pmAdd(ing.item, 0, true); }
           } else if (sv) {
             const inBatch = batch.includes(ing.category);
             // grams available to this ingredient's GROUP, per gender (combined pool if batched)
@@ -4834,34 +4890,21 @@
             const share = (ing.pct != null && ing.pct !== "")
               ? parseFloat(ing.pct) / 100
               : (groupCount[groupKey(ing.category)] ? 1 / groupCount[groupKey(ing.category)] : 0);
-            ingMap[ing.item].cookedG  += (sv.female * poolG("f") + sv.male * poolG("m")) * share;
+            const contribution = (sv.female * poolG("f") + sv.male * poolG("m")) * share;
+            ingMap[ing.item].cookedG  += contribution;
             ingMap[ing.item].hasOrders = true;
+            pmAdd(ing.item, contribution, false);
           }
         });
       });
 
-      // Derived purchase quantities per non-misc ingredient: aggregated cooked → raw (shrinkage) →
-      // purchase units → pack estimate (all from the ingredient library).
-      Object.values(ingMap).forEach(p => {
-        if (p.isMisc) return;
-        const shrink = ingShrinkage(p.name);
-        p.shrink   = shrink;
-        p.cookedGr = Math.round(p.cookedG);
-        if (shrink != null && p.cookedG > 0) {
-          p.rawG = Math.round(p.cookedG * shrink);
-          const u = getIngUnit(p.name);
-          if (u) {
-            p.unit    = u.unit;
-            p.unitQty = p.rawG / u.g;
-            const rec = ingRec(p.name);
-            if (rec && rec.package_size) {
-              p.packs    = Math.ceil(p.unitQty / rec.package_size);
-              p.packSize = rec.package_size;
-              p.packUnit = rec.package_size_unit || u.unit;
-            }
-          }
-        }
-      });
+      // Derived purchase quantities: aggregated cooked -> raw (shrinkage) -> purchase units -> packs.
+      // Shared with the per-meal breakdown below so the two can never disagree about a quantity.
+      Object.values(ingMap).forEach(deriveIngQty);
+      ingByMeal = Object.values(perMeal)
+        .filter(m => m.totalOrders > 0)
+        .map(m => ({ ...m, items: Object.values(m.items).map(i => (deriveIngQty(i), i)) }))
+        .sort((a, b) => b.totalOrders - a.totalOrders);
 
       // Flag any ordered meal name that isn't in the meal library at all (a data-sync problem to fix,
       // not something to silently drop). Surfaced on the Ingredients + Orders tabs.
@@ -4871,13 +4914,43 @@
       return Object.values(ingMap);
     }
     let ingUnmatchedMeals = [];
+    let ingByMeal = [];   // per-meal ingredient breakdown, rendered at the BOTTOM of the tab
 
     async function initIngredientsTab() {
       await hydrateMenuDraft();     // shopping list derives from the confirmed menu — pull the shared draft first
       await loadIngredientLib();    // refresh shrinkage/unit data before computing quantities
       renderIngChecklist();
       renderIngPills();
+      renderIngByMeal();            // per-meal breakdown at the bottom (depends on renderIngPills' pass)
       renderIngLibrary();           // owner-only management table
+    }
+
+    // Ingredients grouped BY MEAL. Same numbers as the aggregate list above (shared deriveIngQty),
+    // just sliced per dish instead of summed across the week.
+    function renderIngByMeal() {
+      const host = document.getElementById("ing-bymeal");
+      if (!host) return;
+      if (!ingByMeal.length) { host.innerHTML = ""; return; }
+      const esc = t => String(t == null ? "" : t)
+        .replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+      const qty = (i) => {
+        if (i.isMisc) return "to taste";
+        if (i.unitQty != null) return `${i.unitQty < 10 ? i.unitQty.toFixed(2) : i.unitQty.toFixed(1)} ${i.unit}`;
+        if (i.rawG != null) return `${i.rawG} g`;
+        return "-";
+      };
+      host.innerHTML = '<div class="ing-bymeal-head">Ingredients needed by meal</div>'
+        + ingByMeal.map(m => {
+            const items = m.items.slice().sort((a, b) => (a.isMisc - b.isMisc) || (b.rawG || 0) - (a.rawG || 0));
+            return `<div class="ing-bymeal-card">
+              <div class="ing-bymeal-title">${esc(m.meal)}
+                <span class="ing-bymeal-count">${m.totalOrders} ordered</span></div>
+              ${items.map(i => `<div class="ing-bymeal-row">
+                  <span class="ing-bymeal-qty">${esc(qty(i))}</span>
+                  <span class="ing-bymeal-name">${esc(i.name)}</span>
+                </div>`).join("")}
+            </div>`;
+          }).join("");
     }
 
     function renderIngChecklist() {

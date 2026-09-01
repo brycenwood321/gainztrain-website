@@ -5193,7 +5193,7 @@
             ? `<div class="ing-pill-pack">${pill.packs} x ${pill.packSize} ${esc(pill.packUnit)}${pill.samsItem ? ` · Sam's #${esc(pill.samsItem)}` : ""}${costBit}</div>`
             : "";
           const riceLine = pill.riceInterimQty != null
-            ? `<div class="ing-pill-pack" style="color:#b4552e;"><b>INTERIM (rice under review): pull ${pill.riceInterimQty.toFixed(1)} ${esc(pill.unit)}</b> (1.65x, plan 4c). Weigh dry-in/cooked-out + one container this Saturday.</div>`
+            ? `<div class="ing-pill-pack" style="background:#5c1f04;color:#fff;padding:3px 8px;border-radius:6px;display:inline-block;"><b>INTERIM (rice under review): pull ${pill.riceInterimQty.toFixed(1)} ${esc(pill.unit)}</b> (1.65x, plan 4c). Weigh dry-in/cooked-out + one container this Saturday.</div>`
             : "";
           const bufBit = pill.buffered ? " incl +10% buffer" : "";
           qtyHtml = `<div class="ing-pill-qty">${pill.unitQty.toFixed(1)} ${esc(pill.unit)}</div>${packLine}${riceLine}`

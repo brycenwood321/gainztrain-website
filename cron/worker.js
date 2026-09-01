@@ -46,6 +46,69 @@ async function hit(env, path) {
   }
 }
 
+// JSON variants for the verify flow below. Failures return null rather than throwing: a broken
+// verify must never take down the send it was checking.
+async function callJson(env, method, path, body) {
+  try {
+    const r = await fetch(`${BASE}${path}`, {
+      method,
+      headers: { 'X-Admin-Token': env.ADMIN_TOKEN, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    if (!r.ok) { console.error(`[gainztrain-cron] FAIL ${method} ${path} -> ${r.status}`); return null; }
+    return await r.json();
+  } catch (e) {
+    console.error(`[gainztrain-cron] THREW ${method} ${path}: ${String(e).slice(0, 200)}`);
+    return null;
+  }
+}
+
+// Sunday pickup reminder, SEND then VERIFY. The launchd one-shot this cron replaced had one piece
+// of real value: it read comms-audit afterwards as GROUND TRUTH and went loud when the send's own
+// summary and the log disagreed (memory: a-send-is-not-done-until-the-log-says-so). This restores
+// that. The sender's summary is never trusted; the per-channel comms_log rows decide, and any
+// orphan/failure pages the owners through /api/admin/alert.
+async function pickupReminderWithVerify(env, week) {
+  // 1. Drive the send until it reports nothing left to attempt (the endpoint batches under the
+  // subrequest cap; dedup makes extra passes free).
+  let summary = null;
+  for (let pass = 1; pass <= 6; pass++) {
+    const d = await callJson(env, 'POST', `/api/admin/pickup-notice?event=reminder&week=${week}`);
+    summary = d && d.summary;
+    if (!summary || !summary.remaining) break;
+  }
+
+  // 2. Ground truth from the log, bounded to today. since=0.5 (12h) covers clock skew without
+  // reaching into last week's rows.
+  const audit = await callJson(env, 'GET', `/api/admin/comms-audit?template=pickup_reminder&since=0.5`);
+  if (!audit) {
+    // Cannot see the log means cannot verify. Report "did not look", never "looks fine"
+    // (memory: a-check-that-cannot-see-its-input-must-not-judge).
+    await callJson(env, 'POST', '/api/admin/alert', {
+      summary: `Pickup reminder UNVERIFIED for ${week}: comms-audit unreachable after the send`,
+      lines: ['The send may be fine. Nothing confirmed it. Check /api/admin/comms-audit?template=pickup_reminder&since=1 by hand.'],
+    });
+    return;
+  }
+
+  const orphans = (audit.counts && audit.counts.orphans) || 0;
+  const failed = (audit.counts && audit.counts.failed) || 0;
+  if (orphans > 0 || failed > 0) {
+    const names = [...(audit.orphans || []), ...(audit.failed || [])].map((p) => p.name || p.email).slice(0, 12);
+    await callJson(env, 'POST', '/api/admin/alert', {
+      summary: `Pickup reminder INCOMPLETE for ${week}: ${orphans} claimed-not-sent, ${failed} failed`,
+      lines: [
+        `Missing: ${names.join(', ')}`,
+        'Release stuck claims: POST /api/admin/comms-audit?template=pickup_reminder&release_orphans=1',
+        'Then re-run: POST /api/admin/pickup-notice?event=reminder',
+      ],
+    });
+    console.error(`[gainztrain-cron] pickup reminder verify FAILED: ${orphans} orphans, ${failed} failed`);
+  } else {
+    console.log(`[gainztrain-cron] pickup reminder verified: ${(audit.counts && audit.counts.delivered) || 0} delivered, 0 orphans, 0 failed`);
+  }
+}
+
 export default {
   async scheduled(event, env, ctx) {
     const day = new Date(event.scheduledTime).getUTCDay();
@@ -94,12 +157,16 @@ export default {
       // for being one-shot ("customer messages going out with no human in the loop").
       //
       // The endpoint is idempotent per customer per week per event via its dedupKey, so a retry or a
-      // double fire cannot re-blast anyone. It is NOT self-verifying though: the old script's real
-      // value was reading comms-audit afterwards and exiting non-zero when the two disagreed. That
-      // check does not exist here yet. See the comms watchdog item in the plan.
+      // double fire cannot re-blast anyone. Since 2026-08-31 the send is also VERIFIED: see
+      // pickupReminderWithVerify above, which reads comms-audit afterwards and pages the owners
+      // when the log disagrees with the sender.
       if (day === SUN) {
-        ctx.waitUntil(hit(env, `/api/admin/pickup-notice?event=reminder&week=${isoDate(new Date(event.scheduledTime))}`));
+        ctx.waitUntil(pickupReminderWithVerify(env, isoDate(new Date(event.scheduledTime))));
       }
+      // Saturday-only: sync phones D1 -> GHL BEFORE Sunday's texts. 4 of 20 customers were silently
+      // unreachable on 08-30 because their GHL contact predated their phone number; this closes the
+      // gap the day before it matters instead of discovering it in the failure column afterwards.
+      if (day === SAT) ctx.waitUntil(hit(env, '/api/admin/phone-sync'));
       // Monday-only:
       //   - prune the in-app feed (>120d)
       //   - MENU FAILSAFE: if no owner confirmed this week's menu, auto-publish it (a staged menu is

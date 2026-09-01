@@ -123,10 +123,12 @@ function libraryToRecipes(meals, ingredients, priceLib) {
 
 export async function loadRecipes(request, env) {
   const staticLib = await loadStaticRecipes(request);   // prices, and the fallback if D1 is unreachable
-  if (!env || !env.DB) return staticLib;
+  // `source` says which engine actually answered. A checker that cannot tell live from fallback
+  // would happily re-verify the demoted price table, which is the drift this system just closed.
+  if (!env || !env.DB) return { ...staticLib, source: 'static_fallback' };
   const [meals, ingredients] = await Promise.all([opsKv(env, 'meal_library'), opsKv(env, 'ingredient_library')]);
-  if (!meals || !ingredients) return staticLib;         // never leave the kitchen with no list at all
-  return libraryToRecipes(meals, ingredients, staticLib);
+  if (!meals || !ingredients) return { ...staticLib, source: 'static_fallback' };  // never leave the kitchen with no list at all
+  return { ...libraryToRecipes(meals, ingredients, staticLib), source: 'ops_kv' };
 }
 
 export function normalizeName(s) {

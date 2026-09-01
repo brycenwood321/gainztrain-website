@@ -227,13 +227,28 @@ export async function notify(env, customer, eventKey, data = {}, opts = {}) {
         customerId: customer.id, contactId, channel: 'sms', template: eventKey, body: rendered.sms,
       });
     }
-    // Claim-then-CONFIRM: if the email leg actually FAILED (real GHL error, not the dev no-token /
-    // no-contact 'queued_no_token' case), release the dedup claim so a webhook retry can re-attempt.
-    // Without this, at-most-once silently degrades to never-sent on a transient GHL outage.
-    if (opts.dedupKey && wantEmail && results.email === 'failed') {
+    // Claim-then-CONFIRM: if a leg we attempted actually FAILED (real GHL error, not the dev
+    // no-token / no-contact 'queued_no_token' case) and NOTHING was delivered, release the dedup
+    // claim so a retry can re-attempt. Without this, at-most-once silently degrades to never-sent.
+    //
+    // The !anySent gate matters in both directions and was got wrong once each way:
+    //   - Before 2026-08-31 only an EMAIL failure released, so an SMS-only failure (a channels:['sms']
+    //     finish-the-job run, per-channel dedupKey) left a claim that blocked its own retry. That cost
+    //     three rounds of sending on 08-30 and a manual comms-audit?release_channel=sms each time.
+    //   - But releasing when the OTHER leg succeeded re-sends the delivered leg on retry. A customer
+    //     with the email in hand must not get it twice to redeliver one text; that partial case stays
+    //     claimed, is visible in comms-audit, and is finished with a channels-restricted run.
+    const emailFailed = wantEmail && results.email === 'failed';
+    const smsFailed = wantSms && results.sms === 'failed';
+    const anySent = results.email === 'sent' || results.sms === 'sent';
+    if (opts.dedupKey && (emailFailed || smsFailed) && !anySent) {
       try { await run(env.DB, `DELETE FROM comms_log WHERE dedup_key = ? AND ghl_status = 'claimed'`, opts.dedupKey); } catch { /* best effort */ }
       return { ok: false, reason: 'send_failed', results };
     }
+    // Partial delivery: keep the claim (stops a duplicate of the delivered leg), still write the feed
+    // row below for what DID deliver, but report it honestly instead of a clean ok that reads as
+    // fully delivered. The stuck leg shows in comms-audit and is finished with a channels run.
+    const partial = opts.dedupKey && (emailFailed || smsFailed) && anySent;
 
     // In-app feed row (best-effort; table is migration 0008). Reached only on the success path — a
     // deduped call or a released failed-claim already returned above, so each logical notification
@@ -247,6 +262,7 @@ export async function notify(env, customer, eventKey, data = {}, opts = {}) {
         randomToken(12), customer.id, eventKey, rendered.subject || eventKey, body, HREF[cat] || '/app/', cat, nowIso());
     } catch { /* in-app feed is best-effort (table may not exist pre-migration 0008) */ }
 
+    if (partial) return { ok: false, reason: 'partial_delivery', results };
     return { ok: true, results };
   } catch (e) {
     // Never throw — record best-effort and move on.

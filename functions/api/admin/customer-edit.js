@@ -16,6 +16,7 @@ import { ensureDeliveryPrice } from '../../_lib/plans.js';
 import { orderableWeek, isLocked } from '../../_lib/menu.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
 import { notify } from '../../_lib/notify.js';
+import { ghlUpdatePhone } from '../../_lib/ghl.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -53,6 +54,13 @@ export async function onRequestPost(context) {
       firstName, lastName, phone, phone, phone, now, customerId);
     if (firstName !== null || lastName !== null) changed.push('name');
     if (phone !== null) changed.push('phone');
+    // Keep GHL's copy of the phone in step at the moment it changes. D1 alone is not enough:
+    // GHL is the thing that actually dials, and a contact that never learns the number fails
+    // every text as "no phone on file" (4 of 20 customers on 2026-08-30). Best-effort; the
+    // Saturday phone-sync sweep catches anything this misses.
+    if (phone && customer.ghl_contact_id) {
+      try { await ghlUpdatePhone(env, customer.ghl_contact_id, phone); } catch { /* sweep catches it */ }
+    }
   }
 
   // ── 2. Password reset ──

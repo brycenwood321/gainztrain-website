@@ -9,6 +9,11 @@ const GHL_BASE = 'https://services.leadconnectorhq.com';
 // channel: 'email' | 'sms'. body is the FULLY rendered message (no GHL variables).
 export async function ghlSend(env, { customerId = null, contactId, channel, template, subject, body }) {
   let ghlStatus = 'failed';
+  // On failure, the HTTP status + error body go to audit_log. The 7-day token outage produced ZERO
+  // diagnostic rows because this used to keep only ok/not-ok; a 401 and a rate-limit both read as
+  // 'failed'. comms_log's shape is load-bearing (audit + dedup consumers), so the detail rides
+  // audit_log instead of a schema change.
+  let errorDetail = null;
   if (env.GAINZ_GHL_TOKEN && env.GAINZ_GHL_TOKEN !== 'PLACEHOLDER_SET_LATER' && contactId) {
     try {
       const payload =
@@ -24,9 +29,16 @@ export async function ghlSend(env, { customerId = null, contactId, channel, temp
         },
         body: JSON.stringify(payload),
       });
-      ghlStatus = r.ok ? 'sent' : 'failed';
-    } catch {
+      if (r.ok) {
+        ghlStatus = 'sent';
+      } else {
+        ghlStatus = 'failed';
+        const errBody = await r.text().catch(() => '');
+        errorDetail = { http_status: r.status, body: errBody.slice(0, 500) };
+      }
+    } catch (e) {
       ghlStatus = 'failed';
+      errorDetail = { http_status: 0, body: `threw: ${String(e).slice(0, 300)}` };
     }
   } else {
     // No token configured (local/dev) — record as queued so nothing silently vanishes.
@@ -46,7 +58,44 @@ export async function ghlSend(env, { customerId = null, contactId, channel, temp
     ghlStatus,
     nowIso(),
   );
+  if (errorDetail) {
+    try {
+      await run(env.DB,
+        `INSERT INTO audit_log (at, actor, entity, action, detail_json) VALUES (?, 'ghl', ?, 'ghl_send_failed', ?)`,
+        nowIso(), `contact:${contactId}`,
+        JSON.stringify({ template, channel, customer_id: customerId, ...errorDetail }).slice(0, 2000));
+    } catch { /* diagnostics must never fail the caller */ }
+  }
   return ghlStatus;
+}
+
+// Push a phone number onto an EXISTING GHL contact. ghlEnsureContact only fires when a customer has
+// no contact id yet, so a contact created before the customer had a phone never learns it. That is
+// how 4 of 20 pickup customers were silently unreachable by SMS on 2026-08-30. phone-sync.js repairs
+// the fleet weekly; customer-edit pushes on change.
+export async function ghlUpdatePhone(env, contactId, phone) {
+  if (!env.GAINZ_GHL_TOKEN || env.GAINZ_GHL_TOKEN === 'PLACEHOLDER_SET_LATER' || !contactId || !phone) return false;
+  try {
+    const r = await fetch(`${GHL_BASE}/contacts/${contactId}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${env.GAINZ_GHL_TOKEN}`, Version: '2021-07-28', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+
+// Read one GHL contact (the phone check needs GHL's stored value, not our copy of it).
+export async function ghlGetContact(env, contactId) {
+  if (!env.GAINZ_GHL_TOKEN || env.GAINZ_GHL_TOKEN === 'PLACEHOLDER_SET_LATER' || !contactId) return null;
+  try {
+    const r = await fetch(`${GHL_BASE}/contacts/${contactId}`, {
+      headers: { Authorization: `Bearer ${env.GAINZ_GHL_TOKEN}`, Version: '2021-07-28' },
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d?.contact || d || null;
+  } catch { return null; }
 }
 
 // Create-or-find a GHL contact by email (idempotent upsert). Returns the contact id, or null.

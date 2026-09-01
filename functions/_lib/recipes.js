@@ -64,6 +64,20 @@ async function opsKv(env, key) {
 // Dashboard model: each ingredient carries a PERCENTAGE of its category's gram target, and batched
 // categories pool their targets before the split. Misc items (pct null) are eyeballed and weigh
 // nothing, which is why they contribute 0 grams here rather than a guess.
+// Grams per named purchase unit, for turning a package (e.g. "10 lbs") into grams. An unknown unit
+// string falls back to the ingredient's own grams_per_unit when the units match, else null: a pack
+// we cannot weigh gets no pack math rather than wrong pack math.
+const UNIT_G = { lb: 453.592, lbs: 453.592, pound: 453.592, pounds: 453.592, oz: 28.3495, kg: 1000, g: 1 };
+function unitGrams(unitStr, ing) {
+  const u = String(unitStr || '').toLowerCase().trim();
+  if (UNIT_G[u]) return UNIT_G[u];
+  if (!u || u === String(ing.unit || '').toLowerCase().trim()) {
+    const g = Number(ing.grams_per_unit);
+    return g > 0 ? g : null;
+  }
+  return null;
+}
+
 function libraryToRecipes(meals, ingredients, priceLib) {
   const priceByName = {};
   for (const [, ing] of Object.entries(priceLib.ingredients || {})) {
@@ -74,11 +88,31 @@ function libraryToRecipes(meals, ingredients, priceLib) {
     if (!ing || !ing.name) continue;
     const priced = priceByName[normalizeName(ing.name)];
     const shrink = Number(ing.shrinkage) > 0 ? Number(ing.shrinkage) : 1;
+    // SKU map (2026-08-31): a REAL price is a price_per_package_cents the owners typed off the
+    // Sam's receipt, on a package whose gram weight we can compute. The static file's cost_per_kg
+    // values are placeholder averages and are labelled as such, so no total built on them can ever
+    // read as the real food cost.
+    const pkgSize = Number(ing.package_size) > 0 ? Number(ing.package_size) : null;
+    const pkgUnitG = pkgSize ? unitGrams(ing.package_size_unit, ing) : null;
+    const packageGrams = pkgSize && pkgUnitG ? pkgSize * pkgUnitG : null;
+    const priceCents = Number.isFinite(Number(ing.price_per_package_cents)) ? Number(ing.price_per_package_cents) : null;
+    let costPerKg = null, priceSource = null;
+    if (priceCents != null && packageGrams) {
+      costPerKg = (priceCents / 100) / (packageGrams / 1000);
+      priceSource = 'library';
+    } else if (priced && typeof priced.cost_per_kg === 'number') {
+      costPerKg = priced.cost_per_kg;
+      priceSource = 'static_placeholder';
+    }
     outIng[slugifyName(ing.name)] = {
       name: ing.name,
       category: 'pantry',                 // overwritten per use below from the meal's own category
       yield_factor: 1 / shrink,           // server divides by this; library multiplies by shrinkage
-      cost_per_kg: priced && typeof priced.cost_per_kg === 'number' ? priced.cost_per_kg : null,
+      cost_per_kg: costPerKg,
+      price_source: priceSource,
+      sams_item: ing.sams_item || null,
+      price_per_package_cents: priceCents,
+      package_grams: packageGrams,
       is_misc: !!ing.is_misc,
       unit: ing.unit || null,
       package_size: ing.package_size == null ? null : Number(ing.package_size),
@@ -209,6 +243,7 @@ export function computeShoppingList(rows, slugByPosition, lib, bufferPct = 10) {
   // actually buy. exact = the food that ends up in containers (no over-buy). Any ingredient missing a
   // price is listed in `unpriced` so the UI can flag that the total is understated.
   let foodCostCents = 0, foodCostExactCents = 0;
+  let realCostCents = 0, placeholderCostCents = 0, packsCostCents = 0, packsAllPriced = true;
   const unpriced = [];
   for (const [slug, cookedG] of Object.entries(cooked)) {
     const ing = ingredients[slug] || { name: slug, category: 'pantry', yield_factor: 1 };
@@ -220,7 +255,16 @@ export function computeShoppingList(rows, slugByPosition, lib, bufferPct = 10) {
     const costCents = pricePerKg != null ? Math.round((rawBuf / 1000) * pricePerKg * 100) : null;
     const costExactCents = pricePerKg != null ? Math.round((rawExact / 1000) * pricePerKg * 100) : null;
     if (pricePerKg == null) unpriced.push(ing.name || slug);
-    else { foodCostCents += costCents; foodCostExactCents += costExactCents; }
+    else {
+      foodCostCents += costCents; foodCostExactCents += costExactCents;
+      if (ing.price_source === 'library') realCostCents += costCents;
+      else placeholderCostCents += costCents;
+    }
+    // Pack math (SKU map): whole packages at the receipt price = what leaves the bank account,
+    // as opposed to the theoretical per-gram cost above.
+    const packs = ing.package_grams ? Math.ceil(rawBuf / ing.package_grams) : null;
+    const packCost = packs != null && ing.price_per_package_cents != null ? packs * ing.price_per_package_cents : null;
+    if (packCost != null) packsCostCents += packCost; else packsAllPriced = false;
     (byCat[cat] = byCat[cat] || []).push({
       ingredient: slug, name: ing.name, category: cat,
       grams_cooked_total: Math.round(cookedG),
@@ -229,7 +273,13 @@ export function computeShoppingList(rows, slugByPosition, lib, bufferPct = 10) {
       lb_buffered: Math.round((rawBuf / LB) * 100) / 100,
       kg_buffered: Math.round((rawBuf / 1000) * 100) / 100,
       cost_per_kg: pricePerKg,
+      price_source: ing.price_source || null,
       cost_cents: costCents,
+      packs,
+      package_size: ing.package_size || null,
+      package_size_unit: ing.package_size_unit || null,
+      sams_item: ing.sams_item || null,
+      pack_cost_cents: packCost,
       used_in: [...(usedIn[slug] || [])],
     });
   }
@@ -241,7 +291,15 @@ export function computeShoppingList(rows, slugByPosition, lib, bufferPct = 10) {
   const cost = {
     food_cost_cents: foodCostCents,            // what you BUY this week (incl. over-buy buffer)
     food_cost_exact_cents: foodCostExactCents, // food that ends up in containers (no buffer)
-    unpriced,                                  // ingredient names with no cost_per_kg set
+    unpriced,                                  // ingredient names with no price at all
+    // The honesty split (2026-08-31): only 'real' comes from owner-entered package prices; the
+    // rest is placeholder averages. A margin decision may be made on real, never on the blend.
+    food_cost_real_cents: realCostCents,
+    food_cost_placeholder_cents: placeholderCostCents,
+    // Whole-packs total at receipt prices; null until every bought ingredient carries pack + price,
+    // because a partial packs total reads like the shopping bill and is not.
+    packs_cost_cents: packsAllPriced ? packsCostCents : null,
+    packs_cost_partial_cents: packsCostCents,
   };
   return { categories, unmatched, cost };
 }

@@ -2401,7 +2401,7 @@
       <div class="ing-lib-table-wrap">
         <table class="ing-lib-table" id="ing-lib-table">
           <thead>
-            <tr><th>Name</th><th>Unit</th><th>g / unit</th><th>Shrinkage</th><th>Pkg size</th><th>Misc?</th><th></th></tr>
+            <tr><th>Name</th><th>Unit</th><th>g / unit</th><th>Shrinkage</th><th>Pkg size</th><th>Sam's #</th><th>$ / pkg</th><th>Misc?</th><th></th></tr>
           </thead>
           <tbody id="ing-lib-tbody"></tbody>
         </table>
@@ -4701,6 +4701,8 @@
       document.getElementById("new-ing-shrinkage").value   = rec && rec.shrinkage != null ? rec.shrinkage : "";
       document.getElementById("new-ing-pkg").value         = rec && rec.package_size != null ? rec.package_size : "";
       document.getElementById("new-ing-pkg-unit").value    = rec ? (rec.package_size_unit || "") : "";
+      document.getElementById("new-ing-sams").value        = rec ? (rec.sams_item || "") : "";
+      document.getElementById("new-ing-price").value       = rec && rec.price_per_package_cents != null ? (rec.price_per_package_cents / 100).toFixed(2) : "";
       toggleMiscFields();
     }
 
@@ -4747,6 +4749,10 @@
       const shrStr  = document.getElementById("new-ing-shrinkage").value.trim();
       const pkgStr  = document.getElementById("new-ing-pkg").value.trim();
       const pkgUnit = document.getElementById("new-ing-pkg-unit").value.trim();
+      const samsStr = document.getElementById("new-ing-sams").value.trim();
+      const priceStr = document.getElementById("new-ing-price").value.trim();
+      const priceCents = priceStr !== "" && !isNaN(parseFloat(priceStr)) && parseFloat(priceStr) >= 0
+        ? Math.round(parseFloat(priceStr) * 100) : null;
 
       if (!name) { showToast("Please enter an ingredient name."); return; }
       if (!isMisc) {
@@ -4758,9 +4764,14 @@
         showToast(`"${name}" already exists in the library.`); return;
       }
 
+      // Spread the existing record FIRST so a field this form doesn't know about survives an edit
+      // (the old rebuild-from-scratch dropped anything a newer form version had added).
+      const existing = (libEditOrigName && INGREDIENT_LIB[libEditOrigName]) || {};
       const rec = isMisc
-        ? { name, unit: null, grams_per_unit: null, shrinkage: null, package_size: null, package_size_unit: null, is_misc: true }
+        ? { ...existing, name, unit: null, grams_per_unit: null, shrinkage: null, package_size: null, package_size_unit: null, is_misc: true,
+            sams_item: samsStr || null, price_per_package_cents: priceCents }
         : {
+            ...existing,
             name,
             unit,
             grams_per_unit: parseFloat(convStr),
@@ -4768,6 +4779,8 @@
             package_size: pkgStr !== "" && !isNaN(parseFloat(pkgStr)) ? parseFloat(pkgStr) : null,
             package_size_unit: pkgUnit || null,
             is_misc: false,
+            sams_item: samsStr || null,
+            price_per_package_cents: priceCents,
           };
 
       // If we renamed an existing record, drop the old key.
@@ -4798,19 +4811,32 @@
       if (!tbody) return;
       const rows = ingLibList();
       if (!rows.length) {
-        tbody.innerHTML = `<tr><td colspan="7" class="ing-lib-dash">No ingredients yet — add one to get started.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="ing-lib-dash">No ingredients yet — add one to get started.</td></tr>`;
         return;
       }
       const dash = '<span class="ing-lib-dash">—</span>';
+      // The SKU-map homework, made visible: count what still blocks a real food-cost number.
+      const needPrice = rows.filter(r => !r.is_misc && r.price_per_package_cents == null).length;
+      const needPkg   = rows.filter(r => !r.is_misc && (r.package_size == null || r.package_size === "")).length;
+      const headEl = document.querySelector(".ing-lib-sub");
+      if (headEl) {
+        headEl.innerHTML = "The master list that drives shopping quantities. Editing here changes the math for everyone. Owner-only."
+          + ((needPrice || needPkg)
+            ? ` <b style="color:#b4552e;">SKU map incomplete: ${needPrice} ingredient${needPrice === 1 ? "" : "s"} missing a price, ${needPkg} missing a pack size. Food cost stays a guess until these are real (from the Sam's order history, never estimated).</b>`
+            : ' <b style="color:#3d7a45;">SKU map complete: every measured ingredient has a pack size and a real price.</b>');
+      }
       tbody.innerHTML = rows.map(r => {
         const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
         const pkg = r.package_size != null ? `${r.package_size}${r.package_size_unit ? " " + esc(r.package_size_unit) : ""}` : dash;
-        return `<tr>
+        const needs = !r.is_misc && (r.price_per_package_cents == null || r.package_size == null);
+        return `<tr${needs ? ' style="background:#fdf3ee;"' : ""}>
           <td>${esc(r.name)}</td>
           <td>${r.unit ? esc(r.unit) : dash}</td>
           <td>${r.grams_per_unit != null ? r.grams_per_unit : dash}</td>
           <td>${r.shrinkage != null ? r.shrinkage : dash}</td>
           <td>${pkg}</td>
+          <td>${r.sams_item ? esc(r.sams_item) : dash}</td>
+          <td>${r.price_per_package_cents != null ? "$" + (r.price_per_package_cents / 100).toFixed(2) : dash}</td>
           <td>${r.is_misc ? '<span class="ing-lib-misc">misc</span>' : dash}</td>
           <td><button class="ing-lib-edit" onclick="openLibEditor('${esc(r.name).replace(/'/g,"\\'")}')">Edit</button></td>
         </tr>`;
@@ -4897,7 +4923,20 @@
     }
 
     // Aggregate ingredients from confirmed menu meals × gender-based order quantities
-    // cooked grams -> raw (shrinkage) -> purchase units -> pack estimate, all from the ingredient library.
+    // cooked grams -> raw (shrinkage) -> +10% waste buffer -> purchase units -> packs -> cost.
+    //
+    // WASTE BUFFER (2026-08-31): the server shopping list has always bought +10% for pot loss and
+    // trim; this kitchen-facing tab bought exact theoretical yield, so the kitchen ran tighter than
+    // the API said. Buy quantities (unitQty, packs, cost) now carry the buffer; rawG/cooked stay
+    // exact so the numbers still reconcile against portioning.
+    //
+    // ⚠️ JASMINE RICE IS EXEMPT from the buffer while the interim 1.65x instruction stands (plan
+    // Part 4c): that multiplier was calibrated against the UNBUFFERED figure, and stacking +10%
+    // under it would silently over-order. Remove the exemption when the two rice measurements land
+    // and shrinkage is corrected for real.
+    const ING_BUFFER_PCT = 10;
+    const RICE_INTERIM_MULT = 1.65;
+    function isInterimRice(name) { return /jasmine\s*rice/i.test(String(name || "")); }
     function deriveIngQty(p) {
       if (p.isMisc) return p;
       const shrink = ingShrinkage(p.name);
@@ -4905,16 +4944,27 @@
       p.cookedGr = Math.round(p.cookedG);
       if (shrink != null && p.cookedG > 0) {
         p.rawG = Math.round(p.cookedG * shrink);
+        const rice = isInterimRice(p.name);
+        p.buffered = !rice;
+        const buyG = rice ? p.rawG : Math.round(p.rawG * (1 + ING_BUFFER_PCT / 100));
+        p.buyG = buyG;
         const u = getIngUnit(p.name);
         if (u) {
           p.unit    = u.unit;
-          p.unitQty = p.rawG / u.g;
+          p.unitQty = buyG / u.g;
+          if (rice) p.riceInterimQty = (p.rawG / u.g) * RICE_INTERIM_MULT;
           const rec = ingRec(p.name);
           if (rec && rec.package_size) {
             p.packs    = Math.ceil(p.unitQty / rec.package_size);
             p.packSize = rec.package_size;
             p.packUnit = rec.package_size_unit || u.unit;
+            if (rec.price_per_package_cents != null) {
+              // Real cost = whole packs bought at the receipt price, not a theoretical per-gram rate.
+              p.pricePerPkgCents = rec.price_per_package_cents;
+              p.costCents = p.packs * rec.price_per_package_cents;
+            }
           }
+          if (rec && rec.sams_item) p.samsItem = rec.sams_item;
         }
       }
       return p;
@@ -5105,6 +5155,22 @@
       main.innerHTML = "";
       const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 
+      // RUNNING COST TOTAL (2026-08-31): the whole point of the SKU map. Honest about coverage:
+      // a total over half-priced ingredients is labelled as partial, never presented as the cost.
+      const priced   = measured.filter(p => p.costCents != null);
+      const unpricedMeasured = measured.filter(p => p.costCents == null && p.rawG != null);
+      if (priced.length) {
+        const totalCents = priced.reduce((s, p) => s + p.costCents, 0);
+        const cs = document.createElement("div");
+        cs.className = "ing-unmatched-warn";
+        cs.style.background = "#eef5ef";
+        cs.style.color = "#2c5533";
+        cs.innerHTML = unpricedMeasured.length
+          ? `Buy cost so far: <b>$${(totalCents / 100).toFixed(2)}</b> across ${priced.length} priced ingredient${priced.length === 1 ? "" : "s"}. <b>PARTIAL:</b> ${unpricedMeasured.length} still unpriced, so the real total is higher. Add prices in the Ingredient Library below.`
+          : `Estimated buy cost this week: <b>$${(totalCents / 100).toFixed(2)}</b> (every measured ingredient priced, whole packs at receipt prices, +${10}% waste buffer).`;
+        main.appendChild(cs);
+      }
+
       // Data-sync warning: ordered meals that aren't in the library (would otherwise be silently skipped).
       if (ingUnmatchedMeals && ingUnmatchedMeals.length) {
         const w = document.createElement("div");
@@ -5120,11 +5186,18 @@
 
         let qtyHtml;
         if (pill.rawG != null && pill.unit) {
-          const packLine = pill.packs
-            ? `<div class="ing-pill-pack">~${pill.packs} pack${pill.packs > 1 ? "s" : ""} of ${pill.packSize} ${esc(pill.packUnit)}</div>`
+          const costBit = pill.costCents != null
+            ? ` · $${(pill.costCents / 100).toFixed(2)}${pill.packs > 1 ? ` (${pill.packs} x $${(pill.pricePerPkgCents / 100).toFixed(2)})` : ""}`
             : "";
-          qtyHtml = `<div class="ing-pill-qty">${pill.unitQty.toFixed(1)} ${esc(pill.unit)}</div>${packLine}`
-                  + `<div class="ing-qty-cooked">${pill.rawG.toLocaleString()}g raw → ${pill.cookedGr.toLocaleString()}g cooked</div>`;
+          const packLine = pill.packs
+            ? `<div class="ing-pill-pack">${pill.packs} x ${pill.packSize} ${esc(pill.packUnit)}${pill.samsItem ? ` · Sam's #${esc(pill.samsItem)}` : ""}${costBit}</div>`
+            : "";
+          const riceLine = pill.riceInterimQty != null
+            ? `<div class="ing-pill-pack" style="color:#b4552e;"><b>INTERIM (rice under review): pull ${pill.riceInterimQty.toFixed(1)} ${esc(pill.unit)}</b> (1.65x, plan 4c). Weigh dry-in/cooked-out + one container this Saturday.</div>`
+            : "";
+          const bufBit = pill.buffered ? " incl +10% buffer" : "";
+          qtyHtml = `<div class="ing-pill-qty">${pill.unitQty.toFixed(1)} ${esc(pill.unit)}</div>${packLine}${riceLine}`
+                  + `<div class="ing-qty-cooked">${pill.rawG.toLocaleString()}g raw → ${pill.cookedGr.toLocaleString()}g cooked${bufBit}</div>`;
         } else if (pill.cookedG > 0 && pill.shrink == null) {
           qtyHtml = `<div class="ing-pill-qty">${pill.cookedGr.toLocaleString()}g cooked</div><div class="ing-qty-cooked">no shrinkage data — add it in the Ingredient Library</div>`;
         } else if (pill.cookedG > 0) {
@@ -5192,7 +5265,12 @@
       const lines = measured.map(p => {
         let qty;
         if (p.rawG != null && p.unit) {
-          const pack = p.packs ? ` (~${p.packs} pack${p.packs > 1 ? "s" : ""} of ${p.packSize} ${p.packUnit})` : "";
+          const bits = [];
+          if (p.packs) bits.push(`${p.packs} x ${p.packSize} ${p.packUnit}`);
+          if (p.samsItem) bits.push(`Sam's #${p.samsItem}`);
+          if (p.costCents != null) bits.push(`$${(p.costCents / 100).toFixed(2)}`);
+          if (p.riceInterimQty != null) bits.push(`INTERIM: pull ${p.riceInterimQty.toFixed(1)} ${p.unit} (1.65x)`);
+          const pack = bits.length ? ` (${bits.join(", ")})` : "";
           qty = `${p.unitQty.toFixed(1)} ${p.unit}${pack} — ${p.rawG}g raw → ${p.cookedGr}g cooked`;
         } else if (p.cookedG > 0 && p.shrink == null) {
           qty = `${p.cookedGr}g cooked (no shrinkage data)`;
@@ -5210,6 +5288,14 @@
       }
 
       const weekStr = getWeekStr();
+      const pricedP = measured.filter(p => p.costCents != null);
+      if (pricedP.length) {
+        const tot = pricedP.reduce((s, p) => s + p.costCents, 0);
+        const gaps = measured.filter(p => p.costCents == null && p.rawG != null).length;
+        lines.push("", gaps
+          ? `Buy cost so far: $${(tot / 100).toFixed(2)} (PARTIAL: ${gaps} ingredients unpriced, real total is higher)`
+          : `Estimated buy cost: $${(tot / 100).toFixed(2)} (whole packs, +10% buffer)`);
+      }
       const warn = (ingUnmatchedMeals && ingUnmatchedMeals.length)
         ? `\n⚠ Not in library (fix name): ${ingUnmatchedMeals.join(", ")}\n` : "";
       const header  = `GainzTrain Ingredients — Week of ${weekStr}\n${warn}`;
@@ -6345,6 +6431,18 @@
             <div style="flex:1;">
               <label class="menu-field-label">Pkg unit</label>
               <input type="text" id="new-ing-pkg-unit" class="menu-field-input" placeholder="lbs" />
+            </div>
+          </div>
+          <!-- Sam's Club SKU map (2026-08-31): item number + price per package make food cost REAL.
+               Copy both straight off the Sam's receipt or order history. Never guess a price. -->
+          <div style="display:flex; gap:10px; margin-top:8px;">
+            <div style="flex:1;">
+              <label class="menu-field-label">Sam's item #</label>
+              <input type="text" id="new-ing-sams" class="menu-field-input" placeholder="e.g. 980123456" />
+            </div>
+            <div style="flex:1;">
+              <label class="menu-field-label">Price per pkg ($)</label>
+              <input type="number" id="new-ing-price" class="menu-field-input" min="0" step="0.01" placeholder="e.g. 24.98" />
             </div>
           </div>
         </div>

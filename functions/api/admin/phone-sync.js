@@ -14,25 +14,52 @@
 // Workers subrequest limit. At ~27 customers one pass covers everyone; if the cap is ever hit the
 // response says truncated:true and the next run finishes the job.
 import { json } from '../../_lib/respond.js';
-import { all } from '../../_lib/db.js';
+import { all, one, run, nowIso } from '../../_lib/db.js';
 import { requireAdmin } from '../../_lib/admin.js';
 import { ghlGetContact, ghlUpdatePhone, ghlEnsureContact } from '../../_lib/ghl.js';
-import { run, nowIso } from '../../_lib/db.js';
 
 const MAX_LOOKUPS = 40; // stay clearly under the subrequest cap, PUTs included
 const BATCH = 5;
+const CURSOR_KEY = 'phone_sync_cursor';
+
+// Where a truncated sweep left off, kept in ops_kv so the next run CONTINUES instead of re-checking
+// the same first 40 customers forever (the bug the first version of this file shipped with: anyone
+// past the cap was never looked at). Wraps to the start when the end is reached.
+async function readCursor(env) {
+  try {
+    const row = await one(env.DB, `SELECT value_json FROM ops_kv WHERE key = ?`, CURSOR_KEY);
+    return row ? (JSON.parse(row.value_json || '""') || '') : '';
+  } catch { return ''; }
+}
+async function writeCursor(env, v) {
+  try {
+    await run(env.DB,
+      `INSERT INTO ops_kv (key, value_json, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
+      CURSOR_KEY, JSON.stringify(v || ''), nowIso());
+  } catch { /* non-fatal: worst case the next sweep re-checks a stretch */ }
+}
 
 async function sweep(env, repair) {
-  const customers = await all(env.DB,
-    `SELECT id, email, first_name, last_name, phone, ghl_contact_id
-       FROM customers WHERE phone IS NOT NULL AND phone != '' ORDER BY created_at`);
+  // Only the repair path (the Saturday cron) advances the cursor. A hand-run GET report always
+  // shows from the top and must not shift where the weekly sweep resumes.
+  const cursor = repair ? await readCursor(env) : '';
+  // Start after the cursor; wrap the remainder to the front so one ordering covers everyone.
+  const after = await all(env.DB,
+    `SELECT id, email, first_name, last_name, phone, ghl_contact_id, created_at
+       FROM customers WHERE phone IS NOT NULL AND phone != '' AND created_at > ? ORDER BY created_at`, cursor);
+  const before = await all(env.DB,
+    `SELECT id, email, first_name, last_name, phone, ghl_contact_id, created_at
+       FROM customers WHERE phone IS NOT NULL AND phone != '' AND created_at <= ? ORDER BY created_at`, cursor);
+  const customers = [...after, ...before];
 
   const missing = [], pushed = [], noContact = [], errors = [];
-  let looked = 0, truncated = false;
+  let looked = 0, truncated = false, lastChecked = cursor;
 
   for (let i = 0; i < customers.length; i += BATCH) {
     if (looked >= MAX_LOOKUPS) { truncated = true; break; }
     const slice = customers.slice(i, i + BATCH);
+    lastChecked = slice[slice.length - 1].created_at;
     await Promise.all(slice.map(async (c) => {
       const who = { id: c.id, name: `${c.first_name || ''} ${c.last_name || ''}`.trim(), email: c.email };
       try {
@@ -64,10 +91,14 @@ async function sweep(env, repair) {
     }));
   }
 
+  // Full pass completed: reset so the next run starts at the top. Truncated: continue from here.
+  if (repair) await writeCursor(env, truncated ? lastChecked : '');
+
   return {
     checked: looked,
     total_with_phone: customers.length,
     truncated,
+    cursor_resumes_after: truncated ? lastChecked : null,
     missing_in_ghl: missing,
     no_ghl_contact: noContact,
     pushed,

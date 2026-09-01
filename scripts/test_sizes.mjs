@@ -55,7 +55,11 @@ check('no customer resolves regular', sizeForCustomer(null).key, 'regular');
 // 5. Out-of-band meal counts refuse a price rather than inventing one.
 check('out of band returns null', perMealCentsFor(envOn, 'large', 40), null);
 
-// 6. Custom is never self-serve selectable in the public payload.
+// 6. No portion grams exist until Jayson's ladder is real. If this fails, someone invented
+// numbers; the ladder lands by EDITING SIZES with Jayson's figures and UPDATING this check.
+check('no invented portions', SIZES.map((s) => s.portion), [null, null, null, null]);
+
+// 7. Custom is never self-serve selectable in the public payload.
 check('public selectable sizes', publicSizes().filter((s) => s.selectable).map((s) => s.key), ['mini', 'regular', 'large']);
 check('custom listed but locked', publicSizes().find((s) => s.key === 'custom').selectable, false);
 

@@ -247,7 +247,11 @@
       if(!sel.find(s=>s.key===sizeKey))sizeKey='regular';
       $('sizeOpts').innerHTML=sel.map(s=>{
         const b=(s.bands||[]).find(b=>meals>=b.min&&meals<=b.max);
-        return `<div class="opt ${s.key===sizeKey?'sel':''}" data-size="${s.key}">${s.name}<small>${b?money(b.per_meal_cents)+'/meal':''}</small></div>`;
+        // Portion line renders ONLY when the size carries real grams from the kitchen's ladder.
+        // No grams, no line: an invented portion number on a sales page is a broken promise.
+        const p=s.portion;
+        const pLine=p&&p.protein_g?`<small style="margin-top:.1rem;">${p.protein_g}g protein${p.carbs_g?' · '+p.carbs_g+'g carbs':''}${p.veggies_g?' · '+p.veggies_g+'g veggies':''}</small>`:'';
+        return `<div class="opt ${s.key===sizeKey?'sel':''}" data-size="${s.key}">${s.name}<small>${b?money(b.per_meal_cents)+'/meal':''}</small>${pLine}</div>`;
       }).join('');
       [...$('sizeOpts').children].forEach(el=>{el.onclick=()=>{sizeKey=el.dataset.size;render();};});
     }

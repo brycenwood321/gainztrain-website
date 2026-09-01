@@ -37,11 +37,17 @@ export function tierForMeals(n) {
 //
 // Portion grams per size are NOT here yet: the mini/custom gram ladder is Jayson's to define, and
 // portioning stays sex-driven until it exists. Never guess a gram figure.
+// `portion` is the per-meal gram ladder (grams of cooked protein/carbs/veggies in the container),
+// the SAME numbers the kitchen will cook from once wired. ALL NULL until Jayson defines the ladder:
+// a size card renders its portion line only when real grams exist, and nothing anywhere invents
+// one (memory: the plan's own rule, a plausible wrong number is worse than a visible gap). Today's
+// only confirmed anchors are the signup portions, Standard 115g and Large 170g protein; how those
+// map onto this ladder is part of Jayson's homework, not a default.
 export const SIZES = [
-  { key: 'mini',    name: 'Mini',    listCents: 925 },
-  { key: 'regular', name: 'Regular', listCents: 1050 },  // == today's single price. The anchor.
-  { key: 'large',   name: 'Large',   listCents: 1175 },
-  { key: 'custom',  name: 'Custom',  listCents: 1600 },
+  { key: 'mini',    name: 'Mini',    listCents: 925,  portion: null },
+  { key: 'regular', name: 'Regular', listCents: 1050, portion: null },  // == today's single price. The anchor.
+  { key: 'large',   name: 'Large',   listCents: 1175, portion: null },
+  { key: 'custom',  name: 'Custom',  listCents: 1600, portion: null },  // set per customer, by hand
 ];
 
 export function sizesEnabled(env) { return String(env && env.SIZES_ENABLED) === 'true'; }
@@ -70,6 +76,7 @@ export function perMealCentsFor(env, sizeKey, meals) {
 export function sizePriceTable() {
   return SIZES.map((s) => ({
     key: s.key, name: s.name, list_cents: s.listCents,
+    portion: s.portion || null,
     bands: TIERS.map((t) => ({
       tier: t.key, min: t.min, max: t.max,
       per_meal_cents: Math.round(s.listCents * (t.perMealCents / TIERS[0].perMealCents)),

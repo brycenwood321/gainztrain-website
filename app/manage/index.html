@@ -158,7 +158,9 @@
       const meals=(sub&&sub.meals_per_week)||tier;
       $('sizeOpts').innerHTML=SIZES.filter(s=>s.selectable).map(s=>{
         const c=sizeBand(s.key,meals);
-        return `<div class="opt ${s.key===sizeSel?'sel':''}" data-size="${s.key}">${s.name}<small style="display:block;font-weight:400;color:var(--muted);font-size:.78rem;">${c!=null?money(c)+'/meal':''}</small></div>`;
+        const p=s.portion;
+        const pLine=p&&p.protein_g?`<small style="display:block;font-weight:400;color:var(--muted);font-size:.74rem;">${p.protein_g}g protein${p.carbs_g?' · '+p.carbs_g+'g carbs':''}${p.veggies_g?' · '+p.veggies_g+'g veg':''}</small>`:'';
+        return `<div class="opt ${s.key===sizeSel?'sel':''}" data-size="${s.key}">${s.name}<small style="display:block;font-weight:400;color:var(--muted);font-size:.78rem;">${c!=null?money(c)+'/meal':''}</small>${pLine}</div>`;
       }).join('');
       [...$('sizeOpts').children].forEach(el=>{el.onclick=()=>{sizeSel=el.dataset.size;renderSizeOpts();};});
       const c=sizeBand(sizeSel,meals);

@@ -89,9 +89,10 @@ function libraryToRecipes(meals, ingredients, priceLib) {
     const priced = priceByName[normalizeName(ing.name)];
     const shrink = Number(ing.shrinkage) > 0 ? Number(ing.shrinkage) : 1;
     // SKU map (2026-08-31): a REAL price is a price_per_package_cents the owners typed off the
-    // Sam's receipt, on a package whose gram weight we can compute. The static file's cost_per_kg
-    // values are placeholder averages and are labelled as such, so no total built on them can ever
-    // read as the real food cost.
+    // receipt of whichever store sells it (usually Sam's, not always), on a package whose gram
+    // weight we can compute. `store` + `store_item` record WHERE it is bought so a stand-in
+    // shopper can run the list. The static file's cost_per_kg values are placeholder averages and
+    // are labelled as such, so no total built on them can ever read as the real food cost.
     const pkgSize = Number(ing.package_size) > 0 ? Number(ing.package_size) : null;
     const pkgUnitG = pkgSize ? unitGrams(ing.package_size_unit, ing) : null;
     const packageGrams = pkgSize && pkgUnitG ? pkgSize * pkgUnitG : null;
@@ -110,7 +111,8 @@ function libraryToRecipes(meals, ingredients, priceLib) {
       yield_factor: 1 / shrink,           // server divides by this; library multiplies by shrinkage
       cost_per_kg: costPerKg,
       price_source: priceSource,
-      sams_item: ing.sams_item || null,
+      store: ing.store || null,
+      store_item: ing.store_item || ing.sams_item || null,
       price_per_package_cents: priceCents,
       package_grams: packageGrams,
       is_misc: !!ing.is_misc,
@@ -278,7 +280,8 @@ export function computeShoppingList(rows, slugByPosition, lib, bufferPct = 10) {
       packs,
       package_size: ing.package_size || null,
       package_size_unit: ing.package_size_unit || null,
-      sams_item: ing.sams_item || null,
+      store: ing.store || null,
+      store_item: ing.store_item || null,
       pack_cost_cents: packCost,
       used_in: [...(usedIn[slug] || [])],
     });

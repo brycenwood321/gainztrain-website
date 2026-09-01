@@ -2401,7 +2401,7 @@
       <div class="ing-lib-table-wrap">
         <table class="ing-lib-table" id="ing-lib-table">
           <thead>
-            <tr><th>Name</th><th>Unit</th><th>g / unit</th><th>Shrinkage</th><th>Pkg size</th><th>Sam's #</th><th>$ / pkg</th><th>Misc?</th><th></th></tr>
+            <tr><th>Name</th><th>Unit</th><th>g / unit</th><th>Shrinkage</th><th>Pkg size</th><th>Store</th><th>Item #</th><th>$ / pkg</th><th>Misc?</th><th></th></tr>
           </thead>
           <tbody id="ing-lib-tbody"></tbody>
         </table>
@@ -4701,7 +4701,8 @@
       document.getElementById("new-ing-shrinkage").value   = rec && rec.shrinkage != null ? rec.shrinkage : "";
       document.getElementById("new-ing-pkg").value         = rec && rec.package_size != null ? rec.package_size : "";
       document.getElementById("new-ing-pkg-unit").value    = rec ? (rec.package_size_unit || "") : "";
-      document.getElementById("new-ing-sams").value        = rec ? (rec.sams_item || "") : "";
+      document.getElementById("new-ing-store").value       = rec ? (rec.store || "") : "";
+      document.getElementById("new-ing-sams").value        = rec ? (rec.store_item || rec.sams_item || "") : "";
       document.getElementById("new-ing-price").value       = rec && rec.price_per_package_cents != null ? (rec.price_per_package_cents / 100).toFixed(2) : "";
       toggleMiscFields();
     }
@@ -4749,6 +4750,7 @@
       const shrStr  = document.getElementById("new-ing-shrinkage").value.trim();
       const pkgStr  = document.getElementById("new-ing-pkg").value.trim();
       const pkgUnit = document.getElementById("new-ing-pkg-unit").value.trim();
+      const storeStr = document.getElementById("new-ing-store").value.trim();
       const samsStr = document.getElementById("new-ing-sams").value.trim();
       const priceStr = document.getElementById("new-ing-price").value.trim();
       const priceCents = priceStr !== "" && !isNaN(parseFloat(priceStr)) && parseFloat(priceStr) >= 0
@@ -4769,7 +4771,7 @@
       const existing = (libEditOrigName && INGREDIENT_LIB[libEditOrigName]) || {};
       const rec = isMisc
         ? { ...existing, name, unit: null, grams_per_unit: null, shrinkage: null, package_size: null, package_size_unit: null, is_misc: true,
-            sams_item: samsStr || null, price_per_package_cents: priceCents }
+            store: storeStr || null, store_item: samsStr || null, price_per_package_cents: priceCents }
         : {
             ...existing,
             name,
@@ -4779,9 +4781,11 @@
             package_size: pkgStr !== "" && !isNaN(parseFloat(pkgStr)) ? parseFloat(pkgStr) : null,
             package_size_unit: pkgUnit || null,
             is_misc: false,
-            sams_item: samsStr || null,
+            store: storeStr || null,
+            store_item: samsStr || null,
             price_per_package_cents: priceCents,
           };
+      delete rec.sams_item;   // pre-rename key, superseded by store_item (no live data ever used it)
 
       // If we renamed an existing record, drop the old key.
       if (libEditOrigName && libEditOrigName !== name) delete INGREDIENT_LIB[libEditOrigName];
@@ -4811,7 +4815,7 @@
       if (!tbody) return;
       const rows = ingLibList();
       if (!rows.length) {
-        tbody.innerHTML = `<tr><td colspan="9" class="ing-lib-dash">No ingredients yet — add one to get started.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="ing-lib-dash">No ingredients yet — add one to get started.</td></tr>`;
         return;
       }
       const dash = '<span class="ing-lib-dash">—</span>';
@@ -4822,7 +4826,7 @@
       if (headEl) {
         headEl.innerHTML = "The master list that drives shopping quantities. Editing here changes the math for everyone. Owner-only."
           + ((needPrice || needPkg)
-            ? ` <b style="color:#b4552e;">SKU map incomplete: ${needPrice} ingredient${needPrice === 1 ? "" : "s"} missing a price, ${needPkg} missing a pack size. Food cost stays a guess until these are real (from the Sam's order history, never estimated).</b>`
+            ? ` <b style="color:#b4552e;">SKU map incomplete: ${needPrice} ingredient${needPrice === 1 ? "" : "s"} missing a price, ${needPkg} missing a pack size. Food cost stays a guess until these are real (off the receipt or order history of whichever store it comes from, never estimated). Store + item # are optional but mean anyone can run the shopping trip.</b>`
             : ' <b style="color:#3d7a45;">SKU map complete: every measured ingredient has a pack size and a real price.</b>');
       }
       tbody.innerHTML = rows.map(r => {
@@ -4835,7 +4839,8 @@
           <td>${r.grams_per_unit != null ? r.grams_per_unit : dash}</td>
           <td>${r.shrinkage != null ? r.shrinkage : dash}</td>
           <td>${pkg}</td>
-          <td>${r.sams_item ? esc(r.sams_item) : dash}</td>
+          <td>${r.store ? esc(r.store) : dash}</td>
+          <td>${(r.store_item || r.sams_item) ? esc(r.store_item || r.sams_item) : dash}</td>
           <td>${r.price_per_package_cents != null ? "$" + (r.price_per_package_cents / 100).toFixed(2) : dash}</td>
           <td>${r.is_misc ? '<span class="ing-lib-misc">misc</span>' : dash}</td>
           <td><button class="ing-lib-edit" onclick="openLibEditor('${esc(r.name).replace(/'/g,"\\'")}')">Edit</button></td>
@@ -4964,7 +4969,8 @@
               p.costCents = p.packs * rec.price_per_package_cents;
             }
           }
-          if (rec && rec.sams_item) p.samsItem = rec.sams_item;
+          if (rec && (rec.store_item || rec.sams_item)) p.storeItem = rec.store_item || rec.sams_item;
+          if (rec && rec.store) p.store = rec.store;
         }
       }
       return p;
@@ -5190,7 +5196,7 @@
             ? ` · $${(pill.costCents / 100).toFixed(2)}${pill.packs > 1 ? ` (${pill.packs} x $${(pill.pricePerPkgCents / 100).toFixed(2)})` : ""}`
             : "";
           const packLine = pill.packs
-            ? `<div class="ing-pill-pack">${pill.packs} x ${pill.packSize} ${esc(pill.packUnit)}${pill.samsItem ? ` · Sam's #${esc(pill.samsItem)}` : ""}${costBit}</div>`
+            ? `<div class="ing-pill-pack">${pill.packs} x ${pill.packSize} ${esc(pill.packUnit)}${pill.store ? ` · ${esc(pill.store)}` : ""}${pill.storeItem ? ` #${esc(pill.storeItem)}` : ""}${costBit}</div>`
             : "";
           const riceLine = pill.riceInterimQty != null
             ? `<div class="ing-pill-pack" style="background:#5c1f04;color:#fff;padding:3px 8px;border-radius:6px;display:inline-block;"><b>INTERIM (rice under review): pull ${pill.riceInterimQty.toFixed(1)} ${esc(pill.unit)}</b> (1.65x, plan 4c). Weigh dry-in/cooked-out + one container this Saturday.</div>`
@@ -5267,7 +5273,7 @@
         if (p.rawG != null && p.unit) {
           const bits = [];
           if (p.packs) bits.push(`${p.packs} x ${p.packSize} ${p.packUnit}`);
-          if (p.samsItem) bits.push(`Sam's #${p.samsItem}`);
+          if (p.store || p.storeItem) bits.push(`${p.store || ""}${p.store && p.storeItem ? " " : ""}${p.storeItem ? "#" + p.storeItem : ""}`);
           if (p.costCents != null) bits.push(`$${(p.costCents / 100).toFixed(2)}`);
           if (p.riceInterimQty != null) bits.push(`INTERIM: pull ${p.riceInterimQty.toFixed(1)} ${p.unit} (1.65x)`);
           const pack = bits.length ? ` (${bits.join(", ")})` : "";
@@ -6433,11 +6439,16 @@
               <input type="text" id="new-ing-pkg-unit" class="menu-field-input" placeholder="lbs" />
             </div>
           </div>
-          <!-- Sam's Club SKU map (2026-08-31): item number + price per package make food cost REAL.
-               Copy both straight off the Sam's receipt or order history. Never guess a price. -->
+          <!-- SKU map (2026-08-31): pack size + price per package make food cost REAL; store + item
+               number record WHERE it is bought, so a stand-in shopper can run the list cold.
+               Copy price straight off that store's receipt or order history. Never guess a price. -->
           <div style="display:flex; gap:10px; margin-top:8px;">
             <div style="flex:1;">
-              <label class="menu-field-label">Sam's item #</label>
+              <label class="menu-field-label">Store</label>
+              <input type="text" id="new-ing-store" class="menu-field-input" placeholder="Sam's Club" />
+            </div>
+            <div style="flex:1;">
+              <label class="menu-field-label">Item #</label>
               <input type="text" id="new-ing-sams" class="menu-field-input" placeholder="e.g. 980123456" />
             </div>
             <div style="flex:1;">

@@ -14,7 +14,8 @@ import { one, run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
 import { str } from '../../_lib/validate.js';
-import { tierForMeals, ensureStripePrice, ensureDeliveryPrice, ensureFuel8Coupon, MIN_MEALS, MAX_MEALS } from '../../_lib/plans.js';
+import { tierForMeals, ensureStripePrice, ensureDeliveryPrice, ensureFuel8Coupon, MIN_MEALS, MAX_MEALS,
+  sizesEnabled, sizeByKey, perMealCentsFor, ensureStripePriceForCents } from '../../_lib/plans.js';
 
 // Stripe statuses that mean "this person already has a plan" — block a second subscription.
 const LIVE_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
@@ -33,6 +34,20 @@ export async function onRequestPost(context) {
   const meals = Number(body.meals);
   const tier = tierForMeals(meals);
   if (!tier) return fail(400, 'invalid_meals', `Choose between ${MIN_MEALS} and ${MAX_MEALS} meals per week.`);
+
+  // ── Size (Build 3, behind SIZES_ENABLED) ── the per-customer size drives the per-meal price.
+  // Flag off: everything below resolves to the legacy tier price and no size is stored, byte-for-byte
+  // the old behaviour. Custom is not self-serve (it starts as a conversation); reject it here so a
+  // raw API call can't grab the $16 row unattended.
+  const useSizes = sizesEnabled(env);
+  let size = null;
+  if (useSizes) {
+    const requested = str(body.size).trim().toLowerCase();
+    size = sizeByKey(requested) || sizeByKey(customer.size_key) || sizeByKey('regular');
+    if (requested && !sizeByKey(requested)) return fail(400, 'invalid_size', 'Pick a valid meal size.');
+    if (size.key === 'custom') return fail(400, 'custom_is_manual', 'Custom plans are set up with us directly. Text us and we will build yours.');
+  }
+  const perMealCents = useSizes ? perMealCentsFor(env, size.key, meals) : tier.perMealCents;
 
   // Optional promo code: must be a PUBLIC (customer-facing) coupon in our table, not expired.
   // Internal comps like OWNERS100 (is_public=0) are blocked here — a customer can't grant themselves
@@ -126,7 +141,12 @@ export async function onRequestPost(context) {
       }
     }
 
-    const lineItems = [{ price: await ensureStripePrice(env, tier), quantity: meals }];
+    const lineItems = [{
+      price: useSizes
+        ? await ensureStripePriceForCents(env, perMealCents, `${size.name} ${tier.name}`)
+        : await ensureStripePrice(env, tier),
+      quantity: meals,
+    }];
     if (deliveryMethod === 'delivery' && feeCents > 0) {
       lineItems.push({ price: await ensureDeliveryPrice(env, zone, feeCents), quantity: 1 });
     }
@@ -140,10 +160,11 @@ export async function onRequestPost(context) {
         metadata: {
           meals_per_week: String(meals), tier: tier.key, d1_customer_id: customer.id,
           delivery_method: deliveryMethod, delivery_zone: String(zone),
+          ...(useSizes ? { size_key: size.key } : {}),
           promo: isFuel8 ? 'FUEL8' : '', // webhook watches this to trim FUEL8 to exactly 4 weeks
         },
       },
-      metadata: { d1_customer_id: customer.id, meals: String(meals), tier: tier.key, delivery_method: deliveryMethod, code: code || '' },
+      metadata: { d1_customer_id: customer.id, meals: String(meals), tier: tier.key, delivery_method: deliveryMethod, code: code || '', ...(useSizes ? { size_key: size.key } : {}) },
       // Don't force a card when nothing is due now (e.g. a 100%-off plan checks out at $0).
       payment_method_collection: 'if_required',
       success_url: `${base}/app/menu/?checkout=success`,
@@ -155,7 +176,13 @@ export async function onRequestPost(context) {
     if (couponToApply) sessionParams.discounts = [{ coupon: couponToApply }];
 
     const session = await stripe(env, 'POST', 'checkout/sessions', sessionParams,
-      `gt_checkout_${customer.id}_${meals}_${deliveryMethod}_${zone}_${code}`);
+      `gt_checkout_${customer.id}_${meals}_${deliveryMethod}_${zone}_${code}${useSizes ? `_${size.key}` : ''}`);
+
+    // Persist the chosen size on the customer (Build 3). Guarded: migration 0026 adds size_key and
+    // is not yet applied (D1 error 7500), and this write must never fail a checkout either way.
+    if (useSizes) {
+      try { await run(env.DB, `UPDATE customers SET size_key = ?, updated_at = ? WHERE id = ?`, size.key, nowIso(), customer.id); } catch { /* column pending 0026 */ }
+    }
 
     // Persist the delivery choice only AFTER the session is created (not on a validation failure).
     await run(env.DB,
@@ -163,7 +190,8 @@ export async function onRequestPost(context) {
          address = COALESCE(NULLIF(?,''), address), city = COALESCE(NULLIF(?,''), city), updated_at = ? WHERE id = ?`,
       deliveryMethod, zone, zip, address, city, nowIso(), customer.id);
 
-    return ok({ url: session.url, tier: tier.key, meals, delivery_method: deliveryMethod, delivery_fee_cents: feeCents });
+    return ok({ url: session.url, tier: tier.key, meals, delivery_method: deliveryMethod, delivery_fee_cents: feeCents,
+      ...(useSizes ? { size: size.key, per_meal_cents: perMealCents } : {}) });
   } catch (e) {
     return fail(502, 'checkout_failed', String(e?.message || e).slice(0, 200));
   }

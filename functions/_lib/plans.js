@@ -102,6 +102,12 @@ export function publicPlans() {
   return TIERS.map((t) => ({ key: t.key, name: t.name, min: t.min, max: t.max, per_meal_cents: t.perMealCents }));
 }
 
+// Public sizes payload for /start and /app when the flag is on. Custom is listed but not
+// self-serve selectable: a $16/meal custom plan starts as a conversation, not a click.
+export function publicSizes() {
+  return sizePriceTable().map((s) => ({ ...s, selectable: s.key !== 'custom' }));
+}
+
 // Find-or-create a named Stripe Product (idempotent: name lookup + idempotency key on create).
 async function ensureProduct(env, name) {
   const list = await stripe(env, 'GET', 'products', { active: true, limit: 100 });
@@ -141,6 +147,18 @@ export async function ensureStripePrice(env, tier) {
     keyBase: 'gt_meal',
     unitAmount: tier.perMealCents,
     nickname: `${tier.name} — $${(tier.perMealCents / 100).toFixed(2)}/meal`,
+  });
+}
+
+// Sized variant (Build 3). Same product + amount-encoded lookup scheme as ensureStripePrice, so a
+// sized amount that happens to equal a legacy amount reuses the exact same Stripe price object
+// (the regular row equals the legacy TIERS by construction; nothing duplicates).
+export async function ensureStripePriceForCents(env, cents, label) {
+  return ensurePrice(env, {
+    productName: 'Gainz Train Meals',
+    keyBase: 'gt_meal',
+    unitAmount: cents,
+    nickname: `${label} $${(cents / 100).toFixed(2)}/meal`,
   });
 }
 

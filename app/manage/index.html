@@ -82,6 +82,15 @@
         </div>
       </div>
 
+      <!-- Sizes (Build 3): hidden unless /api/plans says sizes_enabled. -->
+      <div class="card hidden" id="sizeCard">
+        <h2>Meal size</h2>
+        <div class="sub">Sets your per-meal price at your current meal count. Heads up: portion changes ship separately; for now portions still come from Goal &amp; body below. Want Custom macros? Text us and we'll build it by hand.</div>
+        <div class="toggle" id="sizeOpts"></div>
+        <div class="sub" id="sizePreview" style="margin-top:.4rem"></div>
+        <div class="acts"><button class="btn" id="sizeSave" disabled>Save size</button></div>
+      </div>
+
       <div class="card">
         <h2>Goal &amp; body</h2>
         <div class="sub">Sets your meal portions and macros. Doesn't change your price.</div>
@@ -134,13 +143,34 @@
     const money=c=>'$'+((c||0)/100).toFixed(2);
     const fmtDate=s=>{try{return new Date(s).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});}catch(e){return s;}};
     let ME=null,sub=null,tier=9,method='pickup',PLANS=[];
-    // Per-meal price for a given meal count, from the public plan bands (fallback to current sub rate).
-    function perMealCents(n){const p=PLANS.find(p=>n>=p.min&&n<=p.max);return p?p.per_meal_cents:(sub?sub.tier_price_cents:0);}
+    // Sizes (Build 3): SIZES stays null with the flag off and every path below behaves exactly as
+    // before. savedSize = what the account is on; sizeSel = what the size card has highlighted.
+    let SIZES=null,savedSize='regular',sizeSel='regular';
+    function sizeRow(key){return SIZES?(SIZES.find(s=>s.key===key)||SIZES.find(s=>s.key==='regular')):null;}
+    function sizeBand(key,n){const s=sizeRow(key);const b=s&&(s.bands||[]).find(b=>n>=b.min&&n<=b.max);return b?b.per_meal_cents:null;}
+    // Per-meal price for a given meal count: the SAVED size's band when sizes are on, else the
+    // public plan bands (fallback to current sub rate).
+    function perMealCents(n){
+      if(SIZES){const c=sizeBand(savedSize,n);if(c!=null)return c;}
+      const p=PLANS.find(p=>n>=p.min&&n<=p.max);return p?p.per_meal_cents:(sub?sub.tier_price_cents:0);}
+    function renderSizeOpts(){
+      if(!SIZES)return;
+      const meals=(sub&&sub.meals_per_week)||tier;
+      $('sizeOpts').innerHTML=SIZES.filter(s=>s.selectable).map(s=>{
+        const c=sizeBand(s.key,meals);
+        return `<div class="opt ${s.key===sizeSel?'sel':''}" data-size="${s.key}">${s.name}<small style="display:block;font-weight:400;color:var(--muted);font-size:.78rem;">${c!=null?money(c)+'/meal':''}</small></div>`;
+      }).join('');
+      [...$('sizeOpts').children].forEach(el=>{el.onclick=()=>{sizeSel=el.dataset.size;renderSizeOpts();};});
+      const c=sizeBand(sizeSel,meals);
+      $('sizePreview').innerHTML=sizeSel===savedSize?'':(c!=null?`${meals} meals × ${money(c)} = <b>${money(meals*c)}/week</b> <span style="color:var(--muted)">(new)</span>`:'');
+      $('sizeSave').disabled=(sizeSel===savedSize);
+    }
     function renderPreview(){const wk=tier*perMealCents(tier);const changed=sub&&tier!==sub.meals_per_week;
       $('tPreview').innerHTML=`${tier} meals × ${money(perMealCents(tier))} = <b>${money(wk)}/week</b>`+(changed?' <span style="color:var(--muted)">(new)</span>':'');}
 
     async function load(){
-      try{const pr=await api('/api/plans');if(pr.status===200&&pr.body.plans)PLANS=pr.body.plans;}catch(e){}
+      try{const pr=await api('/api/plans');if(pr.status===200&&pr.body.plans){PLANS=pr.body.plans;
+        if(pr.body.sizes_enabled&&Array.isArray(pr.body.sizes))SIZES=pr.body.sizes;}}catch(e){}
       const r=await api('/api/me');
       $('loading').classList.add('hidden');
       if(r.status!==200||!r.body.ok){location.href='/app/';return;}
@@ -159,8 +189,10 @@
       const stDisp=st==='trialing'?'active':st;
       const badgeCls=sub.cancel_at_period_end?'cancel_scheduled':stDisp;
       const badgeTxt=sub.cancel_at_period_end?'cancel scheduled':stDisp.replace('_',' ');
+      if(SIZES){savedSize=ME.customer.size_key||'regular';sizeSel=savedSize;$('sizeCard').classList.remove('hidden');renderSizeOpts();}
       const perMeal=perMealCents(sub.meals_per_week);const wk=sub.meals_per_week*perMeal;
-      let line=`<span class="badge ${badgeCls}">${badgeTxt}</span> · ${sub.meals_per_week} meals × ${money(perMeal)} = <b>${money(wk)}/week</b>`;
+      const sName=SIZES?((sizeRow(savedSize)||{}).name||''):'';
+      let line=`<span class="badge ${badgeCls}">${badgeTxt}</span> · ${sub.meals_per_week} ${sName?sName+' ':''}meals × ${money(perMeal)} = <b>${money(wk)}/week</b>`;
       if(sub.coupon_code&&sub.discount_active)line+=` · <span style="color:var(--green)">${sub.coupon_code} applied</span>`;
       if(sub.cancel_at_period_end&&sub.current_period_end)line+=`<br><span style="color:#b45309">Your meals continue through ${fmtDate(sub.current_period_end)}.</span>`;
       $('planSub').innerHTML=line;
@@ -183,6 +215,8 @@
     function setMethod(m){method=m;$('optPickup').classList.toggle('sel',m==='pickup');$('optDelivery').classList.toggle('sel',m==='delivery');$('addrFields').classList.toggle('hidden',m!=='delivery');}
     $('optPickup').onclick=()=>setMethod('pickup');$('optDelivery').onclick=()=>setMethod('delivery');
 
+    $('sizeSave').onclick=()=>act('sizeSave',()=>post('/api/account/size',{size:sizeSel}),
+      b=>b.effective==='next_week'?'Size saved. The new price starts next week (this week is already locked).':(b.effective==='next_checkout'?'Size saved for your next plan.':'Size saved. Your price updates this week, prorated.'));
     // meal count
     $('tMinus').onclick=()=>{if(tier>6){tier--;$('tMeals').textContent=tier;$('tSave').disabled=(tier===sub.meals_per_week);renderPreview();}};
     $('tPlus').onclick=()=>{if(tier<16){tier++;$('tMeals').textContent=tier;$('tSave').disabled=(tier===sub.meals_per_week);renderPreview();}};

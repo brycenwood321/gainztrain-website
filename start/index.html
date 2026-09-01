@@ -84,6 +84,13 @@
           <div class="mealnum"><span id="mealCount">9</span><small>meals / week</small></div>
           <button class="stepbtn" id="plus" aria-label="more">+</button>
         </div>
+        <!-- Sizes (Build 3): hidden unless /api/plans says sizes_enabled. With the flag off this
+             block does not exist as far as the customer is concerned. -->
+        <div id="sizeRow" class="hidden" style="margin:.2rem 0 .9rem;">
+          <label style="margin-top:0;">Meal size</label>
+          <div class="toggle" id="sizeOpts"></div>
+          <p class="note" id="sizeNote" style="margin-top:.45rem;">Custom macros? <b>Text us</b> and we'll build your plan by hand.</p>
+        </div>
         <div class="pricebar">
           <div class="tier" id="tierName">Starter</div>
           <div class="detail"><span id="perMeal">$10.50</span>/meal · <span class="total" id="weekTotal">$94.50</span>/week</div>
@@ -204,14 +211,18 @@
     const api=(p,o={})=>fetch(p,{credentials:'same-origin',headers:{'Content-Type':'application/json'},...o}).then(async r=>({status:r.status,body:await r.json().catch(()=>({}))}));
     const money=c=>'$'+(c/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
     let PLANS=[],MIN=6,MAX=16,meals=9,method='pickup',loggedIn=false,returning=false,deliveryFeeCents=0,deliveryServed=null;
+    // Sizes (Build 3): null until /api/plans says sizes_enabled, and every code path below treats
+    // null as "the sizes system does not exist", so the flag-off experience is unchanged.
+    let SIZES=null,sizeKey='regular';
 
     // Cart persistence: a magic-link login opens a NEW tab (so sessionStorage is empty there) — keep the
     // half-filled cart in localStorage with a 24h TTL so a returning customer never loses their progress.
     const CART_KEY='gt_start_cart';
-    function saveCart(){try{localStorage.setItem(CART_KEY,JSON.stringify({meals,method,address:$('address').value,city:$('city').value,zip:$('zip').value,code:$('code').value,ts:Date.now()}));}catch(e){}}
+    function saveCart(){try{localStorage.setItem(CART_KEY,JSON.stringify({meals,method,size:sizeKey,address:$('address').value,city:$('city').value,zip:$('zip').value,code:$('code').value,ts:Date.now()}));}catch(e){}}
     function restoreCart(seedMeals){try{const raw=localStorage.getItem(CART_KEY);if(!raw)return;const c=JSON.parse(raw);
       if(!c||!c.ts||Date.now()-c.ts>864e5){localStorage.removeItem(CART_KEY);return;}
       if(c.zip)$('zip').value=c.zip;if(c.address)$('address').value=c.address;if(c.city)$('city').value=c.city;if(c.code)$('code').value=c.code;
+      if(c.size)sizeKey=c.size;
       if(c.method==='delivery')setMethod('delivery');
       if(seedMeals&&Number.isInteger(c.meals))meals=Math.min(MAX,Math.max(MIN,c.meals));
     }catch(e){}}
@@ -222,16 +233,43 @@
     $('heard').addEventListener('change',()=>{const v=$('heard').value;$('heardDetail').classList.toggle('hidden',v!=='friend'&&v!=='other');});
 
     function tierFor(n){return PLANS.find(p=>n>=p.min&&n<=p.max);}
+    // Per-meal cents for the current meal count. With sizes on, the chosen size's band table is the
+    // price; with sizes off (SIZES null), the legacy tier price, exactly as before.
+    function curSize(){return SIZES?(SIZES.find(x=>x.key===sizeKey)||SIZES.find(x=>x.key==='regular')):null;}
+    function priceFor(n){
+      const s=curSize();
+      if(s){const b=(s.bands||[]).find(b=>n>=b.min&&n<=b.max);return b?b.per_meal_cents:0;}
+      const t=tierFor(n);return t?t.per_meal_cents:0;
+    }
+    function renderSizes(){
+      if(!SIZES)return;
+      const sel=SIZES.filter(s=>s.selectable);
+      if(!sel.find(s=>s.key===sizeKey))sizeKey='regular';
+      $('sizeOpts').innerHTML=sel.map(s=>{
+        const b=(s.bands||[]).find(b=>meals>=b.min&&meals<=b.max);
+        return `<div class="opt ${s.key===sizeKey?'sel':''}" data-size="${s.key}">${s.name}<small>${b?money(b.per_meal_cents)+'/meal':''}</small></div>`;
+      }).join('');
+      [...$('sizeOpts').children].forEach(el=>{el.onclick=()=>{sizeKey=el.dataset.size;render();};});
+    }
     function render(){
       const t=tierFor(meals);
       $('mealCount').textContent=meals;
-      $('tierName').textContent=t?t.name:'—';
-      $('perMeal').textContent=t?money(t.per_meal_cents):'—';
-      const total=t?t.per_meal_cents*meals:0;
+      const s=curSize();
+      const DASH=String.fromCharCode(8212); // the placeholder glyph the page already uses
+      $('tierName').textContent=t?(s?`${s.name} · ${t.name}`:t.name):DASH;
+      const pm=priceFor(meals);
+      $('perMeal').textContent=pm?money(pm):DASH;
+      const total=pm*meals;
       $('weekTotal').textContent=money(total);
       $('minus').disabled=meals<=MIN;$('plus').disabled=meals>=MAX;
-      // bands
-      $('bands').innerHTML=PLANS.map(p=>`<div class="band ${t&&p.name===t.name?'active':''}"><b>${p.name}</b>${p.min}-${p.max} · ${money(p.per_meal_cents)}</div>`).join('');
+      // bands: with sizes on, show the CHOSEN size's three band prices so the volume discount reads
+      // in the customer's own size, not regular's. Band index i lines up with PLANS (same TIERS order).
+      if(s){
+        $('bands').innerHTML=(s.bands||[]).map((b,i)=>`<div class="band ${t&&PLANS[i]&&PLANS[i].name===t.name?'active':''}"><b>${PLANS[i]?PLANS[i].name:''}</b>${b.min}-${b.max} · ${money(b.per_meal_cents)}</div>`).join('');
+        renderSizes();
+      }else{
+        $('bands').innerHTML=PLANS.map(p=>`<div class="band ${t&&p.name===t.name?'active':''}"><b>${p.name}</b>${p.min}-${p.max} · ${money(p.per_meal_cents)}</div>`).join('');
+      }
       // cta — fold in the delivery fee so the sticky total matches what Stripe will charge
       const delivery=(method==='delivery'&&deliveryFeeCents>0)?deliveryFeeCents:0;
       $('ctaTotal').textContent=money(total+delivery)+'/wk';
@@ -374,7 +412,7 @@
         }
         // checkout
         const code=($('code').value||'').trim().toUpperCase();
-        const co=await api('/api/checkout/create',{method:'POST',body:JSON.stringify({meals,delivery_method:method,address,city,zip,code})});
+        const co=await api('/api/checkout/create',{method:'POST',body:JSON.stringify({meals,delivery_method:method,address,city,zip,code,...(SIZES?{size:sizeKey}:{})})});
         if(co.status===200&&co.body.url){clearCart();window.location.href=co.body.url;return;}
         showMsg(co.body.detail||'Could not start checkout. Try again.');reset();
       }catch(e){showMsg('Something went wrong. Try again.');reset();}
@@ -383,6 +421,7 @@
     (async()=>{
       const{body}=await api('/api/plans');
       PLANS=body.plans||[];MIN=body.min_meals||6;MAX=body.max_meals||16;
+      if(body.sizes_enabled&&Array.isArray(body.sizes)&&body.sizes.length){SIZES=body.sizes;$('sizeRow').classList.remove('hidden');}
       // Seed the meal count from ?meals=N (customer arriving from the pricing calculator),
       // clamped to the valid range, so they land on exactly the plan they picked.
       const qsMeals=parseInt(new URLSearchParams(location.search).get('meals'),10);

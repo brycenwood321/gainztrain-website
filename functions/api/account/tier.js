@@ -10,7 +10,8 @@ import { one, run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
 import { currentSub, findMealItem } from '../../_lib/account.js';
-import { tierForMeals, ensureStripePrice, MIN_MEALS, MAX_MEALS } from '../../_lib/plans.js';
+import { tierForMeals, ensureStripePrice, MIN_MEALS, MAX_MEALS,
+  sizesEnabled, sizeForCustomer, perMealCentsFor, ensureStripePriceForCents } from '../../_lib/plans.js';
 import { orderableWeek, isLocked } from '../../_lib/menu.js';
 import { notify } from '../../_lib/notify.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
@@ -28,6 +29,10 @@ export async function onRequestPost(context) {
   if (!sub || !sub.stripe_subscription_id) return fail(400, 'no_active_sub', 'You have no active plan to change.');
   if (sub.meals_per_week === meals) return ok({ meals, tier: tier.key });
 
+  const useSizes = sizesEnabled(env);
+  const size = sizeForCustomer(auth.customer);
+  const perMealCents = useSizes ? perMealCentsFor(env, size.key, meals) : tier.perMealCents;
+
   // Is this week already committed (locked order, or past the Friday cutoff)? Drives proration + copy.
   const weekOf = orderableWeek();
   const order = await one(env.DB, `SELECT status, total_meals FROM orders WHERE subscription_id = ? AND week_of = ?`, sub.id, weekOf);
@@ -38,7 +43,11 @@ export async function onRequestPost(context) {
     const stripeSub = await stripe(env, 'GET', `subscriptions/${sub.stripe_subscription_id}`);
     const mealItem = findMealItem(stripeSub);
     if (!mealItem) return fail(409, 'meal_item_missing', 'Could not find your meal plan on file — contact us.');
-    const priceId = await ensureStripePrice(env, tier);
+    // Sizes (Build 3): with the flag on, a band change must reprice IN THE CUSTOMER'S SIZE, or a
+    // Large customer changing meal count would be silently dropped back to regular pricing.
+    const priceId = useSizes
+      ? await ensureStripePriceForCents(env, perMealCents, `${size.name} ${tier.name}`)
+      : await ensureStripePrice(env, tier);
     // Open week → create_prorations (charge/credit the difference this week). Locked week → none (new
     // amount starts next cycle, matching the meals the kitchen is already prepping — no 3-way mismatch).
     await stripe(env, 'POST', `subscription_items/${mealItem.id}`, {
@@ -51,7 +60,7 @@ export async function onRequestPost(context) {
     return fail(502, 'stripe_failed', String(e?.message || e).slice(0, 160));
   }
   await run(env.DB, `UPDATE subscriptions SET meals_per_week=?, tier_price_cents=?, updated_at=? WHERE id=?`,
-    meals, tier.perMealCents, nowIso(), sub.id);
+    meals, perMealCents, nowIso(), sub.id);
 
   // Open week with picks already saved at the OLD count → those picks no longer total the new count.
   // Clear them so /app/menu prompts a fresh pick at the new tier (the email says "pick your meals").
@@ -61,7 +70,7 @@ export async function onRequestPost(context) {
       await run(env.DB, `DELETE FROM orders WHERE subscription_id = ? AND week_of = ?`, sub.id, weekOf);
     } catch { /* non-fatal */ }
   }
-  try { await notify(env, auth.customer, 'tier_changed', { meals, perMealCents: tier.perMealCents, nextWeek: !!weekLocked }); } catch { /* non-fatal */ }
-  try { const c = auth.customer; await ownerNotify(env, 'owner_tier_changed', `${c.first_name || c.email} changed plan: ${sub.meals_per_week} → ${meals} meals/wk ($${(tier.perMealCents / 100).toFixed(2)}/meal)`, { entity: `customer:${c.id}` }); } catch { /* non-fatal */ }
-  return ok({ meals, tier: tier.key, per_meal_cents: tier.perMealCents, effective: weekLocked ? 'next_week' : 'this_week' });
+  try { await notify(env, auth.customer, 'tier_changed', { meals, perMealCents, nextWeek: !!weekLocked }); } catch { /* non-fatal */ }
+  try { const c = auth.customer; await ownerNotify(env, 'owner_tier_changed', `${c.first_name || c.email} changed plan: ${sub.meals_per_week} → ${meals} meals/wk ($${(perMealCents / 100).toFixed(2)}/meal${useSizes ? ', ' + size.name : ''})`, { entity: `customer:${c.id}` }); } catch { /* non-fatal */ }
+  return ok({ meals, tier: tier.key, per_meal_cents: perMealCents, effective: weekLocked ? 'next_week' : 'this_week' });
 }

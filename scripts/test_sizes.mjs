@@ -3,7 +3,7 @@
 // The expected cells are HARDCODED from plan Part 4b, the table Brycen decided, not recomputed
 // through the same formula the code uses. Two sides of a check must not share a source
 // (memory: two-sides-of-a-check-same-source).
-import { TIERS, SIZES, sizePriceTable, perMealCentsFor, sizeForCustomer, MIN_MEALS, MAX_MEALS } from '../functions/_lib/plans.js';
+import { TIERS, SIZES, sizePriceTable, perMealCentsFor, sizeForCustomer, publicSizes, MIN_MEALS, MAX_MEALS } from '../functions/_lib/plans.js';
 
 let failures = 0;
 const check = (label, got, want) => {
@@ -54,6 +54,10 @@ check('no customer resolves regular', sizeForCustomer(null).key, 'regular');
 
 // 5. Out-of-band meal counts refuse a price rather than inventing one.
 check('out of band returns null', perMealCentsFor(envOn, 'large', 40), null);
+
+// 6. Custom is never self-serve selectable in the public payload.
+check('public selectable sizes', publicSizes().filter((s) => s.selectable).map((s) => s.key), ['mini', 'regular', 'large']);
+check('custom listed but locked', publicSizes().find((s) => s.key === 'custom').selectable, false);
 
 if (failures) { console.error(`\n${failures} FAILURE(S)`); process.exit(1); }
 console.log('\nall sizes pricing checks pass');

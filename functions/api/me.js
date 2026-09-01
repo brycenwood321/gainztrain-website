@@ -3,7 +3,7 @@
 import { ok, fail } from '../_lib/respond.js';
 import { all, one } from '../_lib/db.js';
 import { getSessionCustomer } from '../_lib/auth.js';
-import { tierForMeals } from '../_lib/plans.js';
+import { tierForMeals, sizesEnabled, sizeForCustomer, perMealCentsFor } from '../_lib/plans.js';
 
 export async function onRequestGet(context) {
   const auth = await getSessionCustomer(context);
@@ -64,6 +64,8 @@ export async function onRequestGet(context) {
       address: customer.address,
       city: customer.city,
       zip: customer.zip,
+      // Sizes (Build 3): present only with the flag on, so the flag-off payload is unchanged.
+      ...(sizesEnabled(env) ? { size_key: sizeForCustomer(customer).key } : {}),
     },
     subscription: sub
       ? {
@@ -73,7 +75,9 @@ export async function onRequestGet(context) {
           // Trustworthy per-meal rate from the public plan bands, by meal count. Legacy subs
           // (e.g. a flat $X/week line item) stored the WEEKLY total in tier_price_cents, which the
           // UI would otherwise multiply by meals again — derive from the band instead.
-          per_meal_cents: tierForMeals(sub.meals_per_week)?.perMealCents ?? sub.tier_price_cents,
+          per_meal_cents: sizesEnabled(env)
+            ? (perMealCentsFor(env, sizeForCustomer(customer).key, sub.meals_per_week) ?? sub.tier_price_cents)
+            : (tierForMeals(sub.meals_per_week)?.perMealCents ?? sub.tier_price_cents),
           current_period_end: sub.current_period_end,
           cancel_at_period_end: !!sub.cancel_at_period_end,
           coupon_code: sub.coupon_code,

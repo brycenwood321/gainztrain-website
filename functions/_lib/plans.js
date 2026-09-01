@@ -19,6 +19,64 @@ export function tierForMeals(n) {
   return TIERS.find((t) => n >= t.min && n <= t.max) || null;
 }
 
+// ── SIZES (Build 3, 2026-08-31, plan Part 4b) ───────────────────────────────────────────────────
+// Four sizes, priced per CUSTOMER (decision D1), with the volume bands kept and applied as the SAME
+// discount percentage off each size's list price (Brycen's 4b decision). Four list prices plus the
+// two band percentages generate all twelve cells; nothing below hardcodes a derived cell, so the
+// table cannot drift from its own rule.
+//
+// ⚠️ ALL of this is behind SIZES_ENABLED (default OFF). With the flag off, every price path returns
+// exactly the legacy TIERS number. With the flag on, a customer with no explicit size_key resolves
+// to 'regular', whose whole row equals the legacy TIERS by construction (1050 list, same bands), so
+// flipping the flag changes NOBODY'S bill until someone is deliberately given a different size.
+// Existing subscribers are NEVER auto-mapped from Marissa's signup portion_size field: 'large'
+// there is a 170g portion, not consent to a price rise. Migration is explicit, per the plan's
+// grandfather-or-prompt rule.
+//
+// Display names are placeholders (4b: "names not final"). Keys are stable; rename freely.
+//
+// Portion grams per size are NOT here yet: the mini/custom gram ladder is Jayson's to define, and
+// portioning stays sex-driven until it exists. Never guess a gram figure.
+export const SIZES = [
+  { key: 'mini',    name: 'Mini',    listCents: 925 },
+  { key: 'regular', name: 'Regular', listCents: 1050 },  // == today's single price. The anchor.
+  { key: 'large',   name: 'Large',   listCents: 1175 },
+  { key: 'custom',  name: 'Custom',  listCents: 1600 },
+];
+
+export function sizesEnabled(env) { return String(env && env.SIZES_ENABLED) === 'true'; }
+
+export function sizeByKey(key) { return SIZES.find((s) => s.key === key) || null; }
+
+// A customer's size, from the size-system's OWN field only (customers.size_key, migration 0026).
+// Anything missing or unrecognized is 'regular' so the default is always today's price.
+export function sizeForCustomer(customer) {
+  return sizeByKey(customer && customer.size_key) || sizeByKey('regular');
+}
+
+// Per-meal price in cents for a size at a meal count. The band discount is derived from the legacy
+// TIERS relative to its own first band, so the two tables share one source of truth for the bands.
+export function perMealCentsFor(env, sizeKey, meals) {
+  const tier = tierForMeals(meals);
+  if (!tier) return null;
+  if (!sizesEnabled(env)) return tier.perMealCents;
+  const size = sizeByKey(sizeKey) || sizeByKey('regular');
+  const discount = 1 - tier.perMealCents / TIERS[0].perMealCents;
+  return Math.round(size.listCents * (1 - discount));
+}
+
+// The full 12-cell table (sizes x bands), for display and for the self-test that pins it to the
+// numbers Brycen decided in plan Part 4b.
+export function sizePriceTable() {
+  return SIZES.map((s) => ({
+    key: s.key, name: s.name, list_cents: s.listCents,
+    bands: TIERS.map((t) => ({
+      tier: t.key, min: t.min, max: t.max,
+      per_meal_cents: Math.round(s.listCents * (t.perMealCents / TIERS[0].perMealCents)),
+    })),
+  }));
+}
+
 // Weekly LIST value (pre-discount) of a set of subscription rows, in cents.
 //
 // ⚠️ Do NOT compute this as SUM(meals_per_week * tier_price_cents) in SQL, which is what the owner

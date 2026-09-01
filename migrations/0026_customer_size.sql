@@ -1,0 +1,14 @@
+-- 0026: per-customer size for the sizes system (Build 3, plan Part 4b, decision D1 2026-08-31).
+--
+-- size_key is the size system's OWN field, deliberately separate from portion_size (Marissa's
+-- signup field, which stays exactly as it is per 4b). portion_size 'large' means a 170g portion
+-- today at today's price; size_key 'large' means the $11.75 row. Conflating them would hand
+-- existing customers a silent price rise at flag-flip, so the mapping between the two is an
+-- explicit, human-approved migration, never a schema default.
+--
+-- NULL resolves to 'regular' in _lib/plans.js sizeForCustomer, which prices identically to today.
+--
+-- ⚠️ NOT YET APPLIED as of 2026-08-31: the D1 HTTP query API returns internal error 7500, which
+-- blocks `wrangler d1 migrations apply --remote`. Apply the moment it recovers. All size code
+-- tolerates the column's absence (missing key reads as undefined, resolves 'regular').
+ALTER TABLE customers ADD COLUMN size_key TEXT;

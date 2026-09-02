@@ -16,7 +16,7 @@ export async function syncStripeMonth(env, month, { force = false } = {}) {
   const existing = await one(env.DB, `SELECT frozen FROM finance_stripe_months WHERE month = ?`, month);
   if (existing?.frozen && !force) return { month, skipped: 'frozen' };
   const { gte, lt } = monthBounds(month);
-  const agg = { gross: 0, fees: 0, refunds: 0, disputes: 0, payouts: 0, payout_count: 0, txn: 0 };
+  const agg = { gross: 0, fees: 0, refunds: 0, disputes: 0, payouts: 0, payout_count: 0, txn: 0, neutral: 0, neutral_n: 0 };
   const other = {};
   let starting_after = null, complete = false;
   for (let page = 0; page < MAX_PAGES; page++) {
@@ -33,6 +33,9 @@ export async function syncStripeMonth(env, month, { force = false } = {}) {
         case 'stripe_fee': case 'application_fee': agg.fees += -amt; break;
         case 'payout': agg.payouts += -amt; agg.payout_count++; break;
         case 'adjustment': case 'dispute': agg.disputes += amt; agg.fees += fee; break;
+        // Stripe's minimum-balance hold/release pairs net to zero within the month; counted, not summed,
+        // and NOT unknown (they were marking every month not-final on day one).
+        case 'payout_minimum_balance_hold': case 'payout_minimum_balance_release': agg.neutral += amt; agg.neutral_n++; break;
         default: { const o = other[t.type] = other[t.type] || { n: 0, amount_cents: 0, fee_cents: 0 }; o.n++; o.amount_cents += amt; o.fee_cents += fee; }
       }
       starting_after = t.id;
@@ -47,6 +50,7 @@ export async function syncStripeMonth(env, month, { force = false } = {}) {
        disputes_cents=excluded.disputes_cents, payouts_cents=excluded.payouts_cents, payout_count=excluded.payout_count, txn_count=excluded.txn_count,
        other_types_json=excluded.other_types_json, complete=excluded.complete, frozen=excluded.frozen, synced_at=excluded.synced_at`,
     month, agg.gross, agg.fees, agg.refunds, agg.disputes, agg.payouts, agg.payout_count, agg.txn, JSON.stringify(other), complete ? 1 : 0, frozen, nowIso());
+  if (agg.neutral !== 0) other.neutral_pairs_unbalanced = { n: agg.neutral_n, amount_cents: agg.neutral, fee_cents: 0 };
   return { month, gross_cents: agg.gross, fees_cents: agg.fees, refunds_cents: agg.refunds, disputes_cents: agg.disputes, payouts_cents: agg.payouts, payout_count: agg.payout_count, txn_count: agg.txn, other_types: other, complete, frozen: !!frozen };
 }
 

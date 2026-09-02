@@ -19,7 +19,7 @@ export async function onRequestGet(context) {
     `SELECT COUNT(*) AS sessions, COUNT(DISTINCT visitor_id) AS visitors,
             COALESCE(SUM(pageviews), 0) AS pageviews,
             SUM(CASE WHEN pageviews <= 1 THEN 1 ELSE 0 END) AS bounces,
-            SUM(CASE WHEN is_returning = 1 THEN 1 ELSE 0 END) AS returning,
+            SUM(CASE WHEN is_returning = 1 THEN 1 ELSE 0 END) AS returning_n,
             AVG(CASE WHEN duration_ms > 0 THEN duration_ms END) AS avg_dur_ms
      FROM analytics_sessions WHERE started_at >= ?`, since);
   const ov24 = await one(db,
@@ -93,7 +93,7 @@ export async function onRequestGet(context) {
     window_days: days,
     overview: {
       sessions: ov?.sessions || 0, visitors: ov?.visitors || 0, pageviews: ov?.pageviews || 0,
-      bounces: ov?.bounces || 0, returning: ov?.returning || 0, avg_dur_ms: Math.round(ov?.avg_dur_ms || 0),
+      bounces: ov?.bounces || 0, returning: ov?.returning_n || 0, avg_dur_ms: Math.round(ov?.avg_dur_ms || 0),
       sessions_24h: ov24?.sessions || 0, pageviews_24h: ov24?.pageviews || 0,
     },
     sources, pages, devices, geo, funnel, ctas, by_day: byDay, journeys,

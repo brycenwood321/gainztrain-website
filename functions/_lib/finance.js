@@ -7,7 +7,10 @@ export const EXPENSE_CATEGORIES = ['food', 'packaging', 'kitchen_rent', 'softwar
 // ⚠️ normalizeVendor() feeds the content hash. The first real import landed 2026-09-02; changing the
 // normaliser after that makes every re-export look new. Add RULES for odd vendors, do not touch this.
 export const EXCLUDED_CATEGORIES = ['owner_draw', 'transfer', 'stripe_payout'];
-export const CATEGORIES = [...EXPENSE_CATEGORIES, ...EXCLUDED_CATEGORIES, 'uncategorized'];
+// Money IN that is revenue the app never saw: customers who paid by Venmo before the app and Stripe
+// (Brycen 2026-09-02: 'any venmo going into the account would be customers paying'). Added to revenue.
+export const INCOME_CATEGORIES = ['offline_revenue'];
+export const CATEGORIES = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES, ...EXCLUDED_CATEGORIES, 'uncategorized'];
 export const ACCOUNTS = ['checking', 'card'];
 
 const norm = (h) => String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '');

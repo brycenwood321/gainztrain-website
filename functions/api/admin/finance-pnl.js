@@ -8,7 +8,7 @@
 import { ok } from '../../_lib/respond.js';
 import { requireOwner } from '../../_lib/admin.js';
 import { all } from '../../_lib/db.js';
-import { EXPENSE_CATEGORIES, EXCLUDED_CATEGORIES, CATEGORIES, monthRange } from '../../_lib/finance.js';
+import { EXPENSE_CATEGORIES, EXCLUDED_CATEGORIES, INCOME_CATEGORIES, CATEGORIES, monthRange } from '../../_lib/finance.js';
 
 export async function onRequestGet(context) {
   const denied = await requireOwner(context);
@@ -36,20 +36,22 @@ export async function onRequestGet(context) {
   const out = months.map((month) => {
     const revenue_gross = revM[month]?.cents || 0;
     const refunds = refM[month]?.cents || 0;
-    const revenue_net = revenue_gross + refunds;
     const st = stM[month] || null;
-    const expenses = {}; let expTotal = 0;
+    const expenses = {}; let expTotal = 0; let offlineRevenue = 0;
     const excluded = { transfer_cents: 0, owner_draw_cents: 0, stripe_payout_cents: 0 };
     const unc = { count: 0, out_cents: 0, in_cents: 0 };
     for (const c of CATEGORIES) if (EXPENSE_CATEGORIES.includes(c)) expenses[c] = 0;
     for (const b of bankM[month] || []) {
       if (EXPENSE_CATEGORIES.includes(b.category)) { expenses[b.category] = -(b.cents || 0); expTotal += -(b.cents || 0); }
+      else if (INCOME_CATEGORIES.includes(b.category)) offlineRevenue += b.cents || 0;
       else if (b.category === 'transfer') excluded.transfer_cents += b.cents || 0;
       else if (b.category === 'owner_draw') excluded.owner_draw_cents += b.cents || 0;
       else if (b.category === 'stripe_payout') excluded.stripe_payout_cents += b.cents || 0;
       else if (b.category === 'uncategorized') { unc.count += b.n || 0; unc.out_cents += b.out_cents || 0; unc.in_cents += b.in_cents || 0; }
     }
     expenses.total_cents = expTotal;
+    // Offline revenue (Venmo customers before the app) is real revenue the D1 invoices never saw.
+    const revenue_net = revenue_gross + refunds + offlineRevenue;
     let otherTypes = {}; try { otherTypes = st?.other_types_json ? JSON.parse(st.other_types_json) : {}; } catch { otherTypes = {}; }
     const stripeOut = st ? { gross_cents: st.gross_cents, fees_cents: st.fees_cents, refunds_cents: st.refunds_cents, disputes_cents: st.disputes_cents, payouts_cents: st.payouts_cents, payout_count: st.payout_count, other_types: otherTypes, complete: !!st.complete, frozen: !!st.frozen, synced_at: st.synced_at } : null;
     const fees = st ? st.fees_cents : null;
@@ -67,7 +69,7 @@ export async function onRequestGet(context) {
     const final = reasons.length === 0;
     const bankStripeDeposits = excluded.stripe_payout_cents;
     return {
-      month, revenue_gross_cents: revenue_gross, refunds_cents: refunds, revenue_net_cents: revenue_net,
+      month, revenue_gross_cents: revenue_gross, refunds_cents: refunds, offline_revenue_cents: offlineRevenue, revenue_net_cents: revenue_net,
       revenue_reconciliation: reconciliation, stripe: stripeOut, expenses, excluded, uncategorized: unc,
       profit_cents: profit,
       profit_low_cents: profit + unc.out_cents - (delta ? Math.abs(delta) : 0),   // unc.out_cents is negative

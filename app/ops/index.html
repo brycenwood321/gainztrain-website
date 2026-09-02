@@ -5722,7 +5722,7 @@
           const other = (focus.expenses.total_cents || 0) - (focus.expenses.food || 0);
           const profitTxt = focus.final ? finMoney(focus.profit_cents) : finMoney(focus.profit_low_cents) + " to " + finMoney(focus.profit_high_cents);
           cards = '<div class="ownv-card"><h2>' + ownEsc(focus.month) + (focus.final ? ' <span class="badge">final</span>' : ' <span class="badge" style="background:#fde68a;color:#7c5a00;">not final: ' + ownEsc(focus.reasons.join("; ")) + '</span>') + '</h2><div class="ownv-grid">' +
-            '<div><div class="stat">' + finMoney(focus.revenue_net_cents) + '</div><div class="stat-sub">Revenue (net of refunds) · gross ' + finMoney(focus.revenue_gross_cents) + '</div></div>' +
+            '<div><div class="stat">' + finMoney(focus.revenue_net_cents) + '</div><div class="stat-sub">Revenue (net of refunds) · Stripe ' + finMoney(focus.revenue_gross_cents) + (focus.offline_revenue_cents ? ' + offline ' + finMoney(focus.offline_revenue_cents) : '') + '</div></div>' +
             '<div><div class="stat">' + (focus.stripe ? finMoney(focus.stripe.fees_cents) : '<span class="warn">not synced</span>') + '</div><div class="stat-sub">Stripe fees' + (focus.stripe ? ' · synced ' + ownFmtDate(focus.stripe.synced_at) : '') + '</div></div>' +
             '<div><div class="stat">' + finMoney(focus.expenses.food) + '</div><div class="stat-sub">Food (bank)</div></div>' +
             '<div><div class="stat">' + finMoney(other) + '</div><div class="stat-sub">Other expenses</div></div>' +

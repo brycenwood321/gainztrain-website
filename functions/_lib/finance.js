@@ -3,7 +3,9 @@
 // content hash that makes re-imports idempotent, and the rule engine. No D1 access here.
 import { sha256hex } from './crypto.js';
 
-export const EXPENSE_CATEGORIES = ['food', 'packaging', 'kitchen_rent', 'software', 'advertising', 'delivery', 'fees', 'equipment', 'payroll_contractors', 'customer_refund_offline'];
+export const EXPENSE_CATEGORIES = ['food', 'packaging', 'kitchen_rent', 'software', 'advertising', 'delivery', 'fees', 'insurance', 'equipment', 'payroll_contractors', 'customer_refund_offline'];
+// ⚠️ normalizeVendor() feeds the content hash. The first real import landed 2026-09-02; changing the
+// normaliser after that makes every re-export look new. Add RULES for odd vendors, do not touch this.
 export const EXCLUDED_CATEGORIES = ['owner_draw', 'transfer', 'stripe_payout'];
 export const CATEGORIES = [...EXPENSE_CATEGORIES, ...EXCLUDED_CATEGORIES, 'uncategorized'];
 export const ACCOUNTS = ['checking', 'card'];

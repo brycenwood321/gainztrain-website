@@ -2043,6 +2043,7 @@
     .owner-view table { width: 100%; border-collapse: collapse; font-size: .9rem; }
     .owner-view th { text-align: left; color: #7a7270; font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; padding: .5rem .4rem; border-bottom: 1px solid #ede9e3; }
     .owner-view td { padding: .55rem .4rem; border-bottom: 1px solid #ede9e3; }
+    .owner-view td.num, .owner-view th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .owner-view tr:last-child td { border-bottom: none; }
     .owner-view .badge { display: inline-block; padding: .15rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 600; text-transform: capitalize; background: #f5f2ee; color: #4a4440; }
     .owner-view .badge.active, .owner-view .badge.trialing, .owner-view .badge.delivered, .owner-view .badge.paid { background: #f0fdf4; color: #16a34a; }
@@ -2224,6 +2225,7 @@
     <div class="tab owner-only tab-hidden" data-tab="activity">Activity</div>
     <div class="tab owner-only" data-tab="marketing">Marketing</div>
     <div class="tab owner-only" data-tab="analytics">Analytics</div>
+    <div class="tab owner-only" data-tab="finance">Finance</div>
     <div class="tab owner-only" data-tab="settings">Settings</div>
     <div class="tab-spacer"></div>
     <a href="/app/" class="back-link">← My Account</a>
@@ -2246,6 +2248,7 @@
     <a data-goto="activity" class="owner-only tab-hidden">Activity</a>
     <a data-goto="marketing" class="owner-only">Marketing</a>
     <a data-goto="analytics" class="owner-only">Analytics</a>
+    <a data-goto="finance" class="owner-only">Finance</a>
     <a data-goto="settings" class="owner-only">Settings</a>
     <a href="/app/" class="tab-mobile-account">← My Account</a>
   </div>
@@ -2262,6 +2265,7 @@
 
   <div class="tab-panel" id="tab-marketing"><div class="owner-view" id="mkt-view"><div class="ownv-loading">Loading…</div></div></div>
   <div class="tab-panel" id="tab-analytics"><div class="owner-view" id="anl-view"><div class="ownv-loading">Loading…</div></div></div>
+  <div class="tab-panel" id="tab-finance"><div class="owner-view" id="fin-view"><div class="ownv-loading">Loading…</div></div></div>
   <div class="tab-panel" id="tab-settings"><div class="owner-view" id="set-view"><div class="ownv-loading">Loading…</div></div></div>
 
   <!-- ── ORDERS TAB ── -->
@@ -5382,6 +5386,7 @@
         if (tab.dataset.tab === "customers") ownRenderCustomers();
         if (tab.dataset.tab === "marketing") ownRenderMarketing();
         if (tab.dataset.tab === "analytics") ownRenderAnalytics();
+        if (tab.dataset.tab === "finance")   ownRenderFinance();
         if (tab.dataset.tab === "settings")  ownRenderSettings();
       });
     });
@@ -5696,6 +5701,103 @@
     }
 
     // ── SETTINGS (owner) — coupons, staff/owner logins, delivery ZIPs ──
+
+    // ── FINANCE (2026-09-02): in-house books. Revenue from Stripe invoices in D1, fees from Stripe, expenses
+    // from the America First CSV. Transfers, owner draws and Stripe deposits are excluded. A month shows ONE
+    // profit number only when it is final; otherwise a range and the reasons (idea_inbox #8).
+    let finMonths = 6, finCsvText = "", finCsvName = "", finAccount = "checking", finPreview = null, finFlip = false;
+    const finMoney = (c) => (c == null ? "—" : ownMoney(c));
+    const finPct = (bp) => (bp == null ? "—" : (bp / 100).toFixed(1) + "%");
+    function finSetMonths(n) { finMonths = n; ownRenderFinance(); }
+    async function ownRenderFinance() {
+      const el = document.getElementById("fin-view"); el.innerHTML = '<div class="ownv-loading">Loading…</div>';
+      try {
+        const [p, u, r, im] = await Promise.all([ownGet("/api/admin/finance-pnl?months=" + finMonths), ownGet("/api/admin/finance-categorize?status=uncategorized&limit=100"), ownGet("/api/admin/finance-rules"), ownGet("/api/admin/finance-import")]);
+        const months = p.months || [];
+        const focus = [...months].reverse().find((m) => m.bank_rows > 0) || months[months.length - 1] || null;
+        const btn = (n) => '<button class="ownv-btn' + (finMonths === n ? '' : ' ghost') + '" onclick="finSetMonths(' + n + ')">' + n + 'mo</button>';
+        const sel = (id, val) => '<select id="' + id + '">' + (p.categories || []).map((c) => '<option value="' + c + '"' + (c === val ? ' selected' : '') + '>' + c + '</option>').join("") + "</select>";
+        let cards = "";
+        if (focus) {
+          const other = (focus.expenses.total_cents || 0) - (focus.expenses.food || 0);
+          const profitTxt = focus.final ? finMoney(focus.profit_cents) : finMoney(focus.profit_low_cents) + " to " + finMoney(focus.profit_high_cents);
+          cards = '<div class="ownv-card"><h2>' + ownEsc(focus.month) + (focus.final ? ' <span class="badge">final</span>' : ' <span class="badge" style="background:#fde68a;color:#7c5a00;">not final: ' + ownEsc(focus.reasons.join("; ")) + '</span>') + '</h2><div class="ownv-grid">' +
+            '<div><div class="stat">' + finMoney(focus.revenue_net_cents) + '</div><div class="stat-sub">Revenue (net of refunds) · gross ' + finMoney(focus.revenue_gross_cents) + '</div></div>' +
+            '<div><div class="stat">' + (focus.stripe ? finMoney(focus.stripe.fees_cents) : '<span class="warn">not synced</span>') + '</div><div class="stat-sub">Stripe fees' + (focus.stripe ? ' · synced ' + ownFmtDate(focus.stripe.synced_at) : '') + '</div></div>' +
+            '<div><div class="stat">' + finMoney(focus.expenses.food) + '</div><div class="stat-sub">Food (bank)</div></div>' +
+            '<div><div class="stat">' + finMoney(other) + '</div><div class="stat-sub">Other expenses</div></div>' +
+            '<div><div class="stat">' + profitTxt + '</div><div class="stat-sub">Profit' + (focus.final ? '' : ' (range until final)') + '</div></div>' +
+            '<div><div class="stat">' + finPct(focus.margin_bp) + '</div><div class="stat-sub">Margin' + (focus.final ? '' : ' (shown when final)') + '</div></div>' +
+            '</div>' + (focus.revenue_reconciliation && focus.revenue_reconciliation.delta_cents != null ? '<div class="stat-sub">D1 revenue ' + finMoney(focus.revenue_reconciliation.d1_cents) + ' vs Stripe gross ' + finMoney(focus.revenue_reconciliation.stripe_gross_cents) + ' · delta ' + finMoney(focus.revenue_reconciliation.delta_cents) + '</div>' : '') + '</div>';
+        }
+        const th = (h) => '<th class="num">' + h + '</th>';
+        const td = (v) => '<td class="num">' + v + '</td>';
+        const rows = months.map((m) => '<tr' + (m.final ? '' : ' style="color:#7c5a00;"') + '><td><b>' + ownEsc(m.month) + '</b>' + (m.final ? '' : ' <span class="stat-sub" title="' + ownEsc(m.reasons.join("; ")) + '">not final</span>') + '</td>' +
+          td(finMoney(m.revenue_net_cents)) + td(m.stripe ? finMoney(m.stripe.fees_cents) : "—") + td(finMoney(m.expenses.food)) + td(finMoney(m.expenses.packaging)) + td(finMoney(m.expenses.kitchen_rent)) +
+          td(finMoney((m.expenses.total_cents || 0) - (m.expenses.food || 0) - (m.expenses.packaging || 0) - (m.expenses.kitchen_rent || 0))) + td(finMoney(m.expenses.total_cents)) +
+          td(m.final ? finMoney(m.profit_cents) : finMoney(m.profit_low_cents) + " – " + finMoney(m.profit_high_cents)) + td(finPct(m.margin_bp)) +
+          td(m.uncategorized.count ? m.uncategorized.count + " · " + finMoney(m.uncategorized.out_cents) : "0") +
+          td(m.revenue_reconciliation.delta_cents == null ? "—" : finMoney(m.revenue_reconciliation.delta_cents)) + '</tr>').join("");
+        const table = '<div class="ownv-card"><h2>By month</h2><div style="overflow-x:auto;"><table><thead><tr><th>Month</th>' + [ "Revenue", "Stripe fees", "Food", "Packaging", "Rent", "Other", "Expenses", "Profit", "Margin", "Uncat.", "D1 − Stripe" ].map(th).join("") + '</tr></thead><tbody>' + (rows || '<tr><td colspan="12" class="stat-sub">No months yet.</td></tr>') + '</tbody></table></div>' +
+          '<div class="stat-sub" style="margin-top:.4rem;">Revenue is Stripe invoices mirrored in D1; fees from Stripe; expenses from the bank CSV. Transfers, owner draws and Stripe deposits are excluded. A month is final only when Stripe is synced, nothing is uncategorized, D1 and Stripe agree within 1%, and the month is closed.</div></div>';
+        const uncRows = (u.rows || []).map((x) => '<tr><td>' + ownEsc(x.posted_on) + '</td><td>' + ownEsc(x.account) + '</td><td>' + ownEsc(x.description_raw) + '<div class="stat-sub">' + ownEsc(x.vendor_norm) + '</div></td>' + td(finMoney(x.amount_cents)) +
+          '<td>' + sel("fin-cat-" + x.id, "uncategorized") + '</td><td><label class="stat-sub"><input type="checkbox" id="fin-always-" ' + 'data-id="' + ownEsc(x.id) + '"> always for “' + ownEsc(x.vendor_norm) + '”</label></td><td><button class="ownv-btn ghost" onclick="finCategorize(\'' + ownEsc(x.id) + '\')">Save</button></td></tr>').join("");
+        const unc = '<div class="ownv-card"><h2>Uncategorized · ' + (u.total_uncategorized || 0) + ' rows · ' + finMoney(u.uncategorized_out_cents) + ' out</h2><div style="overflow-x:auto;"><table><thead><tr><th>Date</th><th>Acct</th><th>Description</th>' + th("Amount") + '<th>Category</th><th>Rule</th><th></th></tr></thead><tbody>' + (uncRows || '<tr><td colspan="7" class="stat-sub">Nothing to review.</td></tr>') + '</tbody></table></div><div class="stat-sub">Biggest amounts first. Offline refunds go to customer_refund_offline; personal spending on the business card goes to owner_draw.</div></div>';
+        const ruleRows = (r.rules || []).map((x) => '<tr><td><code>' + ownEsc(x.pattern) + '</code></td><td>' + ownEsc(x.match_type) + '</td><td>' + ownEsc(x.direction) + '</td><td>' + ownEsc(x.category) + '</td>' + td(x.priority) + td(x.hits || 0) + '<td><button class="ing-lib-edit" onclick="finDelRule(' + x.id + ')">Delete</button></td></tr>').join("");
+        const rules = '<div class="ownv-card"><h2>Rules (evaluated top to bottom, first match wins)</h2><div class="ownv-ctl"><input id="fin-rule-pat" placeholder="pattern, e.g. AMAZON" style="width:12rem;" /><select id="fin-rule-type"><option value="contains">contains</option><option value="regex">regex</option></select><select id="fin-rule-dir"><option value="any">any direction</option><option value="out">money out</option><option value="in">money in</option></select>' + sel("fin-rule-cat", "packaging") + '<button class="ownv-btn" onclick="finAddRule()">Add rule</button></div><div style="overflow-x:auto;"><table><thead><tr><th>Pattern</th><th>Type</th><th>Dir</th><th>Category</th>' + th("Priority") + th("Hits") + '<th></th></tr></thead><tbody>' + (ruleRows || "") + '</tbody></table></div></div>';
+        const impRows = (im.imports || []).slice(0, 5).map((x) => '<tr><td>' + ownFmtDate(x.created_at) + '</td><td>' + ownEsc(x.account) + '</td><td>' + ownEsc(x.filename || "") + '</td>' + td(x.inserted_count) + td(x.duplicate_count) + '<td><button class="ing-lib-edit" onclick="finUndo(\'' + ownEsc(x.id) + '\')">Undo</button></td></tr>').join("");
+        const upload = '<div class="ownv-card"><h2>Import a bank export (CSV)</h2><div class="ownv-ctl"><select id="fin-acct"><option value="checking"' + (finAccount === "checking" ? " selected" : "") + '>Checking</option><option value="card"' + (finAccount === "card" ? " selected" : "") + '>Credit card</option></select><input type="file" id="fin-file" accept=".csv,text/csv" onchange="finPickFile(event)" /><button class="ownv-btn ghost" onclick="finSync()">Sync Stripe (2 months)</button></div><div id="fin-preview" class="stat-sub">America First → Accounts → Export → CSV. Nothing is stored until you confirm the preview. The file itself is never kept.</div>' +
+          (impRows ? '<h3 style="margin:.8rem 0 .2rem;">Recent imports</h3><div style="overflow-x:auto;"><table><thead><tr><th>When</th><th>Acct</th><th>File</th>' + th("Inserted") + th("Dupes") + '<th></th></tr></thead><tbody>' + impRows + '</tbody></table></div>' : "") + '</div>';
+        el.innerHTML = ownHead("Finance", "in-house books", "ownRenderFinance") + '<div class="ownv-ctl">' + btn(3) + btn(6) + btn(12) + '</div>' + cards + table + upload + unc + rules;
+        if (finPreview) finRenderPreview();
+      } catch (e) { ownErr(el, e); }
+    }
+    async function finSync() { showToast("Syncing Stripe…"); const r = await ownPost("/api/admin/finance-stripe-sync?months=2"); showToast(r.ok ? "Stripe synced: " + (r.synced || []).map((m) => m.month).join(", ") : (r.detail || "Sync failed.")); ownRenderFinance(); }
+    function finPickFile(ev) {
+      const f = ev.target.files && ev.target.files[0]; if (!f) return;
+      finAccount = document.getElementById("fin-acct").value; finCsvName = f.name; finFlip = false;
+      const rd = new FileReader(); rd.onload = () => { finCsvText = String(rd.result || ""); finPreviewCsv(); }; rd.readAsText(f);
+    }
+    async function finPreviewCsv() {
+      const box = document.getElementById("fin-preview"); box.textContent = "Reading…";
+      const res = await fetch("/api/admin/finance-import?mode=preview&account=" + finAccount + "&flip=" + (finFlip ? 1 : 0) + "&filename=" + encodeURIComponent(finCsvName), { method: "POST", credentials: "include", headers: { "Content-Type": "text/csv" }, body: finCsvText });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { finPreview = null; box.innerHTML = '<span class="warn">' + ownEsc(d.detail || d.error || ("HTTP " + res.status)) + "</span>"; return; }
+      finPreview = d; if (d.sign_flip_suggested && !finFlip) { /* offer the flip, never apply it */ }
+      finRenderPreview();
+    }
+    function finRenderPreview() {
+      const d = finPreview; const box = document.getElementById("fin-preview"); if (!d || !box) return;
+      const m = d.mapping || {};
+      const sample = (d.sample || []).map((r) => "<tr><td>" + ownEsc(r.posted_on) + "</td><td>" + ownEsc(r.description_raw) + "</td>" + '<td class="num">' + finMoney(r.amount_cents) + "</td><td>" + ownEsc(r.category) + "</td></tr>").join("");
+      const check = (d.check_these || []).map((c) => "<li>" + ownEsc(c.posted_on) + " " + ownEsc(c.vendor) + " " + finMoney(c.amount_cents) + ": " + c.in_file + " in file, " + c.in_db + " already imported</li>").join("");
+      box.innerHTML = '<div><b>' + ownEsc(finCsvName) + '</b> · ' + ownEsc(finAccount) + ' · columns: date ← ' + ownEsc(m.date) + ', description ← ' + ownEsc(m.description) + ', amount ← ' + ownEsc(m.layout === "signed" ? m.amount : (m.debit + " / " + m.credit)) + (m.balance ? ", balance ignored" : "") + '</div>' +
+        '<div>' + d.rows_parsed + ' rows · <b>' + d.new + ' new</b> · ' + d.duplicates + ' already imported · skipped: ' + (d.skipped.pending || 0) + ' pending, ' + (d.skipped.bad_amount || 0) + ' bad amount, ' + (d.skipped.bad_date || 0) + ' bad date · will need a category: ' + (d.would_categorize.uncategorized || 0) + '</div>' +
+        (d.sign_check && d.sign_check.suspicious ? '<div class="warn">Sign check: ' + d.sign_check.outflow_rows + ' money-out rows, ' + d.sign_check.inflow_rows + ' money-in rows. That looks wrong for a ' + ownEsc(finAccount) + ' export.</div>' : "") +
+        (d.sign_flip_suggested || finFlip ? '<label><input type="checkbox" ' + (finFlip ? "checked" : "") + ' onchange="finFlip=this.checked;finPreviewCsv()"> flip signs (this export prints charges as positive)</label>' : "") +
+        (check ? '<div class="warn">Check these (same day, vendor and amount, counts differ from what is already imported):<ul>' + check + '</ul></div>' : "") +
+        '<div style="overflow-x:auto;"><table><thead><tr><th>Date</th><th>Description</th><th class="num">Amount</th><th>Category</th></tr></thead><tbody>' + sample + '</tbody></table></div>' +
+        '<button class="ownv-btn" ' + (d.new > 0 ? "" : "disabled") + ' onclick="finCommit()">' + (d.new > 0 ? "Import " + d.new + " rows" : "Nothing new to import") + '</button>';
+    }
+    async function finCommit() {
+      const force = finPreview && finPreview.sign_check && finPreview.sign_check.suspicious && confirm("The sign check flagged this file. Import anyway?");
+      const res = await fetch("/api/admin/finance-import?mode=commit&account=" + finAccount + "&flip=" + (finFlip ? 1 : 0) + "&force_sign=" + (force ? 1 : 0) + "&filename=" + encodeURIComponent(finCsvName), { method: "POST", credentials: "include", headers: { "Content-Type": "text/csv" }, body: finCsvText });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) { showToast(d.detail || d.error || "Import failed."); return; }
+      showToast("Imported " + d.inserted + " rows (" + d.duplicates + " duplicates, " + (d.uncategorized || 0) + " to categorize)."); finPreview = null; finCsvText = ""; ownRenderFinance();
+    }
+    async function finUndo(id) { if (!confirm("Remove every row from this import?")) return; const r = await ownPost("/api/admin/finance-import?mode=undo&import_id=" + encodeURIComponent(id)); showToast(r.ok ? "Removed " + r.deleted + " rows." : (r.detail || "Undo failed.")); ownRenderFinance(); }
+    async function finCategorize(id) {
+      const cat = document.getElementById("fin-cat-" + id).value; const always = !!document.querySelector('input[data-id="' + id + '"]:checked');
+      const r = await ownPost("/api/admin/finance-categorize", { id, category: cat, make_rule: always });
+      showToast(r.ok ? ("Saved" + (r.reapplied ? "; " + r.reapplied + " more rows categorized by the new rule" : "") + ".") : (r.detail || "Could not save.")); ownRenderFinance();
+    }
+    async function finAddRule() {
+      const body = { pattern: document.getElementById("fin-rule-pat").value.trim(), match_type: document.getElementById("fin-rule-type").value, direction: document.getElementById("fin-rule-dir").value, category: document.getElementById("fin-rule-cat").value };
+      const r = await ownPost("/api/admin/finance-rules", body); showToast(r.ok ? "Rule added; " + r.reapplied + " rows categorized." : (r.detail || "Could not add rule.")); ownRenderFinance();
+    }
+    async function finDelRule(id) { if (!confirm("Delete this rule? Rows keep their category.")) return; const res = await fetch("/api/admin/finance-rules?id=" + id, { method: "DELETE", credentials: "include" }); const r = await res.json().catch(() => ({})); showToast(r.ok ? "Rule deleted." : "Could not delete."); ownRenderFinance(); }
+
     async function ownRenderSettings() {
       const el = document.getElementById("set-view");
       el.innerHTML = '<div class="ownv-loading">Loading…</div>';

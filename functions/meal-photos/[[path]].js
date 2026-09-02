@@ -9,7 +9,9 @@ export async function onRequestGet(context) {
 
   // params.path is the catch-all segments after /meal-photos/ (array or string).
   const key = Array.isArray(params.path) ? params.path.join('/') : String(params.path || '');
-  if (!key || key.includes('..')) return new Response('Not found', { status: 404 });
+  // Only the meals/ prefix is public. The bucket is the ONLY R2 bucket on the project, and this route
+  // served ANY key until 2026-09-02; anything else that ever lands here must stay private.
+  if (!key || key.includes('..') || !key.startsWith('meals/')) return new Response('Not found', { status: 404 });
 
   const object = await env.MEAL_PHOTOS.get(key);
   if (!object) return new Response('Not found', { status: 404 });

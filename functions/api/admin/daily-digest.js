@@ -114,10 +114,10 @@ export async function onRequestPost(context) {
         const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
         const which = pickedN >= lockedN ? 'picked so far' : 'locked';
         await ownerNotify(env, 'owner_capacity_alert',
-          `GT capacity: ${capN} meals ${which} for the week of ${fmt(mon)} (delivery Sun ${fmt(new Date(`${capWeek}T00:00:00Z`))}). Alert line ${CAPACITY_ALERT_MEALS}, kitchen ceiling ${CAPACITY_MEALS}. Signups stay open; heads-up for Jayson.`,
+          `GT capacity: ${capN} meals ${which} for the week of ${fmt(mon)} (delivery Sun ${fmt(new Date(`${capWeek}T00:00:00Z`))}). Alert line ${alertAt}${alertAt !== CAPACITY_ALERT_MEALS ? ' (TEST)' : ''}, kitchen ceiling ${CAPACITY_MEALS}. Signups stay open; heads-up for Jayson.`,
           { entity: 'system', week_of: capWeek, picked: pickedN, locked: lockedN,
             lines: [`Picked so far: ${pickedN} meals`, `Locked (cook list): ${lockedN} meals`,
-                    `Alert line: ${CAPACITY_ALERT_MEALS} · ceiling: ${CAPACITY_MEALS}`, 'Nothing closes automatically. This fires once per week.'] });
+                    `Alert line: ${alertAt}${alertAt !== CAPACITY_ALERT_MEALS ? ' (TEST)' : ''} · ceiling: ${CAPACITY_MEALS}`, 'Nothing closes automatically. This fires once per week.'] });
       }
     }
   } catch { /* the digest must never fail on the heads-up */ }

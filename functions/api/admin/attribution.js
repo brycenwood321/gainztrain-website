@@ -9,6 +9,7 @@
 import { ok } from '../../_lib/respond.js';
 import { requireOwner } from '../../_lib/admin.js';
 import { all } from '../../_lib/db.js';
+import { toChannel } from '../../_lib/channels.js';
 
 export async function onRequestGet(context) {
   const denied = await requireOwner(context);
@@ -80,15 +81,7 @@ export async function onRequestGet(context) {
   const spend = await all(db,
     `SELECT channel, SUM(spend_cents) AS spend_cents FROM marketing_spend GROUP BY channel`);
 
-  const toChannel = (s) => {
-    const v = String(s || '').toLowerCase();
-    if (/facebook|instagram|^fb$|^ig$|meta/.test(v)) return 'meta';
-    if (/google|gbp|youtube/.test(v)) return 'google';
-    if (/tiktok/.test(v)) return 'tiktok';
-    if (/marketplace/.test(v)) return 'marketplace';
-    if (!v || v === '(direct)' || v === '(organic/direct)' || v === '(blank)') return 'organic/direct';
-    return v;
-  };
+  // toChannel() lives in _lib/channels.js (shared with channel-report + marketing-weekly, 2026-09-02).
   const funnel = {};
   const row = (ch) => (funnel[ch] = funnel[ch] || { channel: ch, views: 0, views_30d: 0, signups: 0, paying: 0, revenue_cents: 0, spend_cents: 0 });
   for (const v of views) { const r = row(toChannel(v.source)); r.views += v.views; r.views_30d += v.views_30d; }

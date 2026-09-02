@@ -172,9 +172,12 @@ export default {
       //   - MENU FAILSAFE: if no owner confirmed this week's menu, auto-publish it (a staged menu is
       //     confirmed; otherwise last week's menu is rolled forward) so customers aren't stuck. Runs
       //     ~6–7am MT Monday, before the day's ordering. No-ops if the menu is already live.
+      //   - MARKETING WEEK: the owner email with sessions / signups / new paying / spend by channel for
+      //     the last 7 days (2026-09-02). Email only; a report, not a page.
       if (day === MON) {
         ctx.waitUntil(hit(env, '/api/admin/prune-notifications'));
         ctx.waitUntil(hit(env, '/api/admin/menu-failsafe'));
+        ctx.waitUntil(hit(env, '/api/admin/marketing-weekly'));
       }
     }
   },

@@ -5571,10 +5571,31 @@
       } catch (e) { ownErr(el, e); }
     }
 
+    // Channels card (2026-09-02): the windowed report from /api/admin/channel-report. Two tables on purpose,
+    // first-touch (what the browser said) and self-reported (what the customer typed), never merged.
+    let mktDays = 30;
+    function mktSetDays(n) { mktDays = n; ownRenderMarketing(); }
+    function mktChannelsCard(cr) {
+      const num = (v) => (v == null ? "—" : v.toLocaleString());
+      const cents = (v) => (v == null ? "—" : ownMoney(v));
+      const btn = (n) => '<button class="ownv-btn' + (mktDays === n ? '' : ' ghost') + '" onclick="mktSetDays(' + n + ')">' + n + 'd</button>';
+      const ftRows = (cr.by_first_touch || []).filter((r) => r.sessions || r.signups || r.new_paying || r.spend_cents).map((r) =>
+        "<tr><td><b>" + ownEsc(r.channel) + "</b></td><td>" + num(r.sessions) + "</td><td>" + num(r.signups) + "</td><td>" + num(r.new_paying) + "</td><td>" + cents(r.revenue_cents) + "</td><td>" +
+        (r.spend_cents ? cents(r.spend_cents) : '<span class="stat-sub">none</span>') + "</td><td>" + (r.cac_cents ? cents(r.cac_cents) : "—") + "</td><td>" + (r.revenue_per_dollar == null ? "—" : r.revenue_per_dollar.toFixed(2) + "x") + "</td></tr>").join("");
+      const srRows = (cr.by_self_reported || []).filter((r) => r.signups || r.new_paying).map((r) =>
+        "<tr><td><b>" + ownEsc(r.channel) + "</b></td><td>" + num(r.signups) + "</td><td>" + num(r.new_paying) + "</td><td>" + cents(r.revenue_cents) + "</td></tr>").join("");
+      const t = (head, rows, empty) => '<div style="overflow-x:auto;"><table><thead><tr>' + head.map((h) => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" + (rows || '<tr><td colspan="' + head.length + '" class="stat-sub">' + empty + "</td></tr>") + "</tbody></table></div>";
+      const w = cr.window || {};
+      return '<div class="ownv-card"><h2>Channels · ' + ownEsc(w.start || "") + " to " + ownEsc(w.end || "") + '</h2>' +
+        '<div class="ownv-ctl">' + btn(7) + btn(30) + btn(90) + '<span class="stat-sub">bots excluded · new paying = first successful payment in the window</span></div>' +
+        '<h3 style="margin:.6rem 0 .2rem;">What the browser said (first touch)</h3>' + t(["Channel", "Sessions", "Signups", "New paying", "Revenue", "Spend", "CAC", "Rev / $"], ftRows, "No traffic in this window.") +
+        '<h3 style="margin:.8rem 0 .2rem;">What people said at signup</h3>' + t(["Channel", "Signups", "New paying", "Revenue"], srRows, "No signups in this window.") +
+        '<div class="stat-sub" style="margin-top:.5rem;">' + (cr.notes || []).map(ownEsc).join(" ") + "</div></div>";
+    }
     async function ownRenderMarketing() {
       const el = document.getElementById("mkt-view"); el.innerHTML = '<div class="ownv-loading">Loading…</div>';
       try {
-        const [a, sp] = await Promise.all([ownGet("/api/admin/attribution"), ownGet("/api/admin/spend")]);
+        const [a, sp, cr] = await Promise.all([ownGet("/api/admin/attribution"), ownGet("/api/admin/spend"), ownGet("/api/admin/channel-report?days=" + mktDays)]);
         const num = (v) => (v == null ? "—" : v.toLocaleString());
         const cents = (v) => (v == null ? "—" : ownMoney(v));
         const funnelRows = (a.funnel || []).map((f) => "<tr><td><b>" + ownEsc(f.channel) + "</b></td><td>" + num(f.views) + "</td><td>" + num(f.views_30d) + "</td><td>" + num(f.signups) + "</td><td>" + num(f.paying) + "</td><td>" + cents(f.revenue_cents) + "</td><td>" + cents(f.spend_cents) + "</td><td>" + cents(f.cpl_cents) + "</td><td>" + cents(f.cac_cents) + "</td></tr>").join("");
@@ -5584,8 +5605,9 @@
         const cohortRows = (a.cohort_by_coupon || []).map((c) => "<tr><td>" + ownEsc(c.coupon) + "</td><td>" + num(c.customers) + "</td><td>" + (c.weeks_avg == null ? "—" : c.weeks_avg) + "</td><td>" + num(c.retained_4wk) + "</td><td>" + num(c.canceled) + "</td></tr>").join("");
         const spendRows = ((sp.entries) || []).slice(0, 30).map((e) => "<tr><td>" + ownEsc(e.day) + "</td><td>" + ownEsc(e.channel) + "</td><td>" + ownEsc(e.campaign || "") + "</td><td>" + ownMoney(e.spend_cents) + "</td><td>" + ownEsc(e.notes || "") + "</td></tr>").join("");
         const tbl = (head, rows, empty) => '<div style="overflow-x:auto;"><table><thead><tr>' + head.map((h) => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" + (rows || '<tr><td colspan="' + head.length + '" class="stat-sub" style="padding:1rem .6rem;">' + empty + "</td></tr>") + "</tbody></table></div>";
-        el.innerHTML = ownHead("Marketing", "Funnel", "ownRenderMarketing") +
-          '<div class="ownv-card"><h2>Funnel — views → signups → customers → CAC</h2>' + tbl(["Channel", "Views", "Views 30d", "Signups", "Paying", "Revenue", "Spend", "CPL", "CAC"], funnelRows, "No data yet.") + "</div>" +
+        el.innerHTML = ownHead("Marketing", "Channels + funnel", "ownRenderMarketing") +
+          mktChannelsCard(cr) +
+          '<div class="ownv-card"><h2>Funnel — views → signups → customers → CAC (all time)</h2>' + tbl(["Channel", "Views", "Views 30d", "Signups", "Paying", "Revenue", "Spend", "CPL", "CAC"], funnelRows, "No data yet.") + "</div>" +
           '<div class="ownv-card"><h2>"How did you hear about us?"</h2>' + tbl(["Source", "Signups", "Paying", "Revenue"], selfRows, "Fills in as customers answer at signup.") + "</div>" +
           '<div class="ownv-card"><h2>Retention by offer code</h2>' + tbl(["Coupon", "Customers", "Avg weeks", "4wk+", "Canceled"], cohortRows, "No subscriptions yet.") + "</div>" +
           '<div class="ownv-card"><h2>Log ad spend</h2><div class="ownv-ctl">' +

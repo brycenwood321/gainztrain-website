@@ -174,7 +174,9 @@
             <select id="heard">
               <option value="">Choose one…</option>
               <option value="instagram">Instagram</option>
-              <option value="facebook">Facebook</option>
+              <option value="facebook_ad">Facebook ad</option>
+              <option value="facebook_marketplace">Facebook Marketplace</option>
+              <option value="facebook_organic">Facebook post or page</option>
               <option value="tiktok">TikTok</option>
               <option value="google">Google search</option>
               <option value="friend">Friend or family</option>
@@ -229,8 +231,14 @@
     function clearCart(){try{localStorage.removeItem(CART_KEY);}catch(e){}}
 
     // First-touch attribution captured by /assets/js/attribution.js (localStorage) — sent with register.
-    function readAttr(){try{return JSON.parse(localStorage.getItem('gt_attr'))||null;}catch(e){return null;}}
-    $('heard').addEventListener('change',()=>{const v=$('heard').value;$('heardDetail').classList.toggle('hidden',v!=='friend'&&v!=='other');});
+    // Also carries the beacon's session + visitor ids (gt_sid / gt_vid, set by the same script) so the
+    // server can stamp analytics_sessions.converted, which nothing wrote before 2026-09-02.
+    function readAttr(){
+      let a=null; try{a=JSON.parse(localStorage.getItem('gt_attr'))||null;}catch(e){}
+      try{const sid=localStorage.getItem('gt_sid'), vid=localStorage.getItem('gt_vid'); if(sid||vid){a=a||{}; if(sid)a.session_id=sid; if(vid)a.visitor_id=vid;}}catch(e){}
+      return a;
+    }
+    $('heard').addEventListener('change',()=>{const v=$('heard').value;$('heardDetail').classList.toggle('hidden',v!=='friend'&&v!=='other'&&v!=='gym');});
 
     function tierFor(n){return PLANS.find(p=>n>=p.min&&n<=p.max);}
     // Per-meal cents for the current meal count. With sizes on, the chosen size's band table is the

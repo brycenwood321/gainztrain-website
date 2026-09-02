@@ -14,7 +14,7 @@ CREATE TABLE attribution (
   fbclid       TEXT,   -- Meta click id (present = FB/IG click, paid or organic share)
   landing_path TEXT,   -- first page they hit, with query string
   referrer     TEXT,   -- external referrer on first touch
-  self_reported        TEXT,  -- instagram|facebook|tiktok|google|friend|gym|other
+  self_reported        TEXT,  -- instagram|facebook_ad|facebook_marketplace|facebook_organic|tiktok|google|friend|gym|other (legacy 'facebook' = before the 2026-09-02 split)
   self_reported_detail TEXT,  -- optional free text (which friend / what "other" means)
   first_touch_at TEXT,        -- client-reported time the first touch was captured
   created_at   TEXT NOT NULL

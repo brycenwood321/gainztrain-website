@@ -15,7 +15,9 @@ import { ghlEnsureContact, ghlSend } from './ghl.js';
 // Events important enough to also fire an instant SMS (money-moving / churn). Everything emails.
 // owner_health_alert added 2026-08-31, Brycen's call after the 7-day comms outage: a health page
 // that only emails through the same channel that is failing is not a page.
-const BIG = new Set(['owner_new_signup', 'owner_canceled', 'owner_payment_failed', 'owner_tier_changed', 'owner_refund', 'owner_menu_failsafe', 'owner_health_alert']);
+// owner_capacity_alert added 2026-09-02: the kitchen crossing 400 meals is a heads-up Jayson needs on his
+// phone, not in an inbox.
+const BIG = new Set(['owner_new_signup', 'owner_canceled', 'owner_payment_failed', 'owner_tier_changed', 'owner_refund', 'owner_menu_failsafe', 'owner_health_alert', 'owner_capacity_alert']);
 
 function list(env, key) {
   return String((env && env[key]) || '').split(',').map((s) => s.trim()).filter(Boolean);

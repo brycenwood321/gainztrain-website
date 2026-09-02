@@ -5407,7 +5407,7 @@
             '<div class="ownv-card"><h2>Active subscriptions</h2><div class="stat">' + (subs.active || 0) + "</div></div>" +
             '<div class="ownv-card"><h2>Weekly list price</h2><div class="stat">' + ownMoney(d.weekly_list_price_cents) + '</div><div class="stat-sub">pre-discount/wk</div></div>' +
             '<div class="ownv-card"><h2>Net revenue (30d)</h2><div class="stat">' + ownMoney(d.revenue_30d_cents) + '</div><div class="stat-sub">' + (d.refunds_30d_cents ? "incl. " + ownMoney(d.refunds_30d_cents) + " refunds" : "after refunds") + "</div></div>" +
-            '<div class="ownv-card"><h2>This week locked</h2><div class="stat">' + (prod.orders || 0) + '</div><div class="stat-sub">' + (prod.meals || 0) + " meals</div></div>" +
+            '<div class="ownv-card"><h2>This week locked</h2><div class="stat">' + (prod.orders || 0) + '</div><div class="stat-sub">' + (prod.meals || 0) + " meals of 500 kitchen ceiling (heads-up at 400)</div></div>" +
             '<div class="ownv-card"><h2>Delivery / Pickup</h2><div class="stat sm">' + (split.delivery || 0) + " / " + (split.pickup || 0) + "</div></div>" +
             '<div class="ownv-card"><h2>Specialty upcharge</h2><div class="stat sm">' + ownMoney(prod.upcharge_cents) + '</div><div class="stat-sub">this week</div></div>' +
           "</div>" +
@@ -5578,7 +5578,9 @@
         const num = (v) => (v == null ? "—" : v.toLocaleString());
         const cents = (v) => (v == null ? "—" : ownMoney(v));
         const funnelRows = (a.funnel || []).map((f) => "<tr><td><b>" + ownEsc(f.channel) + "</b></td><td>" + num(f.views) + "</td><td>" + num(f.views_30d) + "</td><td>" + num(f.signups) + "</td><td>" + num(f.paying) + "</td><td>" + cents(f.revenue_cents) + "</td><td>" + cents(f.spend_cents) + "</td><td>" + cents(f.cpl_cents) + "</td><td>" + cents(f.cac_cents) + "</td></tr>").join("");
-        const selfRows = (a.by_self_reported || []).map((r) => "<tr><td>" + ownEsc(r.source) + "</td><td>" + num(r.signups) + "</td><td>" + num(r.paying) + "</td><td>" + cents(r.revenue_cents) + "</td></tr>").join("");
+        const selfRows = (a.by_self_reported || []).map((r) => "<tr><td>" + ownEsc(r.label || r.source) +
+          ((r.details || []).length ? '<div class="stat-sub" style="font-weight:400;">' + r.details.map((d) => "“" + ownEsc(d) + "”").join(" · ") + "</div>" : "") +
+          "</td><td>" + num(r.signups) + "</td><td>" + num(r.paying) + "</td><td>" + cents(r.revenue_cents) + "</td></tr>").join("");
         const cohortRows = (a.cohort_by_coupon || []).map((c) => "<tr><td>" + ownEsc(c.coupon) + "</td><td>" + num(c.customers) + "</td><td>" + (c.weeks_avg == null ? "—" : c.weeks_avg) + "</td><td>" + num(c.retained_4wk) + "</td><td>" + num(c.canceled) + "</td></tr>").join("");
         const spendRows = ((sp.entries) || []).slice(0, 30).map((e) => "<tr><td>" + ownEsc(e.day) + "</td><td>" + ownEsc(e.channel) + "</td><td>" + ownEsc(e.campaign || "") + "</td><td>" + ownMoney(e.spend_cents) + "</td><td>" + ownEsc(e.notes || "") + "</td></tr>").join("");
         const tbl = (head, rows, empty) => '<div style="overflow-x:auto;"><table><thead><tr>' + head.map((h) => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" + (rows || '<tr><td colspan="' + head.length + '" class="stat-sub" style="padding:1rem .6rem;">' + empty + "</td></tr>") + "</tbody></table></div>";

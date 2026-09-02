@@ -19,12 +19,29 @@ export async function onRequestGet(context) {
   const REV = `(SELECT customer_id, SUM(amount_cents) AS rev, COUNT(*) AS payments
                 FROM payments WHERE status = 'succeeded' AND amount_cents > 0 GROUP BY customer_id)`;
 
-  const bySelf = await all(db,
+  const bySelfRaw = await all(db,
     `SELECT COALESCE(a.self_reported, '(blank)') AS source, COUNT(*) AS signups,
             SUM(CASE WHEN p.rev > 0 THEN 1 ELSE 0 END) AS paying,
             COALESCE(SUM(p.rev), 0) AS revenue_cents
      FROM attribution a LEFT JOIN ${REV} p ON p.customer_id = a.customer_id
      GROUP BY 1 ORDER BY signups DESC`);
+  // The free text behind "other", "friend" and "gym" (what people actually typed), newest first, so
+  // "other" is never a mystery bucket. Legacy 'facebook' rows predate the ad/Marketplace/organic split.
+  const detailRows = await all(db,
+    `SELECT self_reported AS source, self_reported_detail AS detail FROM attribution
+      WHERE self_reported_detail IS NOT NULL AND TRIM(self_reported_detail) != ''
+      ORDER BY created_at DESC LIMIT 200`);
+  const detailsBy = {};
+  for (const r of detailRows) {
+    const k = r.source || '(blank)';
+    (detailsBy[k] = detailsBy[k] || []);
+    if (detailsBy[k].length < 20) detailsBy[k].push(String(r.detail).slice(0, 120));
+  }
+  const bySelf = bySelfRaw.map((r) => ({
+    ...r,
+    label: r.source === 'facebook' ? 'facebook (before split)' : r.source,
+    details: detailsBy[r.source] || [],
+  }));
 
   const byUtm = await all(db,
     `SELECT COALESCE(a.utm_source,

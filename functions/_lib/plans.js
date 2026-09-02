@@ -6,6 +6,10 @@ import { stripe } from './stripe.js';
 
 export const MIN_MEALS = 6;
 export const MAX_MEALS = 16;
+// Kitchen capacity (2026-09-02). Brycen's decision: signups STAY OPEN, nothing in code closes or throttles;
+// these only drive the owner heads-up in daily-digest.js so Jayson sees the line coming.
+export const CAPACITY_ALERT_MEALS = 400;
+export const CAPACITY_MEALS = 500;
 
 export const TIERS = [
   { key: 'starter', name: 'Starter', min: 6,  max: 9,  perMealCents: 1050, lookupKey: 'gt_meal_1050' },

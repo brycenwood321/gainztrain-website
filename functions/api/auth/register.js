@@ -15,6 +15,11 @@ import { capiEvent } from '../../_lib/capi.js';
 
 const GOALS = new Set(['cut', 'maintain', 'build']);
 const SEXES = new Set(['male', 'female']);
+// "How did you hear about us?" values. Split 2026-09-02: the single 'facebook' option could not tell an ad
+// from a Marketplace listing from Jayson's posts, and Brycen was about to judge the ad on it. Old rows keep
+// the value 'facebook'; reports label it "facebook (before split)". Anything unknown becomes 'other' with
+// the raw text kept in self_reported_detail, so a stray value never invents a source.
+const HEARD = new Set(['instagram', 'facebook', 'facebook_ad', 'facebook_marketplace', 'facebook_organic', 'tiktok', 'google', 'friend', 'gym', 'other']);
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -89,7 +94,10 @@ export async function onRequestPost(context) {
   try {
     const attr = (body.attribution && typeof body.attribution === 'object') ? body.attribution : {};
     const clip = (v, n) => (typeof v === 'string' ? v.slice(0, n) : null) || null;
-    const selfReported = clip(str(body.heard_about).trim().toLowerCase(), 40);
+    const heardRaw = clip(str(body.heard_about).trim().toLowerCase(), 40);
+    const selfReported = heardRaw ? (HEARD.has(heardRaw) ? heardRaw : 'other') : null;
+    const heardDetailRaw = str(body.heard_detail).trim();
+    const heardDetail = (heardRaw && !HEARD.has(heardRaw)) ? `${heardRaw}${heardDetailRaw ? ' | ' + heardDetailRaw : ''}` : heardDetailRaw;
     // `offer` and `ad_id` (migration 0025) are what tie a paying customer back to a marketing
     // DECISION rather than just a UTM string — offer is the landing variant they saw, ad_id joins to
     // marketing_variants for hook/audience/creative. Both count as attribution signals in their own
@@ -106,9 +114,25 @@ export async function onRequestPost(context) {
         id, clip(attr.utm_source, 120), clip(attr.utm_medium, 120), clip(attr.utm_campaign, 120),
         clip(attr.utm_content, 120), clip(attr.utm_term, 120), clip(attr.gclid, 120), clip(attr.fbclid, 120),
         clip(attr.landing_path, 300), clip(attr.referrer, 300),
-        selfReported, clip(str(body.heard_detail).trim(), 200), clip(attr.first_touch_at, 40),
+        selfReported, clip(heardDetail, 200), clip(attr.first_touch_at, 40),
         clip(attr.offer, 60), clip(attr.ad_id, 120), now,
       );
+    }
+    // Stamp the beacon session as converted. OUTSIDE the attribution `if` on purpose: 11 of 46 customers
+    // since July had neither a heard answer nor a UTM, exactly the direct-traffic cohort this flag exists
+    // to measure, and an UPDATE inside that block would have skipped them behind a green test. Ids are
+    // clipped to 40 because /api/t stores them at 40. Falls back to the visitor's latest session when the
+    // 30-minute session rolled over during the form.
+    const sid = clip(attr.session_id, 40), vid = clip(attr.visitor_id, 40);
+    let stamped = 0;
+    if (sid) {
+      const r = await run(env.DB, `UPDATE analytics_sessions SET converted = 1, customer_id = ? WHERE id = ?`, id, sid);
+      stamped = r?.meta?.changes || 0;
+    }
+    if (!stamped && vid) {
+      await run(env.DB,
+        `UPDATE analytics_sessions SET converted = 1, customer_id = ?
+          WHERE id = (SELECT id FROM analytics_sessions WHERE visitor_id = ? ORDER BY started_at DESC LIMIT 1)`, id, vid);
     }
   } catch { /* non-fatal */ }
 

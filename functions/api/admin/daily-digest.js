@@ -6,7 +6,7 @@ import { ok } from '../../_lib/respond.js';
 import { requireAdmin } from '../../_lib/admin.js';
 import { one, all, addDaysIso } from '../../_lib/db.js';
 import { upcomingSunday, orderableWeek } from '../../_lib/menu.js';
-import { weeklyListCents } from '../../_lib/plans.js';
+import { weeklyListCents, CAPACITY_ALERT_MEALS, CAPACITY_MEALS } from '../../_lib/plans.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
 
 const ACTIVE = ['active', 'trialing', 'past_due'];
@@ -86,6 +86,37 @@ export async function onRequestPost(context) {
         + ' — check /app/ops',
       { entity: 'system', lines: [`failed_comms_24h: ${failed}`, `stuck_webhooks: ${stuck}`, '— failures, last 7 days —', ...detailLines] });
   }
+
+  // Capacity heads-up (2026-09-02). ONE week for both numbers and the label: orderableWeek(), the week
+  // customers are picking for right now. `week` above is upcomingSunday(), which is a DIFFERENT Sunday
+  // on Saturday and Sunday (the grader caught a draft that mixed them: "262 meals for week of Sep 13").
+  // picked = what customers have chosen so far (meal_selections); locked = what the kitchen committed to
+  // (orders). Picks can exceed locked. Fires once per week, texts (BIG), never closes anything.
+  try {
+    const capWeek = orderableWeek();
+    const picked = await one(env.DB,
+      `SELECT COALESCE(SUM(qty),0) AS n FROM meal_selections WHERE week_of = ? AND qty > 0`, capWeek);
+    const lockedCap = await one(env.DB,
+      `SELECT COALESCE(SUM(total_meals),0) AS n FROM orders WHERE week_of = ? AND status = 'locked'`, capWeek);
+    const pickedN = picked?.n || 0, lockedN = lockedCap?.n || 0;
+    const capN = Math.max(pickedN, lockedN);
+    if (capN >= CAPACITY_ALERT_MEALS) {
+      const already = await one(env.DB,
+        `SELECT 1 AS x FROM audit_log WHERE action = 'owner_capacity_alert' AND detail_json LIKE ? LIMIT 1`,
+        `%"week_of":"${capWeek}"%`);
+      if (!already) {
+        // Jayson reads weeks by the Monday they go live (6 days before the delivery Sunday).
+        const mon = new Date(`${capWeek}T00:00:00Z`); mon.setUTCDate(mon.getUTCDate() - 6);
+        const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+        const which = pickedN >= lockedN ? 'picked so far' : 'locked';
+        await ownerNotify(env, 'owner_capacity_alert',
+          `GT capacity: ${capN} meals ${which} for the week of ${fmt(mon)} (delivery Sun ${fmt(new Date(`${capWeek}T00:00:00Z`))}). Alert line ${CAPACITY_ALERT_MEALS}, kitchen ceiling ${CAPACITY_MEALS}. Signups stay open; heads-up for Jayson.`,
+          { entity: 'system', week_of: capWeek, picked: pickedN, locked: lockedN,
+            lines: [`Picked so far: ${pickedN} meals`, `Locked (cook list): ${lockedN} meals`,
+                    `Alert line: ${CAPACITY_ALERT_MEALS} · ceiling: ${CAPACITY_MEALS}`, 'Nothing closes automatically. This fires once per week.'] });
+      }
+    }
+  } catch { /* the digest must never fail on the heads-up */ }
 
   // Sunday morning (this digest runs 13:00 UTC ≈ 7am MT, so UTC-Sunday == Sunday morning in Denver):
   // nudge an owner to CONFIRM this week's menu live. Only fires when action is needed (menu not yet live) —

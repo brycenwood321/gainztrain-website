@@ -17,8 +17,12 @@ const ANNOUNCE_STATUSES = ['active', 'trialing', 'past_due'];
 function mealCountOf(json) { try { return JSON.parse(json || '[]').length; } catch { return 0; } }
 
 // Customer "new menu dropped" blast — GATED off until env.MENU_BLAST_ENABLED==='true'. Deduped per week.
+// Returns { gated, targets, sent }: gated = the production flag is off (nothing was even attempted),
+// targets = announce-eligible customers, sent = sends that were not deduped. The three are distinct on
+// purpose: a Monday response that only said "0 sent" could not tell "flag off" from "everyone already
+// had it", and a check that cannot see its input must not judge.
 async function blast(env, week) {
-  if (String(env.MENU_BLAST_ENABLED) !== 'true') return 0;
+  if (String(env.MENU_BLAST_ENABLED) !== 'true') return { gated: true, targets: 0, sent: 0 };
   const subs = await all(env.DB,
     `SELECT c.id AS customer_id, c.email, c.first_name, c.ghl_contact_id
      FROM subscriptions s JOIN customers c ON c.id = s.customer_id
@@ -30,7 +34,7 @@ async function blast(env, week) {
     const r = await notify(env, cust, 'menu_posted', { weekOf: week }, { dedupKey: `menu_posted:${week}:${cust.id}` });
     if (r.ok && !r.deduped) n++;
   }
-  return n;
+  return { gated: false, targets: subs.length, sent: n };
 }
 
 export async function onRequestPost(context) {
@@ -43,15 +47,22 @@ export async function onRequestPost(context) {
   const row = await one(env.DB, `SELECT status, meals_json FROM weekly_menus WHERE week_of = ?`, week);
   const count = row ? mealCountOf(row.meals_json) : 0;
 
-  // Already live with meals — nothing to do (an owner confirmed in time). This is the normal path.
+  // Already live with meals (an owner confirmed in time). This is the normal path, and it is ALSO the
+  // Monday sweep for the customer "new menu" email: menus get confirmed early (good), and the
+  // confirm-time blast only fires when the confirmed week is the orderable one, so an early confirm
+  // silenced the email forever (found 2026-09-02, it had never sent). blast() dedups per week+customer,
+  // so a menu that was announced at confirm time sends nothing twice.
   if (row && row.status === 'live' && count > 0) {
-    return ok({ week_of: week, action: 'none', reason: 'menu already live' });
+    const b = await blast(env, week);
+    return ok(b.gated
+      ? { week_of: week, action: 'none', reason: 'menu already live', blast_gated: true }
+      : { week_of: week, action: 'none', reason: 'menu already live', blast: b.sent, blast_targets: b.targets });
   }
 
   // Case 1: a staged menu exists — confirm it (publish the work that was already prepared).
   if (row && row.status === 'staged' && count > 0) {
     await run(env.DB, `UPDATE weekly_menus SET status='live', published_at=?, updated_at=? WHERE week_of = ?`, now, now, week);
-    const announced = await blast(env, week);
+    const announced = (await blast(env, week)).sent;
     await ownerNotify(env, 'owner_menu_failsafe',
       `Failsafe published your STAGED menu for week of ${week} (no one confirmed by Monday).`,
       { entity: 'system', lines: [
@@ -80,7 +91,7 @@ export async function onRequestPost(context) {
      ON CONFLICT(week_of) DO UPDATE SET meals_json=excluded.meals_json, label=excluded.label,
        published_at=excluded.published_at, updated_at=excluded.updated_at, source='failsafe', status='live'`,
     week, prev.meals_json, now, now, now);
-  const announced = await blast(env, week);
+  const announced = (await blast(env, week)).sent;
   await ownerNotify(env, 'owner_menu_failsafe',
     `Failsafe rolled last week's menu forward for week of ${week} (no one confirmed by Monday).`,
     { entity: 'system', lines: [

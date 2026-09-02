@@ -93,6 +93,10 @@ export async function onRequestPost(context) {
   // picked = what customers have chosen so far (meal_selections); locked = what the kitchen committed to
   // (orders). Picks can exceed locked. Fires once per week, texts (BIG), never closes anything.
   try {
+    // ?alert_at=N (admin only, this endpoint is already admin-gated) lowers the line for a live test so the
+    // path can be proven the day it ships instead of the week it first matters. Never persisted.
+    const alertAtParam = parseInt(new URL(context.request.url).searchParams.get('alert_at') || '', 10);
+    const alertAt = Number.isFinite(alertAtParam) && alertAtParam > 0 ? alertAtParam : CAPACITY_ALERT_MEALS;
     const capWeek = orderableWeek();
     const picked = await one(env.DB,
       `SELECT COALESCE(SUM(qty),0) AS n FROM meal_selections WHERE week_of = ? AND qty > 0`, capWeek);
@@ -100,7 +104,7 @@ export async function onRequestPost(context) {
       `SELECT COALESCE(SUM(total_meals),0) AS n FROM orders WHERE week_of = ? AND status = 'locked'`, capWeek);
     const pickedN = picked?.n || 0, lockedN = lockedCap?.n || 0;
     const capN = Math.max(pickedN, lockedN);
-    if (capN >= CAPACITY_ALERT_MEALS) {
+    if (capN >= alertAt) {
       const already = await one(env.DB,
         `SELECT 1 AS x FROM audit_log WHERE action = 'owner_capacity_alert' AND detail_json LIKE ? LIMIT 1`,
         `%"week_of":"${capWeek}"%`);

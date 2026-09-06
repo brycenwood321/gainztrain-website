@@ -1,0 +1,21 @@
+{
+  "_note": "Real kitchen measurements of cooked yield. These beat any placeholder in recipes.json or the seed library. Add a new dated file per measuring session, never overwrite.",
+  "measurements": [
+    {
+      "date": "2026-09-06",
+      "ingredient": "Jasmine Rice",
+      "dry_cups": 16,
+      "dry_grams_assumed": 2960,
+      "dry_grams_basis": "185 g per cup, the value the ingredient library uses; dry weight was not put on the scale",
+      "cooked_grams": 6130.5,
+      "pans": [2602.0, 2298.0, 1230.5],
+      "pans_tared": true,
+      "cooked_per_dry": 2.07,
+      "shrinkage_for_library": 0.48,
+      "cooked_grams_per_dry_cup": 383,
+      "measured_by": "Brycen",
+      "photos": ["IMG_2553.HEIC", "IMG_2554.HEIC", "IMG_2555.HEIC"],
+      "replaced": "shrinkage 0.33 (3.0x), which under-bought rice by about 31 percent every prep; Brycen confirmed the kitchen always had to cook more rice"
+    }
+  ]
+}

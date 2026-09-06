@@ -75,7 +75,7 @@
     "name": "Jasmine Rice",
     "unit": "cups",
     "grams_per_unit": 185,
-    "shrinkage": 0.33,
+    "shrinkage": 0.48,
     "package_size": null,
     "package_size_unit": null,
     "is_misc": false

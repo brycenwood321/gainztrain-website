@@ -10,9 +10,9 @@ import { requireAdmin } from '../../_lib/admin.js';
 import { one, all, run, nowIso } from '../../_lib/db.js';
 import { upcomingSunday, cutoffForWeek } from '../../_lib/menu.js';
 import { repeatLastWeek, evenSpread } from '../../_lib/substitute.js';
-import { MIN_MEALS } from '../../_lib/plans.js';
 import { notify } from '../../_lib/notify.js';
 import { stripe } from '../../_lib/stripe.js';
+import { COOKABLE, cookDecision } from '../../_lib/decide.js';
 
 // Build a [{name, qty}] list (qty>0) from a menu + a Map/array of position→qty, for the email body.
 function pickList(menu, qtyByPos) {
@@ -35,10 +35,6 @@ async function billUpcharge(env, sub, weekOf, cents) {
     try { await run(env.DB, `INSERT INTO audit_log (at, actor, entity, action, detail_json) VALUES (?, 'cron:lock-week', ?, 'upcharge_bill_failed', ?)`, nowIso(), `subscription:${sub.id}`, JSON.stringify({ weekOf, cents, error: String(e).slice(0, 160) })); } catch { /* ignore */ }
   }
 }
-
-// Only these get meals cooked. 'paused' is deliberately EXCLUDED — a paused customer isn't billed
-// and gets no meals. Legacy subs with meals_per_week < MIN_MEALS are skipped + surfaced, not locked.
-const COOKABLE = ['active', 'trialing', 'past_due'];
 
 async function writeSelectionsAndOrder(env, sub, weekOf, menu, qtyByPos, now) {
   let total = 0, upchargeTotal = 0;
@@ -89,6 +85,15 @@ export async function onRequestPost(context) {
 
   // The cutoff this week's cook is built against. A subscription created AFTER it paid for the
   // FOLLOWING Sunday, so it must not be swept into this one.
+  //
+  // KNOWN BUG, LEFT AS-IS ON PURPOSE PENDING BRYCEN'S CALL (found 2026-09-05 while extracting
+  // decide.js). This is a Date, not an ISO string, despite the name. cookDecision compares it to
+  // `sub.created_at`, which IS a string, and `string >= Date` coerces both to numbers: the ISO
+  // string becomes NaN, so the comparison is false for every customer and the post-cutoff rule has
+  // never fired in production. The fix is one call, `cutoffForWeek(weekOf).toISOString()`, exactly
+  // what admin/payment-order-audit.js already does on the other side of the same rule. Applying it
+  // changes who gets fed on a live Saturday, so it is a deliberate decision, not a cleanup.
+  // Pinned by "post-cutoff guard is dead when handed a Date" in test/charge_and_feed.test.mjs.
   const cutoffISO = cutoffForWeek(weekOf);
 
   const now = nowIso();
@@ -97,47 +102,22 @@ export async function onRequestPost(context) {
   for (const sub of subs) {
     try {
       const cust = { id: sub.customer_id, email: sub.email, first_name: sub.first_name, ghl_contact_id: sub.ghl_contact_id };
-      // Skip legacy / misconfigured subs (no real tier yet) — surface them instead of locking an
-      // empty order. These need enrich-ghl to set meals_per_week first.
-      if (!(sub.meals_per_week >= MIN_MEALS)) {
-        summary.skipped++;
-        summary.errors.push(`sub ${sub.id}: meals_per_week=${sub.meals_per_week} (< ${MIN_MEALS}) — needs enrichment, not locked`);
-        continue;
-      }
 
-      // ── COOK-LIST GUARD ──────────────────────────────────────────────────────────────────────
-      // `status` alone is NOT enough to decide who gets fed, and every gap below has cost real
-      // money. The lock runs Sat 07:30Z; billing runs Sat 15:00Z. Anything that decides the money
-      // at 15:00Z is invisible to a status check at 07:30Z, so the food is already committed by
-      // the time Stripe disagrees. The Saturday 17:00Z audit is a detector, not a preventer — this
-      // is the preventer.
+      // COOK-LIST GUARD. `status` alone is NOT enough to decide who gets fed, and every rule inside
+      // cookDecision has cost real money. The lock runs Sat 07:30Z; billing runs Sat 15:00Z.
+      // Anything that decides the money at 15:00Z is invisible to a status check at 07:30Z, so the
+      // food is already committed by the time Stripe disagrees. The Saturday 17:00Z audit is a
+      // detector, not a preventer. This is the preventer.
       //
       // Skip-and-REPORT, never skip silently: summary.errors already reaches the owners, and a
       // customer wrongly withheld from a cook must be visible the same morning.
       //
-      // 1. A queued cancellation. `cancel_at_period_end` fires AT the period end (Sat 15:00Z), so
-      //    the sub still reads 'active' at 07:30Z. Luis Soto: 14 meals cooked, $0 collected.
-      //    Already mirrored into D1 by _lib/mirror.js, so this costs no extra Stripe call.
-      if (sub.cancel_at_period_end) {
+      // The rules live in _lib/decide.js so they can be unit tested without a D1 binding.
+      // Tests: test/charge_and_feed.test.mjs.
+      const decision = cookDecision(sub, cutoffISO);
+      if (!decision.cook) {
         summary.skipped++;
-        summary.errors.push(`sub ${sub.id} (${sub.email}): cancellation queued for the period end — NOT cooked (would have been an unpaid week)`);
-        continue;
-      }
-      // 2. An unpaid prior invoice. 'past_due' is cookable so a one-off card decline doesn't cost
-      //    someone their week — but Stripe's Smart Retries hold that state for ~3 weeks, so with no
-      //    bound a dead card buys free food every Saturday. One open invoice is the bound.
-      if (sub.open_invoices > 0) {
-        summary.skipped++;
-        summary.errors.push(`sub ${sub.id} (${sub.email}): ${sub.open_invoices} unpaid invoice(s) — NOT cooked until the card is fixed`);
-        continue;
-      }
-      // 3. A signup that landed after this week's cutoff. They paid for the FOLLOWING Sunday and
-      //    anchored to the next Saturday; sweeping them in here hands them a free week of
-      //    auto-filled meals they never picked. Mirrors the created_at filter that
-      //    admin/payment-order-audit.js already applies in the other direction.
-      if (cutoffISO && sub.created_at && sub.created_at >= cutoffISO) {
-        summary.skipped++;
-        summary.errors.push(`sub ${sub.id} (${sub.email}): created ${sub.created_at}, after the ${cutoffISO} cutoff — starts next week, NOT cooked`);
+        summary.errors.push(decision.message);
         continue;
       }
       const picked = await all(env.DB,

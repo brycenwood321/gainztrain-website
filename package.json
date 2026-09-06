@@ -8,6 +8,8 @@
     "node": ">=20 <23"
   },
   "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "test:sizes": "node scripts/test_sizes.mjs",
     "db:migrate:local": "wrangler d1 migrations apply gainztrain --local",
     "db:migrate:remote": "wrangler d1 migrations apply gainztrain --remote",
     "dev": "wrangler pages dev",

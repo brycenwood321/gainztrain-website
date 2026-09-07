@@ -109,6 +109,21 @@ async function pickupReminderWithVerify(env, week) {
   }
 }
 
+// BILL AT THE LOCK (2026-09-06). The lock endpoint charges each customer's 07:15 draft BEFORE it writes
+// the order as locked, three customers per call (about 14 subrequests each; a Pages invocation has been
+// observed dying at ~50). So it is called in a loop until it reports remaining 0. Pass 1 at 08:00 UTC,
+// pass 2 at 08:30 UTC for anything Stripe had not drafted yet at 08:00. Each call is idempotent: a
+// customer with a charge outcome is never selected again, so a loop that dies mid-way resumes cleanly.
+async function lockWeekLoop(env, pass) {
+  for (let i = 1; i <= 14; i++) {
+    const r = await callJson(env, 'POST', `/api/admin/lock-week?limit=3&pass=${pass}`);
+    if (!r) { console.error(`[gainztrain-cron] lock pass ${pass} call ${i}: endpoint failed, stopping (re-run by hand)`); return; }
+    console.log(`[gainztrain-cron] lock pass ${pass} call ${i}: ${JSON.stringify(r.counts || {})} remaining ${r.remaining}`);
+    if (!r.remaining) return;
+  }
+  console.error(`[gainztrain-cron] lock pass ${pass}: 14 calls and still remaining, check /api/admin/lock-week by hand`);
+}
+
 export default {
   async scheduled(event, env, ctx) {
     const day = new Date(event.scheduledTime).getUTCDay();
@@ -123,11 +138,18 @@ export default {
     } else if (event.cron === '0 23 * * *') {
       // Friday 23:00 UTC (5pm MDT / 4pm MST) — LAST CALL, hours before tonight's MIDNIGHT MT cutoff.
       if (day === FRI) ctx.waitUntil(hit(env, '/api/admin/send-reminders?final=1'));
-    } else if (event.cron === '30 7 * * *') {
-      // Saturday 07:30 UTC — safely AFTER the Friday-midnight MT cutoff (Sat 06:00Z MDT / 07:00Z MST):
-      // lock complete orders + auto-fill anyone who didn't pick, so the kitchen has the final list to
-      // shop Saturday morning. Margin is 1.5h in summer / 0.5h in winter — do not move this earlier.
-      if (day === SAT) ctx.waitUntil(hit(env, '/api/admin/lock-week'));
+    } else if (event.cron === '0 8 * * *') {
+      // Saturday 08:00 UTC, LOCK PASS 1. After the Friday-midnight MT cutoff (Sat 06:00Z MDT / 07:00Z
+      // MST) AND after the 07:15Z billing anchor has drafted every renewal. The lock CHARGES each draft,
+      // then locks complete orders and auto-fills anyone who didn't pick, so the kitchen has a PAID
+      // list to shop Saturday morning. Do not move this before 07:15Z (no drafts yet) and do not move
+      // the anchor after it (that reopens the seven-hour leak this replaced on 2026-09-06).
+      if (day === SAT) ctx.waitUntil(lockWeekLoop(env, 1));
+    } else if (event.cron === '30 8 * * *') {
+      // Saturday 08:30 UTC, LOCK PASS 2. Same endpoint; picks up anyone marked retry at 08:00 (Stripe
+      // had not created their draft yet, or the charge read back as unknown). Idempotent, so a customer
+      // handled in pass 1 is untouched.
+      if (day === SAT) ctx.waitUntil(lockWeekLoop(env, 2));
     } else if (event.cron === '0 13 * * *') {
       // Daily 13:00 UTC (~7am MDT / 6am MST) — owner morning digest + health probe. Emails the owners
       // only if OWNER_NOTIFY_ENABLED=true; escalates an SMS if a health signal trips.

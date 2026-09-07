@@ -2,9 +2,19 @@
 // (checkout webhook, resume, the bulk migration endpoint) re-anchors through here so they can't drift.
 //
 // THE RULE: a customer is charged on the SATURDAY immediately before a delivery they have not paid for.
-// Lock is Friday midnight MT, the lock cron runs Sat 07:30 UTC, we bill Sat 15:00 UTC (9am MDT / 8am MST),
-// and the food arrives Sunday. So money always lands after the order is final and before it's cooked —
-// which is what makes "only cook a paid week" enforceable.
+// Cutoff is Friday midnight MT (Sat 06:00Z MDT / 07:00Z MST). Stripe creates each renewal draft at the
+// anchor, Sat 07:15 UTC. The lock cron runs at 08:00 UTC and CHARGES that draft before it writes the
+// order as locked (see api/admin/lock-week.js). The food arrives Sunday.
+//
+// WHY 07:15 AND NOT 15:00 (changed 2026-09-06): billing used to fire at 15:00 UTC, seven and a half hours
+// AFTER the lock. A pause (pause_collection: void) or a queued cancel inside that window erased the
+// invoice for food that was already cooked: Jeferson 07-30, Luis 08-08, Destiny 09-05, Stephen 08-30.
+// With the anchor just before the lock, the money moment and the lock moment are the same moment, and a
+// pause or cancel can only ever affect a week that has not locked yet. Brycen's rule, in his words:
+// "the only way the invoice can be voided is if they pause or cancel before the lock."
+//
+// WHY :15 AND NOT :00: in MST the cutoff itself is 07:00Z. anchorForNextDelivery() on a RESUME between
+// 06:55 and 07:00 would hit the MIN_LEAD_MS guard and be refused. Fifteen minutes of air keeps it clean.
 //
 // WHY trial_end AND NOT billing_cycle_anchor: Stripe re-anchors a subscription to its trial_end, and
 // billing_cycle_anchor='now' bills immediately (docs: "Stripe immediately attempts payment when a
@@ -14,11 +24,18 @@
 import { stripe } from './stripe.js';
 import { orderableWeek, upcomingSunday } from './menu.js';
 
-export const ANCHOR_HOUR_UTC = 15;
+export const ANCHOR_HOUR_UTC = 7;
+export const ANCHOR_MINUTE_UTC = 15;
 const MIN_LEAD_MS = 5 * 60 * 1000;        // never anchor into the past / the next few minutes
-const MAX_LEAD_MS = 21 * 86400 * 1000;    // a wild anchor means bad input — refuse, don't guess
+const MAX_LEAD_MS = 21 * 86400 * 1000;    // a wild anchor means bad input: refuse, don't guess
 
 function iso(d) { return d.toISOString().slice(0, 10); }
+
+// The anchor instant on the same UTC calendar day as `date`. Used by the one-time shift_hour migration in
+// admin/rebill-anchor.js: a sub anchored at Sat 15:00 moves to THAT Saturday 07:15, nothing else changes.
+export function anchorOnSameDay(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), ANCHOR_HOUR_UTC, ANCHOR_MINUTE_UTC, 0));
+}
 
 function addDaysISO(isoDate, days) {
   const d = new Date(`${isoDate}T00:00:00Z`);
@@ -31,7 +48,7 @@ export function anchorForDelivery(deliverySundayISO) {
   const sunday = new Date(`${deliverySundayISO}T00:00:00Z`);
   const sat = new Date(sunday);
   sat.setUTCDate(sat.getUTCDate() - 1);
-  return new Date(Date.UTC(sat.getUTCFullYear(), sat.getUTCMonth(), sat.getUTCDate(), ANCHOR_HOUR_UTC, 0, 0));
+  return new Date(Date.UTC(sat.getUTCFullYear(), sat.getUTCMonth(), sat.getUTCDate(), ANCHOR_HOUR_UTC, ANCHOR_MINUTE_UTC, 0));
 }
 
 // Which delivery did a given payment buy? This differs by WHY the invoice was raised, and getting it
@@ -40,12 +57,13 @@ export function anchorForDelivery(deliverySundayISO) {
 //   subscription_create (a SIGNUP) — they paid at checkout and picked meals for whatever week was
 //   orderable at that moment. So: orderableWeek(paidAt).
 //
-//   subscription_cycle (a RENEWAL) — ⚠️ renewals now fire SATURDAY 15:00 UTC, which is AFTER the
-//   Friday-midnight cutoff. orderableWeek() therefore reports the NEXT week, not the one the charge
-//   actually pays for: a Saturday charge buys tomorrow's Sunday delivery. Moving billing past the
-//   cutoff is exactly what broke this assumption — the derivation was written when charges landed
-//   mid-week, before cutoff. Caught 2026-08-02 when the dry run wanted to push Luis, Zac, Jameson and
-//   Alyssa a week late, which would have given all four the Aug 9 delivery for free.
+//   subscription_cycle (a RENEWAL): ⚠️ renewals fire SATURDAY (07:15 UTC since 2026-09-06, 15:00 UTC
+//   before that), which is AFTER the Friday-midnight cutoff either way. orderableWeek() therefore
+//   reports the NEXT week, not the one the charge actually pays for: a Saturday charge buys tomorrow's
+//   Sunday delivery. Moving billing past the cutoff is exactly what broke this assumption; the
+//   derivation was written when charges landed mid-week, before cutoff. Caught 2026-08-02 when the dry
+//   run wanted to push Luis, Zac, Jameson and Alyssa a week late, which would have given all four the
+//   Aug 9 delivery for free.
 export function deliveryBoughtBy(paidAt, billingReason) {
   return billingReason === 'subscription_cycle' ? upcomingSunday(paidAt) : orderableWeek(paidAt);
 }
@@ -60,9 +78,13 @@ export function anchorForNextDelivery(now = new Date()) {
   return anchorForDelivery(orderableWeek(now));
 }
 
-// Move a subscription onto its correct Saturday. Safe to call repeatedly — returns {applied:false} with
+// Move a subscription onto its correct Saturday. Safe to call repeatedly: returns {applied:false} with
 // a reason rather than throwing, so callers on the webhook/resume path can never break on it.
-export async function moveToBillingDay(env, stripeSubId, anchor) {
+//
+// opts.allowEarlierSameDay: ONLY the shift_hour migration in admin/rebill-anchor.js passes this. It lets
+// the anchor move EARLIER, but only to the same UTC calendar day the sub already bills on (15:00 to 07:15
+// on one Saturday). Every other caller keeps the "never bill sooner than the customer was told" refusal.
+export async function moveToBillingDay(env, stripeSubId, anchor, opts = {}) {
   if (!stripeSubId || !anchor) return { applied: false, reason: 'missing_input' };
   const lead = anchor.getTime() - Date.now();
   if (lead <= MIN_LEAD_MS) return { applied: false, reason: 'anchor_in_past' };
@@ -88,8 +110,12 @@ export async function moveToBillingDay(env, stripeSubId, anchor) {
     const endMs = itemEnd * 1000;
     if (Math.abs(anchor.getTime() - endMs) < 60 * 1000) return { applied: false, reason: 'already_correct' };
     // Moving the date EARLIER would bill sooner than the customer was told. Every legitimate case moves
-    // later or stays put; anything else is a data problem a human should look at.
-    if (anchor.getTime() < endMs) return { applied: false, reason: 'would_bill_earlier' };
+    // later or stays put; anything else is a data problem a human should look at. The one exception is
+    // the same-day hour shift, and only when the caller says so explicitly.
+    if (anchor.getTime() < endMs) {
+      const sameDay = iso(anchor) === iso(new Date(endMs));
+      if (!(opts.allowEarlierSameDay && sameDay)) return { applied: false, reason: 'would_bill_earlier' };
+    }
   }
 
   const updated = await stripe(env, 'POST', `subscriptions/${stripeSubId}`, {

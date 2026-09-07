@@ -26,8 +26,9 @@ import assert from 'node:assert/strict';
 import {
   COOKABLE, cookDecision, invoiceCoversDelivery, paidWeeksFromInvoices,
   paymentCheckReady, emptyScan, notLockedReport, lockNeverRanReport, buildAuditReport,
+  lockAction, lockPolicies, LOCK_POLICY_DEFAULTS, pickCycleDraft, chargeOutcome, feedAfterCharge, livePeriodEndMs,
 } from '../functions/_lib/decide.js';
-import { anchorForDelivery, deliveryBoughtBy } from '../functions/_lib/billing_day.js';
+import { anchorForDelivery, deliveryBoughtBy, anchorOnSameDay, ANCHOR_HOUR_UTC, ANCHOR_MINUTE_UTC } from '../functions/_lib/billing_day.js';
 import { cutoffForWeek } from '../functions/_lib/menu.js';
 
 // ---- fixture builders ------------------------------------------------------------------------
@@ -125,27 +126,16 @@ describe('who gets fed: the cook-list guard', () => {
     assert.equal(COOKABLE.includes('canceled'), false);
   });
 
-  test('(b) queued cancellation: NOT fed, and reported', () => {
-    // FALSE-CLEAN 4, the prevention half. Luis Soto set cancel_at_period_end on Thu 2026-08-07. It
-    // fires AT the period end, Sat 15:00 UTC, so at 07:30 UTC his subscription still read 'active'
-    // and a status-only check put 14 meals into the cook. $0 was collected.
+  test('(b) a queued cancellation is NO LONGER decided from the mirrored flag (moved 2026-09-06)', () => {
+    // FALSE-CLEAN 4 used to be prevented here: Luis Soto queued a cancel on Thu 2026-08-07, it fired
+    // AT the period end (Sat 15:00 UTC, after the 07:30 lock), 14 meals cooked, $0 collected. Since
+    // billing moved to 07:15 and the lock to 08:00, the D1 flag alone cannot tell the two cases apart:
+    // a cancel queued BEFORE 07:15 has already turned the sub 'canceled' by lock time, and a cancel
+    // queued AFTER 07:15 has a live draft Stripe will charge regardless (skipping that one would be
+    // "charged, not fed", the reverse of Destiny). So cookDecision passes the flag through and
+    // lockAction() decides on the LIVE subscription. Section E replays Luis against lockAction.
     const d = cookDecision(sub({ id: 'sub_luis', email: 'luisgal.soto22@gmail.com', cancel_at_period_end: 1 }), cutoff);
-    assert.equal(d.cook, false);
-    assert.equal(d.reason, 'pending_cancellation');
-    assert.match(d.message, /NOT cooked/);
-    assert.match(d.message, /luisgal\.soto22@gmail\.com/);
-  });
-
-  test('(b cont.) a queued cancellation is withheld even when this period is fully paid', () => {
-    // Worth stating plainly, because it is the sharp edge of the rule and it cuts both ways.
-    // A customer who paid for this Sunday and THEN queued a cancellation is still withheld: the
-    // guard cannot see Stripe, only the mirrored flag. That is money in with no food out, and it is
-    // deliberate, because the opposite error (Luis) is the one that actually happened. It is not
-    // silent: the skip is reported, and section C proves the reconciler flags them the same day.
-    const paidAndCanceling = sub({ cancel_at_period_end: 1, open_invoices: 0 });
-    const d = cookDecision(paidAndCanceling, cutoff);
-    assert.equal(d.cook, false);
-    assert.ok(d.message && d.message.length > 0, 'a skip must never be silent');
+    assert.equal(d.cook, true, 'the mirrored flag alone no longer withholds; the live read does');
   });
 
   test('(c) an open unpaid invoice: NOT fed, and reported', () => {
@@ -214,10 +204,12 @@ describe('who gets fed: the cook-list guard', () => {
 // B. WHO GETS CHARGED. Anchors and the payment-to-delivery mapping, billing_day.js.
 // ================================================================================================
 describe('who gets charged: the billing anchor', () => {
-  test('(a) billing lands Saturday 15:00 UTC, the day before delivery', () => {
-    // Hand-written from the weekly cycle in gainz-train/CLAUDE.md, not recomputed.
-    assert.equal(anchorForDelivery('2026-08-09').toISOString(), '2026-08-08T15:00:00.000Z');
-    assert.equal(anchorForDelivery('2026-08-02').toISOString(), '2026-08-01T15:00:00.000Z');
+  test('(a) billing lands Saturday 07:15 UTC, the day before delivery (15:00 until 2026-09-06)', () => {
+    // Hand-written from the weekly cycle in gainz-train/CLAUDE.md, not recomputed. The hour moved
+    // on 2026-09-06 ("bill at the lock"): the anchor now sits 45 minutes BEFORE the 08:00 lock so the
+    // lock can charge the draft before it commits food. It used to sit seven and a half hours AFTER.
+    assert.equal(anchorForDelivery('2026-08-09').toISOString(), '2026-08-08T07:15:00.000Z');
+    assert.equal(anchorForDelivery('2026-08-02').toISOString(), '2026-08-01T07:15:00.000Z');
   });
 
   test('billing always lands AFTER the ordering cutoff and BEFORE delivery', () => {
@@ -246,12 +238,14 @@ describe('who gets charged: the billing anchor', () => {
   });
 
   test('the payment check refuses to judge before the anchor has fired', () => {
-    // The pre-shop pass runs 13:00 UTC, two hours before billing. Judging payment there would flag
-    // the entire roster and teach everyone to ignore the alert.
-    assert.equal(paymentCheckReady('2026-08-09', new Date('2026-08-08T13:00:00Z')), false);
-    assert.equal(paymentCheckReady('2026-08-09', new Date('2026-08-08T15:00:00Z')), false, 'needs the settle window');
-    assert.equal(paymentCheckReady('2026-08-09', new Date('2026-08-08T15:19:00Z')), false);
-    assert.equal(paymentCheckReady('2026-08-09', new Date('2026-08-08T15:21:00Z')), true);
+    // Judging payment before billing would flag the entire roster and teach everyone to ignore the
+    // alert. With the 07:15 anchor the 13:00 pre-shop pass is now on the RIGHT side of billing, which
+    // is the point: it judges money the same morning the food is shopped.
+    assert.equal(paymentCheckReady('2026-08-09', new Date('2026-08-08T06:30:00Z')), false);
+    assert.equal(paymentCheckReady('2026-08-09', new Date('2026-08-08T07:15:00Z')), false, 'needs the settle window');
+    assert.equal(paymentCheckReady('2026-08-09', new Date('2026-08-08T07:34:00Z')), false);
+    assert.equal(paymentCheckReady('2026-08-09', new Date('2026-08-08T07:36:00Z')), true);
+    assert.equal(paymentCheckReady('2026-08-09', new Date('2026-08-08T13:00:00Z')), true, 'the pre-shop pass now judges money');
     assert.equal(paymentCheckReady('2026-08-09', new Date('2026-08-08T17:00:00Z')), true, 'the post-billing pass');
   });
 });
@@ -589,5 +583,179 @@ describe('the four false-clean weeks', () => {
     // The discount test gets both right.
     assert.equal(invoiceCoversDelivery(comp), 'comp');
     assert.equal(invoiceCoversDelivery(cancel), null);
+  });
+});
+
+// ================================================================================================
+// E. BILL AT THE LOCK (2026-09-06). Stripe drafts each renewal at Sat 07:15 UTC; the lock at 08:00
+// UTC charges the draft BEFORE it writes the order as locked. These cases pin the new per-customer
+// decision (lockAction on a LIVE subscription) and the outcome mapping (chargeOutcome), plus the
+// replays of the four weeks that leaked under the old order: Jeferson, Luis, Destiny, Stephen.
+// ================================================================================================
+describe('bill at the lock: anchor, lock decision, charge outcome', () => {
+  const weekOf = '2026-09-13';                                   // first Saturday under the new order
+  const anchor = anchorForDelivery(weekOf);                      // Sat 2026-09-12 07:15Z
+  const lockTime = new Date('2026-09-12T08:00:00Z');
+  const sec = (iso) => Math.floor(Date.parse(iso) / 1000);
+  const nextSat = sec('2026-09-19T07:15:00Z');
+  const oldHourToday = sec('2026-09-12T15:00:00Z');
+
+  // A live Stripe subscription as GET /v1/subscriptions/:id returns it (period end on the ITEM).
+  function liveSub(over = {}) {
+    const { periodEnd = nextSat, ...rest } = over;
+    return { id: 'sub_live', status: 'active', pause_collection: null, cancel_at_period_end: false,
+      items: { data: [{ current_period_end: periodEnd }] }, ...rest };
+  }
+  // This cycle's draft, created at the anchor.
+  function draft(over = {}) {
+    return { id: 'in_draft', status: 'draft', created: sec('2026-09-12T07:15:20Z'), period_start: sec('2026-09-12T07:15:00Z'),
+      billing_reason: 'subscription_cycle', ...over };
+  }
+  const act = (live, d, policies = LOCK_POLICY_DEFAULTS) => lockAction({ live, draft: d, weekOf, now: lockTime, policies });
+
+  test('the anchor is Saturday 07:15 UTC, before the 08:00 lock, after the cutoff in BOTH time zones', () => {
+    assert.equal(ANCHOR_HOUR_UTC, 7);
+    assert.equal(ANCHOR_MINUTE_UTC, 15);
+    assert.equal(anchor.toISOString(), '2026-09-12T07:15:00.000Z');
+    // MDT week: cutoff Sat 06:00Z, 75 minutes before the anchor.
+    assert.equal(cutoffForWeek('2026-09-13').toISOString(), '2026-09-12T06:00:00.000Z');
+    // MST week (after 2026-11-01): cutoff Sat 07:00Z, still 15 minutes before the anchor, which is
+    // more than moveToBillingDay's 5 minute MIN_LEAD, so a resume at 06:59Z is not refused.
+    assert.equal(cutoffForWeek('2026-11-08').toISOString(), '2026-11-07T07:00:00.000Z');
+    assert.equal(anchorForDelivery('2026-11-08').toISOString(), '2026-11-07T07:15:00.000Z');
+    const gapMin = (anchorForDelivery('2026-11-08') - cutoffForWeek('2026-11-08')) / 60000;
+    assert.ok(gapMin > 5 && gapMin === 15, `MST cutoff-to-anchor gap is ${gapMin} min`);
+    // The lock runs 08:00Z: after the anchor, so drafts exist.
+    assert.ok(lockTime > anchor);
+  });
+
+  test('the same-day hour shift moves 15:00 to 07:15 on the SAME Saturday, never another day', () => {
+    const moved = anchorOnSameDay(new Date('2026-09-12T15:00:00Z'));
+    assert.equal(moved.toISOString(), '2026-09-12T07:15:00.000Z');
+    assert.equal(anchorOnSameDay(new Date('2026-09-12T23:59:59Z')).toISOString(), '2026-09-12T07:15:00.000Z');
+  });
+
+  test('period end is read from the ITEM first (the flat field relocated)', () => {
+    assert.equal(livePeriodEndMs(liveSub()), nextSat * 1000);
+    assert.equal(livePeriodEndMs({ current_period_end: nextSat }), nextSat * 1000);
+    assert.equal(livePeriodEndMs({}), null);
+  });
+
+  test('DESTINY REPLAY, the rule in his words: paused BEFORE the lock is skipped, even with a draft', () => {
+    // Destiny paused 13 minutes after the 15:00 draft on 09-05; the lock had run at 07:30 and the
+    // void landed at 16:01. Under the new order, a pause between the 07:15 anchor and the 08:00 lock
+    // shows pause_collection on the LIVE read while the draft still sits there (Stripe voids it at
+    // its own finalization, about an hour later). The lock must skip and let Stripe void.
+    const d = act(liveSub({ pause_collection: { behavior: 'void' } }), draft());
+    assert.equal(d.action, 'skip');
+    assert.equal(d.reason, 'paused_before_lock');
+    assert.match(d.message, /not cooked/);
+  });
+
+  test('DESTINY REPLAY, the other half: not paused at 08:00 means charge, then lock, then notify', () => {
+    // Had she paused at 09:13 under the new order the invoice would already be paid ("invoices
+    // created before you pause continue to be retried unless you void them", Stripe docs). The lock
+    // sees an active sub with a rolled period and a draft: charge it.
+    const d = act(liveSub(), draft());
+    assert.equal(d.action, 'charge');
+    assert.equal(d.reason, 'draft_ready');
+  });
+
+  test('LUIS REPLAY: a cancel queued before the anchor has already canceled the sub by lock time', () => {
+    // Luis queued cancel_at_period_end on Thursday. Under the new order the period ends at 07:15
+    // Saturday and Stripe cancels there; at 08:00 the live status is 'canceled' and no draft exists.
+    const d = act(liveSub({ status: 'canceled', cancel_at_period_end: true, periodEnd: sec('2026-09-12T07:15:00Z') }), null);
+    assert.equal(d.action, 'skip');
+    assert.equal(d.reason, 'canceled_before_lock');
+  });
+
+  test('a cancel queued AFTER the anchor (period already rolled, draft live) is charged and cooked by default', () => {
+    // The inversion the grader caught: skipping this one is "charged, not fed", because Stripe will
+    // finalize and charge the draft at ~08:15 whether or not we cook. Default policy: their last week.
+    const d = act(liveSub({ cancel_at_period_end: true }), draft());
+    assert.equal(d.action, 'charge');
+    assert.equal(d.reason, 'queued_cancel_last_week');
+  });
+
+  test('the same cancel under the void policy voids the draft and skips (Decision 2, the other fork)', () => {
+    const d = act(liveSub({ cancel_at_period_end: true }), draft(), { declined: 'cook', queuedCancel: 'void' });
+    assert.equal(d.action, 'void');
+  });
+
+  test('period rolled but no draft yet is RETRY, not "paused": two different facts', () => {
+    // Stripe lag was under a minute on 09-05 (26 drafts 15:00:03 to 15:01:02) but the plan does not
+    // depend on that. No row is written; pass 2 at 08:30 re-reads.
+    const d = act(liveSub(), null);
+    assert.equal(d.action, 'retry');
+    assert.equal(d.reason, 'no_draft_yet');
+  });
+
+  test('a live read that failed is RETRY, never a skip and never a charge', () => {
+    assert.equal(act(null, draft()).action, 'retry');
+  });
+
+  test('an anchor that never moved (period still ends 15:00 today) takes the LEGACY path and is flagged', () => {
+    // The migration missed this sub, or a resume landed on the old hour. Old behaviour, named.
+    const d = act(liveSub({ periodEnd: oldHourToday }), null);
+    assert.equal(d.action, 'legacy');
+    assert.equal(d.reason, 'anchor_not_moved');
+    assert.match(d.message, /LEGACY/);
+  });
+
+  test('a status outside COOKABLE is skipped and says which status', () => {
+    const d = act(liveSub({ status: 'unpaid' }), draft());
+    assert.equal(d.action, 'skip');
+    assert.equal(d.reason, 'status_unpaid');
+  });
+
+  test('pickCycleDraft takes this Saturday\'s draft and ignores a stale one and non-drafts', () => {
+    const stale = draft({ id: 'in_old', created: sec('2026-09-05T15:00:56Z'), period_start: sec('2026-09-05T15:00:00Z') });
+    const paid = draft({ id: 'in_paid', status: 'paid' });
+    const chosen = pickCycleDraft([stale, paid, draft()], weekOf);
+    assert.equal(chosen.id, 'in_draft');
+    assert.equal(pickCycleDraft([stale], weekOf), null);
+    assert.equal(pickCycleDraft([], weekOf), null);
+    assert.equal(pickCycleDraft(null, weekOf), null);
+  });
+
+  test('chargeOutcome reads the re-fetched invoice, because the wrapper throws on a decline', () => {
+    assert.equal(chargeOutcome({ status: 'paid', amount_paid: 9150 }), 'paid');
+    assert.equal(chargeOutcome({ status: 'paid', amount_paid: 0, subtotal: 6300, total: 0, discount: { coupon: { id: 'OWNERS100' } } }), 'comp');
+    assert.equal(chargeOutcome({ status: 'open', amount_paid: 0, attempt_count: 1 }), 'declined');
+    assert.equal(chargeOutcome({ status: 'uncollectible' }), 'declined');
+    assert.equal(chargeOutcome({ status: 'void' }), 'void');
+    assert.equal(chargeOutcome({ status: 'draft' }), 'draft');
+    assert.equal(chargeOutcome(null), 'unknown');
+  });
+
+  test('feedAfterCharge: paid and comp cook; declined follows Decision 1; void and unknown write nothing', () => {
+    assert.deepEqual(feedAfterCharge('paid'), { cook: true, charge_status: 'paid', order_status: 'locked' });
+    assert.deepEqual(feedAfterCharge('comp'), { cook: true, charge_status: 'comp', order_status: 'locked' });
+    // Default: cook and chase. Rule 2 (open invoice) blocks them NEXT week, so a dead card buys one week.
+    assert.deepEqual(feedAfterCharge('declined'), { cook: true, charge_status: 'declined', order_status: 'locked' });
+    // No pay, no food: the row is still written, as unpaid_not_cooked, so it is visible and re-runnable.
+    assert.deepEqual(feedAfterCharge('declined', { declined: 'withhold', queuedCancel: 'cook' }),
+      { cook: false, charge_status: 'declined', order_status: 'unpaid_not_cooked' });
+    assert.equal(feedAfterCharge('void').order_status, null);
+    assert.equal(feedAfterCharge('unknown').order_status, null);
+    assert.equal(feedAfterCharge('draft').order_status, null);
+  });
+
+  test('policies default to cook/cook and flip only on the exact env values', () => {
+    assert.deepEqual(lockPolicies({}), { declined: 'cook', queuedCancel: 'cook' });
+    assert.deepEqual(lockPolicies({ LOCK_DECLINED_POLICY: 'withhold' }), { declined: 'withhold', queuedCancel: 'cook' });
+    assert.deepEqual(lockPolicies({ LOCK_QUEUED_CANCEL_POLICY: 'void' }), { declined: 'cook', queuedCancel: 'void' });
+    assert.deepEqual(lockPolicies({ LOCK_DECLINED_POLICY: 'yes' }), { declined: 'cook', queuedCancel: 'cook' });
+  });
+
+  test('the payment check is ready 20 minutes after the NEW anchor, so the 13:00 audit judges money', () => {
+    assert.equal(paymentCheckReady(weekOf, new Date('2026-09-12T07:30:00Z')), false);
+    assert.equal(paymentCheckReady(weekOf, new Date('2026-09-12T07:36:00Z')), true);
+    assert.equal(paymentCheckReady(weekOf, new Date('2026-09-12T13:00:00Z')), true);
+  });
+
+  test('a Saturday 07:15 renewal still buys TOMORROW\'s Sunday', () => {
+    assert.equal(deliveryBoughtBy(new Date('2026-09-12T07:15:30Z'), 'subscription_cycle'), '2026-09-13');
+    assert.equal(deliveryBoughtBy(new Date('2026-09-12T08:00:30Z'), 'subscription_cycle'), '2026-09-13');
   });
 });

@@ -24,7 +24,7 @@ import { requireOwner } from '../../_lib/admin.js';
 import { all, run, nowIso } from '../../_lib/db.js';
 import { stripe } from '../../_lib/stripe.js';
 import { mirrorSubscription } from '../../_lib/mirror.js';
-import { anchorAfterPaidCycle, deliveryBoughtBy, moveToBillingDay } from '../../_lib/billing_day.js';
+import { anchorAfterPaidCycle, deliveryBoughtBy, moveToBillingDay, anchorOnSameDay } from '../../_lib/billing_day.js';
 
 // Only a real billing cycle tells us which delivery a customer bought.
 //
@@ -45,6 +45,17 @@ export async function onRequestPost(context) {
   const body = await readJson(request).catch(() => ({}));
   const dryRun = body.dry_run !== false;              // SAFE DEFAULT: must explicitly pass false to mutate
   const only = Array.isArray(body.only) ? new Set(body.only) : null;
+
+  // ── SHIFT-HOUR MIGRATION (one time, 2026-09-06, "bill at the lock") ──────────────────────────
+  // Moves each live sub's anchor from Sat 15:00 to the SAME Saturday at ANCHOR_HOUR:ANCHOR_MINUTE
+  // (07:15), eight hours EARLIER, with proration none, so nothing is charged. This is the only caller
+  // allowed to move an anchor earlier, and only same-day. Paused, queued-cancel, past and far-out subs
+  // still refuse inside moveToBillingDay. Run it with `only` on ONE owner comp account first (the
+  // canary: read the live sub back and expect status trialing, period end on the new hour, no new
+  // invoice, no customer email), then in batches of 12.
+  //   {"shift_hour": true}                              dry run
+  //   {"shift_hour": true, "dry_run": false, "only": [customer_id, ...]}
+  const shiftHour = body.shift_hour === true;
 
   // ── MANUAL ANCHOR OVERRIDE ────────────────────────────────────────────────────────────────────
   // The derivation below reads PAID INVOICES. Money that arrives outside the invoice system is
@@ -111,7 +122,12 @@ export async function onRequestPost(context) {
       }
 
       let anchor;
-      if (override) {
+      if (shiftHour) {
+        if (!itemEnd) { row.action = 'skipped'; row.reason = 'no_period_end'; results.push(row); continue; }
+        if (live.cancel_at_period_end) { row.action = 'skipped'; row.reason = 'pending_cancellation_left_alone'; results.push(row); continue; }
+        anchor = anchorOnSameDay(new Date(itemEnd * 1000));
+        row.anchor_source = 'shift_hour_same_day';
+      } else if (override) {
         // Derivation skipped on purpose: the paid-invoice history cannot see the payment that
         // justified this override, so consulting it would just re-derive the wrong answer.
         anchor = override;
@@ -139,12 +155,12 @@ export async function onRequestPost(context) {
         const lead = anchor.getTime() - Date.now();
         if (lead <= 5 * 60 * 1000) row.action = 'BLOCKED', row.reason = 'anchor_in_past_check_this_account';
         else if (itemEnd && Math.abs(anchor.getTime() - itemEnd * 1000) < 60 * 1000) row.action = 'already_correct';
-        else if (itemEnd && anchor.getTime() < itemEnd * 1000) row.action = 'BLOCKED', row.reason = 'would_bill_earlier';
+        else if (itemEnd && anchor.getTime() < itemEnd * 1000 && !shiftHour) row.action = 'BLOCKED', row.reason = 'would_bill_earlier';
         else row.action = 'would_update';
         results.push(row); continue;
       }
 
-      const moved = await moveToBillingDay(env, s.stripe_subscription_id, anchor);
+      const moved = await moveToBillingDay(env, s.stripe_subscription_id, anchor, { allowEarlierSameDay: shiftHour });
       if (!moved.applied) { row.action = moved.reason === 'already_correct' ? 'already_correct' : 'BLOCKED'; row.reason = moved.reason; results.push(row); continue; }
 
       await mirrorSubscription(env, moved.updated);

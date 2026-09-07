@@ -11,27 +11,35 @@ import { one } from '../../_lib/db.js';
 import { upcomingSunday } from '../../_lib/menu.js';
 
 // Is this customer's NEXT delivery already locked into the cook? True only between the Saturday
-// 07:30Z lock and that Sunday's delivery — Mon-Fri no order is locked yet, because locking is what
+// 08:00Z lock and that Sunday's delivery. Mon-Fri no order is locked yet, because locking is what
 // the Saturday cron does.
 //
-// This matters because `pause_collection: 'void'` VOIDS the pending invoice. Pause inside that window
-// and the meals are already committed to the kitchen while the money is cancelled: food out, $0 in,
-// and the order row still reads 'locked' so nobody downstream can tell. That is exactly the shape of
-// Jeferson's 2026-07-30 loss ($119). Unlike tier.js:34 and address.js:45, which both consult
-// isLocked() before changing anything, pause consulted nothing at all.
+// Why it matters: `pause_collection: 'void'` VOIDS any invoice Stripe finalizes after the pause. Before
+// 2026-09-06 billing ran seven hours AFTER the lock, so a pause in that window erased the money for
+// food already committed (Jeferson 07-30, $119; Destiny 09-05, $91.50). Since 2026-09-06 the lock
+// CHARGES the week before it locks it (api/admin/lock-week.js), so a pause after the lock cannot void
+// a paid week: this week still comes and it is paid, the pause starts next week. `charge_status` on
+// the order row says which case this is, so the owner alert can say the truth instead of guessing.
 //
-// Deliberately does NOT block the pause — a customer must always be able to stop their plan. It makes
-// the consequence visible instead: the customer is told this week still comes, and the owners get an
-// alert naming the money at risk so someone can collect for food that has already been made.
+// Deliberately does NOT block the pause. A customer must always be able to stop their plan.
 async function lockedWeekForCustomer(env, customerId) {
   const week = upcomingSunday();
   try {
     const row = await one(env.DB,
-      `SELECT week_of, total_meals FROM orders
+      `SELECT week_of, total_meals, charge_status FROM orders
         WHERE customer_id = ? AND week_of = ? AND status = 'locked'`,
       customerId, week);
     return row || null;
   } catch { return null; }
+}
+
+function afterLockNote(lockedOrder) {
+  if (!lockedOrder) return '';
+  const paid = lockedOrder.charge_status === 'paid' || lockedOrder.charge_status === 'comp';
+  if (paid) {
+    return ` (paused AFTER the lock: ${lockedOrder.total_meals} meals for ${lockedOrder.week_of} are already PAID and still come; the pause starts the following week)`;
+  }
+  return ` (⚠️ PAUSED AFTER THE LOCK with charge_status ${lockedOrder.charge_status || 'none'}: ${lockedOrder.total_meals} meals for ${lockedOrder.week_of} are in the cook and this week's money is NOT confirmed. Check the invoice and collect by hand if it is void.)`;
 }
 
 export async function onRequestPost(context) {
@@ -56,10 +64,7 @@ export async function onRequestPost(context) {
   try {
     const c = auth.customer;
     await ownerNotify(env, 'owner_paused',
-      `${c.first_name || c.email} paused their plan (${sub.meals_per_week} meals/wk)`
-        + (lockedOrder
-          ? ` — ⚠️ PAUSED AFTER THE LOCK: ${lockedOrder.total_meals} meals for ${lockedOrder.week_of} are already in the cook and pausing VOIDS that invoice. Collect for this week by hand.`
-          : ''),
+      `${c.first_name || c.email} paused their plan (${sub.meals_per_week} meals/wk)` + afterLockNote(lockedOrder),
       { entity: `customer:${c.id}` });
   } catch { /* non-fatal */ }
   return ok({ status: 'paused', week_already_locked: !!lockedOrder, locked_week: lockedOrder?.week_of || null });

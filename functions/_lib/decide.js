@@ -14,10 +14,17 @@
 // values and every branch are otherwise unchanged, and nothing in the codebase parses those
 // sentences: they are read by humans in an owner alert.
 //
-// THE STRUCTURAL FACT BEHIND ALL OF IT: the lock runs Sat 07:30 UTC and billing runs Sat 15:00 UTC.
-// Anything that decides the money at 15:00 is invisible to the decision made at 07:30, so the cook
-// list is always committed before Stripe agrees. cookDecision is the PREVENTER, buildAuditReport is
-// the DETECTOR, and neither can do the other's job.
+// THE STRUCTURAL FACT BEHIND ALL OF IT, AS IT STOOD UNTIL 2026-09-06: the lock ran Sat 07:30 UTC and
+// billing ran Sat 15:00 UTC. Anything that decided the money at 15:00 was invisible to the decision
+// made at 07:30, so the cook list was always committed before Stripe agreed. Four weeks leaked that way
+// (Jeferson, Luis, Destiny, Stephen).
+//
+// SINCE 2026-09-06 ("bill at the lock"): Stripe drafts each renewal at 07:15 UTC and the lock at 08:00
+// UTC CHARGES that draft before it writes the order as locked. The per-customer decision now has two
+// halves: cookDecision() on the D1 row (tier, unpaid prior invoice, after-cutoff signup) and
+// lockAction() on a LIVE Stripe read (paused, canceled, queued cancel, draft present, period rolled),
+// then chargeOutcome() on the invoice Stripe hands back. cookDecision is still the cheap preventer,
+// lockAction is the money preventer, buildAuditReport is the detector. None can do another's job.
 //
 // Tests: test/charge_and_feed.test.mjs (npm test). Every case in there is a week that actually went
 // wrong in production. Add a fixture before changing a rule here.
@@ -45,14 +52,15 @@ export function cookDecision(sub, cutoff) {
     return { cook: false, reason: 'needs_enrichment',
       message: `sub ${sub.id}: meals_per_week=${sub.meals_per_week} (< ${MIN_MEALS}), needs enrichment, not locked` };
   }
-  // 1. A queued cancellation. `cancel_at_period_end` fires AT the period end (Sat 15:00 UTC), so the
-  //    sub still reads 'active' at 07:30 UTC when the food is committed. Luis Soto, delivery week
-  //    2026-08-09: 14 meals cooked, $0 collected. Already mirrored into D1, so this costs no extra
-  //    Stripe call.
-  if (sub.cancel_at_period_end) {
-    return { cook: false, reason: 'pending_cancellation',
-      message: `sub ${sub.id} (${sub.email}): cancellation queued for the period end, NOT cooked (would have been an unpaid week)` };
-  }
+  // 1. (MOVED 2026-09-06.) A queued cancellation used to be refused here: `cancel_at_period_end` fired
+  //    AT the period end, Sat 15:00 UTC, after the 07:30 lock, so the sub still read 'active' when the
+  //    food was committed (Luis Soto, 2026-08-09: 14 meals cooked, $0 collected). With billing at
+  //    07:15 and the lock at 08:00 that rule INVERTS: a cancel queued before 07:15 has already turned
+  //    the sub 'canceled' by lock time, and a cancel queued after 07:15 points at NEXT Saturday with a
+  //    live draft for THIS week that Stripe will charge regardless. Skipping the second group would be
+  //    "charged, not fed", the reverse of Destiny. The rule now lives in lockAction(), which reads the
+  //    LIVE subscription and knows whether the period has rolled. The D1 flag alone cannot tell.
+  //
   // 2. An unpaid prior invoice. Stripe's Smart Retries hold 'past_due' for about 3 weeks, so with no
   //    bound a dead card buys free food every Saturday, compounding. One open invoice is the bound.
   if (sub.open_invoices > 0) {
@@ -125,11 +133,11 @@ export function paidWeeksFromInvoices(invoices) {
   return { map, counted, ignored };
 }
 
-// THE PAYMENT CHECK CANNOT RUN BEFORE BILLING DOES. The lock fires Sat 07:30 UTC, the pre-shop audit
-// runs 13:00 UTC, but billing anchors fire at 15:00 UTC, so at 7am Mountain almost nobody has paid
-// for tomorrow's delivery yet and a naive run would flag the ENTIRE roster. The 17:00 UTC pass is the
-// one that judges payment; the early pass still earns its slot by catching the other direction (an
-// active subscriber the kitchen has no order for) while Jayson can still act on it.
+// THE PAYMENT CHECK CANNOT RUN BEFORE BILLING DOES. Until 2026-09-06 billing anchors fired at 15:00
+// UTC, so the 13:00 UTC pre-shop audit could only catch the other direction (an active subscriber the
+// kitchen had no order for) and the 17:00 pass judged payment. Since the anchor moved to 07:15 UTC
+// and the lock charges at 08:00, BOTH Saturday passes judge money. The guard stays: anchorForDelivery
+// is the single source of the hour, so this needs no edit when the hour moves.
 const SETTLE_MS = 20 * 60 * 1000; // 20 min for Stripe to settle after the anchor fires
 
 export function paymentCheckReady(weekOf, now = new Date()) {
@@ -222,4 +230,129 @@ export function buildAuditReport({ weekOf, locked, missing, scan, billingSettled
   // Never let a silent cap masquerade as a clean report.
   if (truncated) report.warning = `Invoice scan hit the ${maxPages}-page cap, so coverage may be incomplete.`;
   return report;
+}
+
+// ---- BILL AT THE LOCK (2026-09-06) ------------------------------------------------------------
+// Two more pure decisions, used by api/admin/lock-week.js. Both take plain objects so a test can hand
+// them a Stripe-shaped fixture with no key and no network.
+
+// Policies Brycen owns. Read through lockPolicies(env) so a flip is an env var, not a code change.
+//   declined:      what to do when the card declines AT the lock.
+//                    'cook'      cook and chase (Smart Retries; rule 2 blocks them next week). DEFAULT.
+//                    'withhold'  no pay, no food; row written unpaid_not_cooked so it stays visible.
+//   queuedCancel:  a cancel queued between the 07:15 anchor and the 08:00 lock. The period already
+//                  rolled, so Stripe will charge this week's draft at ~08:15 whether we cook or not.
+//                    'cook'      charge and cook; it is their last week. DEFAULT (his rule, his words).
+//                    'void'      void the draft and skip; no charge, no food.
+export const LOCK_POLICY_DEFAULTS = Object.freeze({ declined: 'cook', queuedCancel: 'cook' });
+export function lockPolicies(env = {}) {
+  const declined = env.LOCK_DECLINED_POLICY === 'withhold' ? 'withhold' : 'cook';
+  const queuedCancel = env.LOCK_QUEUED_CANCEL_POLICY === 'void' ? 'void' : 'cook';
+  return { declined, queuedCancel };
+}
+
+// The period end Stripe reports for a live subscription. current_period_end moved onto subscription
+// ITEMS (memory stripe-flat-fields-relocate); read the item first, fall back to the flat field.
+export function livePeriodEndMs(live) {
+  const end = live?.items?.data?.[0]?.current_period_end || live?.current_period_end;
+  return end ? end * 1000 : null;
+}
+
+// What the lock should do with ONE customer, given the LIVE subscription and this cycle's draft.
+//
+//   live     the Stripe subscription object (never the D1 mirror: rebill-anchor.js documents the
+//            mirror lying about pauses, and this decision now commits money, not just food)
+//   draft    this cycle's draft invoice or null (the caller picks the one whose period starts on or
+//            after this Saturday)
+//   weekOf   delivery Sunday, YYYY-MM-DD
+//   now      Date, injectable for tests
+//   policies from lockPolicies(env)
+//
+// Returns { action, reason, message? }:
+//   skip      paused or canceled BEFORE the lock. Stripe voids or never creates the draft on its own.
+//   charge    the period rolled at 07:15 and the draft is here: attach the upcharge, finalize, pay.
+//   retry     the period rolled but Stripe has not created the draft yet (lag). Do not lock, do not
+//             notify; pass 2 at 08:30 comes back. This is NOT the same fact as "paused", which is why
+//             the live read comes first.
+//   legacy    the anchor never moved (migration missed this sub, or a resume landed on the old hour):
+//             cook on the old path (pending upcharge, Stripe bills later) and flag it by name.
+//   void      queuedCancel policy is 'void': void the draft and skip.
+export function lockAction({ live, draft, weekOf, now = new Date(), policies = LOCK_POLICY_DEFAULTS }) {
+  if (!live) return { action: 'retry', reason: 'no_live_read', message: 'live subscription read failed, will retry' };
+  const st = live.status;
+  if (st === 'canceled' || st === 'incomplete_expired') {
+    return { action: 'skip', reason: 'canceled_before_lock', message: `canceled before the lock (status ${st}), not cooked` };
+  }
+  if (live.pause_collection) {
+    return { action: 'skip', reason: 'paused_before_lock', message: 'paused before the lock (pause_collection set), not cooked; Stripe voids the draft itself' };
+  }
+  if (!COOKABLE.includes(st)) {
+    return { action: 'skip', reason: `status_${st}`, message: `status ${st} is not cookable, not cooked` };
+  }
+
+  // Has the period rolled past this delivery's anchor? The anchor for weekOf is the Saturday before it
+  // at ANCHOR_HOUR:ANCHOR_MINUTE. A rolled sub's period end is a WEEK later than that. A legacy sub
+  // (anchor never moved) still shows a period end on the anchor's own day, e.g. 15:00 that Saturday,
+  // which is after the anchor but not by a day. So the line is drawn at anchor + 24h.
+  const anchorMs = anchorForDelivery(weekOf).getTime();
+  const endMs = livePeriodEndMs(live);
+  const rolled = endMs != null && endMs > anchorMs + 24 * 3600 * 1000;
+  if (!rolled) {
+    return { action: 'legacy', reason: 'anchor_not_moved',
+      message: `period end ${endMs ? new Date(endMs).toISOString() : 'unknown'} has not rolled past the ${new Date(anchorMs).toISOString()} anchor: cooked on the LEGACY path (billed later), check this subscription's anchor` };
+  }
+
+  if (live.cancel_at_period_end) {
+    if (policies.queuedCancel === 'void') {
+      return { action: 'void', reason: 'queued_cancel_void_policy', message: 'cancel queued after the anchor; policy is void: draft voided, not cooked' };
+    }
+    if (!draft) return { action: 'retry', reason: 'no_draft_yet', message: 'period rolled but no draft yet (Stripe lag), will retry' };
+    return { action: 'charge', reason: 'queued_cancel_last_week', message: 'cancel queued after the anchor: charged and cooked, this is their last week' };
+  }
+
+  if (!draft) return { action: 'retry', reason: 'no_draft_yet', message: 'period rolled but no draft yet (Stripe lag), will retry' };
+  return { action: 'charge', reason: 'draft_ready' };
+}
+
+// Pick this cycle's draft out of a list of the subscription's draft invoices: the one whose period
+// starts on or after the anchor day for weekOf (Saturday 00:00 UTC). Stripe keeps voided/paid ones
+// out of a status=draft list already; this guards against a stale draft from a previous cycle.
+export function pickCycleDraft(drafts, weekOf) {
+  if (!Array.isArray(drafts) || drafts.length === 0) return null;
+  const anchor = anchorForDelivery(weekOf);
+  const dayStart = Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate()) / 1000;
+  const ok = drafts.filter((d) => d && d.status === 'draft' && (d.period_start || d.created || 0) >= dayStart);
+  ok.sort((a, b) => (b.created || 0) - (a.created || 0));
+  return ok[0] || null;
+}
+
+// What Stripe says happened to the invoice the lock tried to charge. Read AFTER the pay call, from a
+// fresh GET, because functions/_lib/stripe.js throws on any non-2xx: a declined card arrives as an
+// exception, not as a status in the response, so the exception is caught and the invoice re-read.
+//   paid      money moved
+//   comp      $0 with a discount: a real comp week (same discriminator as invoiceCoversDelivery)
+//   declined  open or uncollectible after a pay attempt
+//   void      voided (a pause raced us to finalization)
+//   draft     still a draft (finalize failed); treat as retry
+//   unknown   anything else; treat as retry
+export function chargeOutcome(inv) {
+  if (!inv) return 'unknown';
+  if (inv.status === 'paid') return (inv.amount_paid || 0) > 0 ? 'paid' : (invoiceCoversDelivery(inv) === 'comp' ? 'comp' : 'paid');
+  if (inv.status === 'open' || inv.status === 'uncollectible') return 'declined';
+  if (inv.status === 'void') return 'void';
+  if (inv.status === 'draft') return 'draft';
+  return 'unknown';
+}
+
+// Given the charge outcome and the declined policy: does this customer get cooked, and what does the
+// order row say? Returns { cook, charge_status, order_status }.
+export function feedAfterCharge(outcome, policies = LOCK_POLICY_DEFAULTS) {
+  if (outcome === 'paid' || outcome === 'comp') return { cook: true, charge_status: outcome, order_status: 'locked' };
+  if (outcome === 'declined') {
+    return policies.declined === 'withhold'
+      ? { cook: false, charge_status: 'declined', order_status: 'unpaid_not_cooked' }
+      : { cook: true, charge_status: 'declined', order_status: 'locked' };
+  }
+  if (outcome === 'void') return { cook: false, charge_status: null, order_status: null };   // skip, report
+  return { cook: false, charge_status: null, order_status: null };                            // retry
 }

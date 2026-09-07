@@ -115,13 +115,29 @@ async function pickupReminderWithVerify(env, week) {
 // pass 2 at 08:30 UTC for anything Stripe had not drafted yet at 08:00. Each call is idempotent: a
 // customer with a charge outcome is never selected again, so a loop that dies mid-way resumes cleanly.
 async function lockWeekLoop(env, pass) {
+  let retries = 0;
   for (let i = 1; i <= 14; i++) {
     const r = await callJson(env, 'POST', `/api/admin/lock-week?limit=3&pass=${pass}`);
-    if (!r) { console.error(`[gainztrain-cron] lock pass ${pass} call ${i}: endpoint failed, stopping (re-run by hand)`); return; }
+    if (!r) { console.error(`[gainztrain-cron] lock pass ${pass} call ${i}: endpoint failed, stopping (re-run by hand)`); return retries; }
     console.log(`[gainztrain-cron] lock pass ${pass} call ${i}: ${JSON.stringify(r.counts || {})} remaining ${r.remaining}`);
-    if (!r.remaining) return;
+    retries += (r.counts && r.counts.retry) || 0;
+    if (!r.remaining) return retries;
   }
   console.error(`[gainztrain-cron] lock pass ${pass}: 14 calls and still remaining, check /api/admin/lock-week by hand`);
+  return retries;
+}
+
+// Pass 1 at 08:00, then, if anything came back `retry` (Stripe had not drafted it yet, or the charge
+// read back as unknown), wait five minutes inside the same invocation and run pass 2. A scheduled
+// invocation has minutes of wall time, and this costs no trigger: the account is at the Workers Free
+// cap of 5 cron triggers ACROSS ALL WORKERS (deploy refused a fifth on 2026-09-07), so the earlier
+// plan of a separate 08:30 trigger could not ship. A final pass 3 rides the 13:00 Saturday trigger.
+async function lockWithRetry(env) {
+  const retries = await lockWeekLoop(env, 1);
+  if (!retries) return;
+  console.log(`[gainztrain-cron] lock pass 1 left ${retries} retry, waiting 5 min for pass 2`);
+  await new Promise((res) => setTimeout(res, 5 * 60 * 1000));
+  await lockWeekLoop(env, 2);
 }
 
 export default {
@@ -144,13 +160,12 @@ export default {
       // then locks complete orders and auto-fills anyone who didn't pick, so the kitchen has a PAID
       // list to shop Saturday morning. Do not move this before 07:15Z (no drafts yet) and do not move
       // the anchor after it (that reopens the seven-hour leak this replaced on 2026-09-06).
-      if (day === SAT) ctx.waitUntil(lockWeekLoop(env, 1));
-    } else if (event.cron === '30 8 * * *') {
-      // Saturday 08:30 UTC, LOCK PASS 2. Same endpoint; picks up anyone marked retry at 08:00 (Stripe
-      // had not created their draft yet, or the charge read back as unknown). Idempotent, so a customer
-      // handled in pass 1 is untouched.
-      if (day === SAT) ctx.waitUntil(lockWeekLoop(env, 2));
+      // Pass 2 runs inside the same invocation five minutes later if anything was marked retry.
+      if (day === SAT) ctx.waitUntil(lockWithRetry(env));
     } else if (event.cron === '0 13 * * *') {
+      // Saturday-only, FIRST: LOCK PASS 3. Same endpoint, idempotent; anyone still without a charge
+      // outcome at 13:00 UTC (7am MDT) is handled before the pre-shop audit below judges the week.
+      if (day === SAT) ctx.waitUntil(lockWeekLoop(env, 3));
       // Daily 13:00 UTC (~7am MDT / 6am MST) — owner morning digest + health probe. Emails the owners
       // only if OWNER_NOTIFY_ENABLED=true; escalates an SMS if a health signal trips.
       ctx.waitUntil(hit(env, '/api/admin/daily-digest'));

@@ -10,9 +10,10 @@ compatibility_date = "2024-09-23"
 #   17:00 → Wed pick reminders. 23:00 → Fri last call (5pm MDT / 4pm MST; cutoff is Fri MIDNIGHT MT).
 #   08:00 → Sat LOCK PASS 1: after the Fri-midnight MT cutoff (Sat 06:00Z MDT / 07:00Z MST) and after
 #           the 07:15Z billing anchor has drafted every renewal; the lock CHARGES then locks (2026-09-06).
-#   08:30 → Sat LOCK PASS 2: retries for drafts Stripe had not created by 08:00. Idempotent.
-#   13:00 → owner digest + health probe (+ feed prune + menu failsafe Mondays).
-# Max 5 cron triggers/account. ALL FIVE IN USE since 2026-09-06 (the free slot went to lock pass 2; the
-# ad-spend kill-switch, if built, must share the 13:00 daily trigger).
+#           Pass 2 runs INSIDE the same invocation five minutes later if anything was marked retry.
+#   13:00 → Sat LOCK PASS 3 first, then owner digest + health probe (+ feed prune + menu failsafe Mondays).
+# ⚠️ The Workers Free cap is 5 cron triggers PER ACCOUNT, across every worker on risiosystems. A fifth
+# trigger on this worker was REFUSED on 2026-09-07 (code 10072) and the deploy left the old schedule in
+# place with new code that no longer matched it. Four is the ceiling here; any new job shares a trigger.
 # worker.js matches event.cron as an EXACT STRING: change a trigger here and its branch there together.
-crons = ["0 17 * * *", "0 23 * * *", "0 8 * * *", "30 8 * * *", "0 13 * * *"]
+crons = ["0 17 * * *", "0 23 * * *", "0 8 * * *", "0 13 * * *"]

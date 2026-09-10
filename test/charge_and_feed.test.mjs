@@ -182,21 +182,19 @@ describe('who gets fed: the cook-list guard', () => {
     assert.equal(cookDecision(sub({ created_at: '2026-08-07T23:00:00.000Z' }), cutoff).cook, true);
   });
 
-  test('post-cutoff guard is dead when handed a Date', () => {
-    // LIVE BUG, PINNED NOT FIXED. lock-week.js passes `cutoffForWeek(weekOf)`, which is a Date, into
-    // a comparison against `sub.created_at`, which is an ISO-8601 string out of D1. JavaScript's
-    // relational operators coerce both operands to numbers when they are not both strings, the ISO
-    // string becomes NaN, and NaN >= anything is false. So the rule has never fired in production,
-    // for anybody, since it shipped 2026-08-12.
-    //
-    // This test asserts the BROKEN behaviour on purpose, so the bug cannot be forgotten and so the
-    // fix (one .toISOString() call, exactly what payment-order-audit.js already does) shows up here
-    // as a deliberate, reviewed change rather than a silent one. It changes who gets fed on a live
-    // Saturday, so it is Brycen's call, not a cleanup.
+  test('post-cutoff guard fires when handed an ISO string, and is dead when handed a Date', () => {
+    // LIVE BUG 2026-08-12 to 2026-09-09, FIXED on Brycen's explicit yes. lock-week.js used to pass
+    // `cutoffForWeek(weekOf)`, a Date, into a comparison against `sub.created_at`, an ISO-8601 string
+    // out of D1. JavaScript's relational operators coerce both operands to numbers when they are not
+    // both strings, the ISO string becomes NaN, and NaN >= anything is false, so the rule never fired
+    // for anybody. lock-week.js now passes `.toISOString()`, exactly what payment-order-audit.js
+    // always did. Both halves stay pinned: the Date form documents the failure so nobody reintroduces
+    // it, the string form is the behaviour the lock now has (Morgan, signed up after the 2026-08-08
+    // cutoff, correctly waits for 2026-08-16).
     const cutoffAsDate = cutoffForWeek('2026-08-09');
     const morgan = sub({ created_at: '2026-08-08T15:58:00.000Z' });
-    assert.equal(cookDecision(morgan, cutoffAsDate).cook, true, 'still broken: change this line only together with the fix');
-    assert.equal(cookDecision(morgan, cutoffAsDate.toISOString()).cook, false, 'and this is what the fix would do');
+    assert.equal(cookDecision(morgan, cutoffAsDate).cook, true, 'a Date silently disables the guard; never pass one');
+    assert.equal(cookDecision(morgan, cutoffAsDate.toISOString()).cook, false, 'the ISO string is what lock-week.js passes now');
   });
 });
 

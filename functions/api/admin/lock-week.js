@@ -213,11 +213,12 @@ export async function onRequestPost(context) {
       ORDER BY s.created_at`,
     weekOf, ...COOKABLE);
 
-  // KNOWN BUG, LEFT AS-IS ON PURPOSE PENDING BRYCEN'S CALL (found 2026-09-05). This is a Date, not an
-  // ISO string, so cookDecision's post-cutoff rule never fires. The fix is `.toISOString()`. Applying
-  // it changes who gets fed on a live Saturday, so it is a deliberate decision, not a cleanup. Pinned
-  // by "post-cutoff guard is dead when handed a Date" in test/charge_and_feed.test.mjs.
-  const cutoffISO = cutoffForWeek(weekOf);
+  // ISO STRING, NOT A DATE. From 2026-08-12 to 2026-09-09 this handed a Date to cookDecision, whose
+  // string comparison then coerced both sides to numbers (NaN), so the post-cutoff signup guard never
+  // fired for anyone. Fixed 2026-09-09 on Brycen's explicit yes, because it changes who gets fed: a
+  // signup after Friday midnight MT now correctly waits for the FOLLOWING Sunday. Pinned by
+  // "post-cutoff guard fires when handed an ISO string" in test/charge_and_feed.test.mjs.
+  const cutoffISO = cutoffForWeek(weekOf).toISOString();
 
   const now = nowIso();
   const batch = subs.slice(0, limit);

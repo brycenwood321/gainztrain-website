@@ -309,8 +309,9 @@ export function lockAction({ live, draft, settled = null, weekOf, now = new Date
   // Already finalized by Stripe: the money question is answered, read it. Checked BEFORE the queued-cancel
   // fork because a paid invoice cannot be voided and a void one is already what the policy wanted.
   if (!draft && settled) {
-    return { action: 'settled', reason: 'stripe_charged_before_lock',
-      message: `Stripe finalized ${settled.id} (${settled.status}) before the lock ran${live.cancel_at_period_end ? ', cancel queued: this is their last week' : ''}` };
+    const how = settled.billing_reason === 'subscription_create' ? 'paid at checkout for this week (first week)' : 'Stripe finalized before the lock ran';
+    return { action: 'settled', reason: settled.billing_reason === 'subscription_create' ? 'paid_at_checkout' : 'stripe_charged_before_lock',
+      message: `${settled.id} (${settled.status}): ${how}${live.cancel_at_period_end ? ', cancel queued: this is their last week' : ''}` };
   }
 
   if (live.cancel_at_period_end) {
@@ -355,10 +356,19 @@ export function pickCycleDraft(drafts, weekOf) {
 // scheduler kept firing the retired 07:30 slot and never the 08:00 one, and Stripe charged 22 customers
 // at 08:15 on its own) there is no draft left to charge. The money already moved; the lock's job is
 // then to READ the outcome and lock the food, never to charge again. Same `created` rule as the draft.
+//
+// FIRST-WEEK CUSTOMERS (2026-09-12, second gap the same morning): a signup pays at CHECKOUT for the week
+// that was orderable at that moment and is anchored to the FOLLOWING Saturday, so on their first lock
+// there is no renewal draft and no cycle invoice, only the checkout invoice from days earlier. Without
+// this clause they read "retry" forever and never lock (Maren, Dean, Paul: 25 meals paid, none locked).
+// The checkout invoice counts when deliveryBoughtBy() says it bought THIS delivery Sunday.
 export function pickCycleInvoice(invoices, weekOf) {
   if (!Array.isArray(invoices) || invoices.length === 0) return null;
   const dayStart = cycleDayStart(weekOf);
-  const ok = invoices.filter((i) => i && i.status && i.status !== 'draft' && i.status !== 'deleted' && inThisCycle(i, dayStart));
+  const boughtThisWeek = (i) => i.billing_reason === 'subscription_create' && i.created
+    && deliveryBoughtBy(new Date(i.created * 1000), 'subscription_create') === weekOf;
+  const ok = invoices.filter((i) => i && i.status && i.status !== 'draft' && i.status !== 'deleted'
+    && (inThisCycle(i, dayStart) || boughtThisWeek(i)));
   // The RENEWAL first (a same-day tier change also raises a small proration invoice), then newest.
   const cyc = (i) => (i.billing_reason === 'subscription_cycle' ? 1 : 0);
   ok.sort((a, b) => (cyc(b) - cyc(a)) || ((b.created || 0) - (a.created || 0)));

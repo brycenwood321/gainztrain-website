@@ -765,6 +765,24 @@ describe('bill at the lock: anchor, lock decision, charge outcome', () => {
     assert.equal(lockAction({ live: liveSub(), draft: null, settled: null, weekOf, now: lockTime }).action, 'retry');
   });
 
+  test('2026-09-12 REPLAY, second gap: a first-week signup locks from its CHECKOUT invoice', () => {
+    // Maren signed up Monday 09-07 15:16Z and paid at checkout for the 09-13 delivery; her sub is anchored
+    // to Sat 09-19, so at the 09-12 lock there is no draft and no cycle invoice. She, Dean and Paul read
+    // "retry" on every pass while 27 others locked.
+    const checkout = { id: 'in_checkout', status: 'paid', amount_paid: 5430, billing_reason: 'subscription_create',
+      created: sec('2026-09-07T15:16:05Z'), period_start: sec('2026-09-07T15:16:05Z') };
+    assert.equal(pickCycleInvoice([checkout], weekOf)?.id, 'in_checkout');
+    // It bought 09-13 only: not next week, and a signup from the week before is not this week either.
+    assert.equal(pickCycleInvoice([checkout], '2026-09-20'), null);
+    assert.equal(pickCycleInvoice([{ ...checkout, created: sec('2026-08-31T15:16:05Z') }], weekOf), null);
+    // A Wednesday signup (before Friday midnight cutoff) also bought 09-13.
+    assert.equal(pickCycleInvoice([{ ...checkout, created: sec('2026-09-09T16:07:25Z') }], weekOf)?.id, 'in_checkout');
+    const d = lockAction({ live: liveSub({ status: 'trialing' }), draft: null, settled: checkout, weekOf, now: lockTime });
+    assert.equal(d.action, 'settled');
+    assert.equal(d.reason, 'paid_at_checkout');
+    assert.deepEqual(feedAfterCharge(chargeOutcome(checkout)), { cook: true, charge_status: 'paid', order_status: 'locked' });
+  });
+
   test('chargeOutcome reads the re-fetched invoice, because the wrapper throws on a decline', () => {
     assert.equal(chargeOutcome({ status: 'paid', amount_paid: 9150 }), 'paid');
     assert.equal(chargeOutcome({ status: 'paid', amount_paid: 0, subtotal: 6300, total: 0, discount: { coupon: { id: 'OWNERS100' } } }), 'comp');

@@ -172,8 +172,6 @@ export default {
       // the anchor after it (that reopens the seven-hour leak this replaced on 2026-09-06).
       // Pass 2 runs inside the same invocation five minutes later if anything was marked retry.
       if (day === SAT) ctx.waitUntil(lockWithRetry(env));
-    } else {
-      console.error(`[gainztrain-cron] no branch for cron="${event.cron}" at utc hour ${hour}, nothing ran`);
     } else if (hour === 13) {
       // Saturday-only, FIRST: LOCK PASS 3. Same endpoint, idempotent; anyone still without a charge
       // outcome at 13:00 UTC (7am MDT) is handled before the pre-shop audit below judges the week.
@@ -228,6 +226,8 @@ export default {
         ctx.waitUntil(hit(env, '/api/admin/menu-failsafe'));
         ctx.waitUntil(hit(env, '/api/admin/marketing-weekly'));
       }
+    } else {
+      console.error(`[gainztrain-cron] no branch for cron="${event.cron}" at utc hour ${hour}, nothing ran`);
     }
   },
 };

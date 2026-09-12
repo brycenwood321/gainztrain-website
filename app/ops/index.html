@@ -4986,6 +4986,20 @@
 
       const confirmedMeals = (menu.meals || []).filter(m => m.status === "confirmed");
 
+      // ONE RECIPE SOURCE (2026-09-12). The confirmed-menu snapshot is a COPY of the library meal taken
+      // at confirm time. When the library meal is edited afterwards (cooking mode, batch categories, the
+      // % split) the snapshot keeps the old values and this tab silently disagrees with
+      // /api/admin/shopping-list, which reads the library. Week of 2026-09-13: Fiesta Chicken and
+      // Protein Baked Ziti were "batch" in the library and mode-less in the snapshot, so this tab said
+      // 71.9 lb chicken while the server said 87.9 lb, with Jayson at the store. Resolve the recipe from
+      // the library by name; the snapshot is only a fallback for a meal that is no longer in it.
+      const libByName = {};
+      (loadMealLibrary() || []).forEach(m => { if (m && m.name) libByName[m.name.toLowerCase().trim()] = m; });
+      const recipeFor = (meal) => {
+        const lib = libByName[(meal.name || "").toLowerCase().trim()];
+        return lib ? { ...meal, mode: lib.mode, batch_categories: lib.batch_categories, ingredients: lib.ingredients } : meal;
+      };
+
       // Build map: meal_name_lower → { female: N, male: N } servings ordered
       const mealServings = {};
       orders.forEach(order => {
@@ -5004,7 +5018,7 @@
       const ingMap = {};
       const perMeal = {};   // meal name -> { meal, totalOrders, items }
 
-      confirmedMeals.forEach(meal => {
+      confirmedMeals.map(recipeFor).forEach(meal => {
         if (!meal.ingredients || meal.ingredients.length === 0) return;
         const mealKey = meal.name.toLowerCase().trim();
         const sv      = mealServings[mealKey]; // { male, female } or undefined

@@ -39,7 +39,7 @@ import { notify } from '../../_lib/notify.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
 import { stripe } from '../../_lib/stripe.js';
 import {
-  COOKABLE, cookDecision, lockAction, lockPolicies, pickCycleDraft, chargeOutcome, feedAfterCharge,
+  COOKABLE, cookDecision, lockAction, lockPolicies, pickCycleDraft, pickCycleInvoice, chargeOutcome, feedAfterCharge,
 } from '../../_lib/decide.js';
 
 const DEFAULT_LIMIT = 3;
@@ -245,7 +245,17 @@ export async function onRequestPost(context) {
         } catch { drafts = []; }
       }
       const draft = pickCycleDraft(drafts, weekOf);
-      const act = lockAction({ live, draft, weekOf, policies });
+      // No draft: Stripe may have finalized this cycle's invoice already (it auto-advances about an hour
+      // after the anchor). Read the finalized invoice instead of retrying forever. 2026-09-12: the lock
+      // ran late, Stripe had charged everyone at 08:15, and every pass reported "no draft yet".
+      let settled = null;
+      if (live && !draft) {
+        try {
+          const r = await stripe(env, 'GET', 'invoices', { subscription: sub.stripe_subscription_id, limit: 5 });
+          settled = pickCycleInvoice(r?.data || [], weekOf);
+        } catch { settled = null; }
+      }
+      const act = lockAction({ live, draft, settled, weekOf, policies });
 
       if (act.action === 'skip') { s.skipped.push(`${who}: ${act.message}`); continue; }
       if (act.action === 'retry') { s.retry.push(`${who}: ${act.message}`); continue; }
@@ -269,26 +279,39 @@ export async function onRequestPost(context) {
         continue;
       }
 
-      // 4. Upcharge onto THIS draft. 5. Finalize, pay, re-read.
-      await attachUpchargeToDraft(env, sub, weekOf, order.upchargeCents, draft.id);
-      const { inv, error } = await chargeDraft(env, draft.id);
+      // 4. Upcharge onto THIS draft. 5. Finalize, pay, re-read. SETTLED: Stripe already did 4 and 5 on its
+      // own (the upcharge, if any, is then missing from that invoice: logged, a few dollars under-billed,
+      // never a second charge). Read the invoice it left behind.
+      let inv, error = null, invoiceId;
+      if (act.action === 'settled') {
+        inv = settled; invoiceId = settled.id;
+        if (order.upchargeCents > 0) {
+          await auditRow(env, `subscription:${sub.id}`, 'upcharge_missed_settled', { weekOf, cents: order.upchargeCents, invoiceId });
+        }
+      } else {
+        await attachUpchargeToDraft(env, sub, weekOf, order.upchargeCents, draft.id);
+        ({ inv, error } = await chargeDraft(env, draft.id));
+        invoiceId = draft.id;
+      }
       const outcome = chargeOutcome(inv);
       const feed = feedAfterCharge(outcome, policies);
+      const via = act.action === 'settled' ? ' (charged by Stripe before the lock)' : '';
 
-      if (outcome === 'void') { s.voided.push(`${who}: draft ${draft.id} was voided before the charge (a pause raced the lock), not cooked`); continue; }
+      if (outcome === 'void') { s.voided.push(`${who}: invoice ${invoiceId} was voided before the lock could charge it (a pause raced the lock), not cooked`); continue; }
       if (!feed.order_status) { s.retry.push(`${who}: charge outcome ${outcome}${error ? ` (${error})` : ''}, will retry`); continue; }
 
       // 6. Write, with the outcome. 7. Notify only if cooked.
       await commitOrder(env, sub, weekOf, menu, order, now,
-        { order_status: feed.order_status, charge_status: feed.charge_status, invoice_id: draft.id, charged_at: now });
+        { order_status: feed.order_status, charge_status: feed.charge_status, invoice_id: invoiceId, charged_at: now });
       const amt = ((inv?.amount_paid || 0) / 100).toFixed(2);
+      const lastWeek = (act.reason === 'queued_cancel_last_week' || (act.action === 'settled' && live?.cancel_at_period_end)) ? ', LAST WEEK (cancel queued)' : '';
       if (feed.cook) {
         try { await notifyLocked(env, cust, sub, weekOf, order); } catch { /* non-fatal */ }
-        if (outcome === 'paid') s.paid.push(`${who}: $${amt}, ${order.total} meals${act.reason === 'queued_cancel_last_week' ? ', LAST WEEK (cancel queued)' : ''}`);
-        else if (outcome === 'comp') s.comp.push(`${who}: comp, ${order.total} meals`);
-        else s.declined_cooked.push(`${who}: card DECLINED (${draft.id}), cooked under the cook-and-chase policy${error ? `; ${error}` : ''}`);
+        if (outcome === 'paid') s.paid.push(`${who}: $${amt}, ${order.total} meals${lastWeek}${via}`);
+        else if (outcome === 'comp') s.comp.push(`${who}: comp, ${order.total} meals${via}`);
+        else s.declined_cooked.push(`${who}: card DECLINED (${invoiceId}), cooked under the cook-and-chase policy${via}${error ? `; ${error}` : ''}`);
       } else {
-        s.declined_withheld.push(`${who}: card DECLINED (${draft.id}), NOT cooked under the no-pay-no-food policy`);
+        s.declined_withheld.push(`${who}: card DECLINED (${invoiceId}), NOT cooked under the no-pay-no-food policy${via}`);
       }
     } catch (e) {
       s.errors.push(`${who}: ${String(e).slice(0, 140)}`);

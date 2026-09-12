@@ -26,7 +26,7 @@ import assert from 'node:assert/strict';
 import {
   COOKABLE, cookDecision, invoiceCoversDelivery, paidWeeksFromInvoices,
   paymentCheckReady, emptyScan, notLockedReport, lockNeverRanReport, buildAuditReport,
-  lockAction, lockPolicies, LOCK_POLICY_DEFAULTS, pickCycleDraft, chargeOutcome, feedAfterCharge, livePeriodEndMs,
+  lockAction, lockPolicies, LOCK_POLICY_DEFAULTS, pickCycleDraft, pickCycleInvoice, chargeOutcome, feedAfterCharge, livePeriodEndMs,
 } from '../functions/_lib/decide.js';
 import { anchorForDelivery, deliveryBoughtBy, anchorOnSameDay, ANCHOR_HOUR_UTC, ANCHOR_MINUTE_UTC } from '../functions/_lib/billing_day.js';
 import { cutoffForWeek } from '../functions/_lib/menu.js';
@@ -604,9 +604,12 @@ describe('bill at the lock: anchor, lock decision, charge outcome', () => {
     return { id: 'sub_live', status: 'active', pause_collection: null, cancel_at_period_end: false,
       items: { data: [{ current_period_end: periodEnd }] }, ...rest };
   }
-  // This cycle's draft, created at the anchor.
+  // This cycle's draft, created at the anchor. SHAPED LIKE STRIPE'S, not like we wished: on a
+  // subscription_cycle invoice period_start is the PREVIOUS period's start (the D1 mirror of the real
+  // 2026-09-12 drafts shows 2026-09-05T03:43Z on an invoice created 2026-09-12T07:15Z). The earlier
+  // fixture put period_start on the anchor day and hid a picker that rejected every real draft.
   function draft(over = {}) {
-    return { id: 'in_draft', status: 'draft', created: sec('2026-09-12T07:15:20Z'), period_start: sec('2026-09-12T07:15:00Z'),
+    return { id: 'in_draft', status: 'draft', created: sec('2026-09-12T07:15:20Z'), period_start: sec('2026-09-05T03:43:07Z'),
       billing_reason: 'subscription_cycle', ...over };
   }
   const act = (live, d, policies = LOCK_POLICY_DEFAULTS) => lockAction({ live, draft: d, weekOf, now: lockTime, policies });
@@ -707,13 +710,59 @@ describe('bill at the lock: anchor, lock decision, charge outcome', () => {
   });
 
   test('pickCycleDraft takes this Saturday\'s draft and ignores a stale one and non-drafts', () => {
-    const stale = draft({ id: 'in_old', created: sec('2026-09-05T15:00:56Z'), period_start: sec('2026-09-05T15:00:00Z') });
+    const stale = draft({ id: 'in_old', created: sec('2026-09-05T15:00:56Z'), period_start: sec('2026-08-29T15:00:00Z') });
     const paid = draft({ id: 'in_paid', status: 'paid' });
     const chosen = pickCycleDraft([stale, paid, draft()], weekOf);
     assert.equal(chosen.id, 'in_draft');
     assert.equal(pickCycleDraft([stale], weekOf), null);
     assert.equal(pickCycleDraft([], weekOf), null);
     assert.equal(pickCycleDraft(null, weekOf), null);
+  });
+
+  test('2026-09-12 REPLAY: a real draft (period_start in the previous cycle) is still picked by created', () => {
+    // Every one of the 22 drafts Stripe made at 07:15Z that morning carried a period_start days earlier.
+    // A picker keyed on period_start returned null for all of them: "no draft yet", forever.
+    const real = draft({ period_start: sec('2026-09-07T14:59:39Z') });
+    assert.equal(pickCycleDraft([real], weekOf)?.id, 'in_draft');
+    const older = draft({ id: 'in_prev', created: sec('2026-09-05T15:00:03Z'), period_start: sec('2026-08-29T15:00:00Z') });
+    assert.equal(pickCycleDraft([older, real], weekOf).id, 'in_draft');
+  });
+
+  test('2026-09-12 REPLAY: Stripe finalized the draft before the lock ran; the lock READS it, never charges again', () => {
+    // The cron scheduler fired the retired 07:30 slot, the lock never ran at 08:00, Stripe auto-advanced
+    // every draft at 08:15. At 13:00 the lock found no draft and said retry, 27 times. Now: settled.
+    const paidInv = { id: 'in_settled', status: 'paid', amount_paid: 11427, billing_reason: 'subscription_cycle', created: sec('2026-09-12T07:15:04Z'), period_start: sec('2026-09-07T14:59:19Z') };
+    assert.equal(pickCycleInvoice([paidInv], weekOf).id, 'in_settled');
+    // Courtney: a $0 tier-change proration at 03:39 the same morning must not outrank the renewal.
+    const proration = { id: 'in_pro', status: 'paid', amount_paid: 0, billing_reason: 'subscription_update', created: sec('2026-09-12T03:39:56Z'), period_start: sec('2026-09-07T14:59:25Z') };
+    assert.equal(pickCycleInvoice([proration, paidInv], weekOf).id, 'in_settled');
+    assert.equal(pickCycleInvoice([paidInv, proration], weekOf).id, 'in_settled');
+    // Last week's paid invoice is NOT this cycle's.
+    assert.equal(pickCycleInvoice([{ ...paidInv, id: 'in_last', created: sec('2026-09-05T15:00:03Z') }], weekOf), null);
+    // A draft in the list is never "settled".
+    assert.equal(pickCycleInvoice([draft()], weekOf), null);
+
+    const d = lockAction({ live: liveSub(), draft: null, settled: paidInv, weekOf, now: new Date('2026-09-12T13:00:00Z') });
+    assert.equal(d.action, 'settled');
+    assert.equal(chargeOutcome(paidInv), 'paid');
+    assert.deepEqual(feedAfterCharge('paid'), { cook: true, charge_status: 'paid', order_status: 'locked' });
+    // A draft present still wins: charge it, do not read a stale settled invoice.
+    assert.equal(lockAction({ live: liveSub(), draft: draft(), settled: paidInv, weekOf, now: lockTime }).action, 'charge');
+    // Jyles: paused Friday night, Stripe voided the draft at 08:16. The live read skips him first; if it
+    // did not, the settled void reads as void and feeds nobody.
+    const voidInv = { ...paidInv, id: 'in_void', status: 'void', amount_paid: 0 };
+    assert.equal(lockAction({ live: liveSub({ pause_collection: { behavior: 'void' } }), draft: null, settled: voidInv, weekOf, now: lockTime }).action, 'skip');
+    assert.equal(chargeOutcome(voidInv), 'void');
+    assert.equal(feedAfterCharge('void').cook, false);
+    // A settled OPEN invoice is a decline: cook-and-chase by default, withheld under the other policy.
+    const openInv = { ...paidInv, id: 'in_open', status: 'open', amount_paid: 0 };
+    assert.equal(lockAction({ live: liveSub(), draft: null, settled: openInv, weekOf, now: lockTime }).action, 'settled');
+    assert.equal(feedAfterCharge(chargeOutcome(openInv)).order_status, 'locked');
+    assert.equal(feedAfterCharge(chargeOutcome(openInv), { declined: 'withhold', queuedCancel: 'cook' }).order_status, 'unpaid_not_cooked');
+    // Cancel queued after the anchor, already charged: still their last week, still fed.
+    assert.equal(lockAction({ live: liveSub({ cancel_at_period_end: true }), draft: null, settled: paidInv, weekOf, now: lockTime }).action, 'settled');
+    // No draft AND no settled invoice is still retry.
+    assert.equal(lockAction({ live: liveSub(), draft: null, settled: null, weekOf, now: lockTime }).action, 'retry');
   });
 
   test('chargeOutcome reads the re-fetched invoice, because the wrapper throws on a decline', () => {

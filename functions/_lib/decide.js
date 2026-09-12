@@ -277,7 +277,11 @@ export function livePeriodEndMs(live) {
 //   legacy    the anchor never moved (migration missed this sub, or a resume landed on the old hour):
 //             cook on the old path (pending upcharge, Stripe bills later) and flag it by name.
 //   void      queuedCancel policy is 'void': void the draft and skip.
-export function lockAction({ live, draft, weekOf, now = new Date(), policies = LOCK_POLICY_DEFAULTS }) {
+//   settled   no draft, but Stripe has ALREADY finalized this cycle's invoice (`settled`): it auto-advanced
+//             before the lock ran. Charge nothing; chargeOutcome(settled) says what happened and the
+//             order is locked or withheld from that. Added 2026-09-12, the morning this exact thing
+//             happened to every customer.
+export function lockAction({ live, draft, settled = null, weekOf, now = new Date(), policies = LOCK_POLICY_DEFAULTS }) {
   if (!live) return { action: 'retry', reason: 'no_live_read', message: 'live subscription read failed, will retry' };
   const st = live.status;
   if (st === 'canceled' || st === 'incomplete_expired') {
@@ -302,6 +306,13 @@ export function lockAction({ live, draft, weekOf, now = new Date(), policies = L
       message: `period end ${endMs ? new Date(endMs).toISOString() : 'unknown'} has not rolled past the ${new Date(anchorMs).toISOString()} anchor: cooked on the LEGACY path (billed later), check this subscription's anchor` };
   }
 
+  // Already finalized by Stripe: the money question is answered, read it. Checked BEFORE the queued-cancel
+  // fork because a paid invoice cannot be voided and a void one is already what the policy wanted.
+  if (!draft && settled) {
+    return { action: 'settled', reason: 'stripe_charged_before_lock',
+      message: `Stripe finalized ${settled.id} (${settled.status}) before the lock ran${live.cancel_at_period_end ? ', cancel queued: this is their last week' : ''}` };
+  }
+
   if (live.cancel_at_period_end) {
     if (policies.queuedCancel === 'void') {
       return { action: 'void', reason: 'queued_cancel_void_policy', message: 'cancel queued after the anchor; policy is void: draft voided, not cooked' };
@@ -314,15 +325,43 @@ export function lockAction({ live, draft, weekOf, now = new Date(), policies = L
   return { action: 'charge', reason: 'draft_ready' };
 }
 
-// Pick this cycle's draft out of a list of the subscription's draft invoices: the one whose period
-// starts on or after the anchor day for weekOf (Saturday 00:00 UTC). Stripe keeps voided/paid ones
-// out of a status=draft list already; this guards against a stale draft from a previous cycle.
+// Pick this cycle's draft out of a list of the subscription's draft invoices. THE SIGNAL IS `created`:
+// Stripe creates the renewal draft AT the anchor (Sat 07:15Z), so this cycle's draft was created on or
+// after Saturday 00:00 UTC and a stale one from a previous cycle was not.
+//
+// ⚠️ NOT `period_start`. On a subscription_cycle invoice Stripe's invoice-level period_start is the start
+// of the period being CLOSED, i.e. the PREVIOUS cycle (the D1 mirror of 2026-09-12's drafts shows
+// period_start 2026-09-05 and 2026-09-07 on invoices created 2026-09-12T07:15Z). Until 2026-09-12 this
+// filtered on period_start first, so no real draft ever qualified, every customer read "no draft yet"
+// and the lock could never charge anyone. The test fixture had supplied its own period_start on the
+// anchor day, which is why the test passed (memory: tests-that-supply-their-own-answer).
+function cycleDayStart(weekOf) {
+  const anchor = anchorForDelivery(weekOf);
+  return Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate()) / 1000;
+}
+function inThisCycle(inv, dayStart) {
+  return (inv.created || 0) >= dayStart || (inv.period_start || 0) >= dayStart;
+}
 export function pickCycleDraft(drafts, weekOf) {
   if (!Array.isArray(drafts) || drafts.length === 0) return null;
-  const anchor = anchorForDelivery(weekOf);
-  const dayStart = Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate()) / 1000;
-  const ok = drafts.filter((d) => d && d.status === 'draft' && (d.period_start || d.created || 0) >= dayStart);
+  const dayStart = cycleDayStart(weekOf);
+  const ok = drafts.filter((d) => d && d.status === 'draft' && inThisCycle(d, dayStart));
   ok.sort((a, b) => (b.created || 0) - (a.created || 0));
+  return ok[0] || null;
+}
+
+// This cycle's invoice when Stripe has ALREADY finalized it (paid, open, uncollectible or void). Stripe
+// auto-advances a draft about an hour after creating it, so if the lock runs late (2026-09-12: the cron
+// scheduler kept firing the retired 07:30 slot and never the 08:00 one, and Stripe charged 22 customers
+// at 08:15 on its own) there is no draft left to charge. The money already moved; the lock's job is
+// then to READ the outcome and lock the food, never to charge again. Same `created` rule as the draft.
+export function pickCycleInvoice(invoices, weekOf) {
+  if (!Array.isArray(invoices) || invoices.length === 0) return null;
+  const dayStart = cycleDayStart(weekOf);
+  const ok = invoices.filter((i) => i && i.status && i.status !== 'draft' && i.status !== 'deleted' && inThisCycle(i, dayStart));
+  // The RENEWAL first (a same-day tier change also raises a small proration invoice), then newest.
+  const cyc = (i) => (i.billing_reason === 'subscription_cycle' ? 1 : 0);
+  ok.sort((a, b) => (cyc(b) - cyc(a)) || ((b.created || 0) - (a.created || 0)));
   return ok[0] || null;
 }
 

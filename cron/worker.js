@@ -142,19 +142,29 @@ async function lockWithRetry(env) {
 
 export default {
   async scheduled(event, env, ctx) {
-    const day = new Date(event.scheduledTime).getUTCDay();
+    const when = new Date(event.scheduledTime);
+    const day = when.getUTCDay();
+    // ⚠️ BRANCH ON THE SCHEDULED HOUR, NOT event.cron. 2026-09-12: the 09-07 deploy replaced the 07:30
+    // lock trigger with 08:00, the schedules API agreed, and Cloudflare's scheduler kept firing the
+    // RETIRED "30 7 * * *" every day and never the new one. The exact-string match below found no branch
+    // for it, so the lock ran zero times and Stripe charged 22 customers on its own at 08:15 with no order
+    // locked and no shopping list. The hour is what the branch actually means; a stale trigger string
+    // must still land in the right branch. (The stale slot is 07:30, after the 07:15 anchor, so the lock
+    // path is correct from either.)
+    const hour = when.getUTCHours();
+    console.log(`[gainztrain-cron] fired cron="${event.cron}" at ${when.toISOString()} (utc hour ${hour}, day ${day})`);
 
-    if (event.cron === '0 17 * * *') {
+    if (hour === 17) {
       // Wednesday 17:00 UTC (~10–11am Mountain) — remind subscribers who haven't picked.
       if (day === WED) ctx.waitUntil(hit(env, '/api/admin/send-reminders'));
       // Saturday 17:00 UTC (11am MDT) — POST-BILLING reconciliation. Billing anchors fire at 15:00 UTC,
       // so this is the run that catches a charge that FAILED this morning, while there's still a day
       // before Sunday delivery to fix the card or pull them from the run.
       if (day === SAT) ctx.waitUntil(hit(env, '/api/admin/payment-order-audit'));
-    } else if (event.cron === '0 23 * * *') {
+    } else if (hour === 23) {
       // Friday 23:00 UTC (5pm MDT / 4pm MST) — LAST CALL, hours before tonight's MIDNIGHT MT cutoff.
       if (day === FRI) ctx.waitUntil(hit(env, '/api/admin/send-reminders?final=1'));
-    } else if (event.cron === '0 8 * * *') {
+    } else if (hour === 7 || hour === 8) {
       // Saturday 08:00 UTC, LOCK PASS 1. After the Friday-midnight MT cutoff (Sat 06:00Z MDT / 07:00Z
       // MST) AND after the 07:15Z billing anchor has drafted every renewal. The lock CHARGES each draft,
       // then locks complete orders and auto-fills anyone who didn't pick, so the kitchen has a PAID
@@ -162,7 +172,9 @@ export default {
       // the anchor after it (that reopens the seven-hour leak this replaced on 2026-09-06).
       // Pass 2 runs inside the same invocation five minutes later if anything was marked retry.
       if (day === SAT) ctx.waitUntil(lockWithRetry(env));
-    } else if (event.cron === '0 13 * * *') {
+    } else {
+      console.error(`[gainztrain-cron] no branch for cron="${event.cron}" at utc hour ${hour}, nothing ran`);
+    } else if (hour === 13) {
       // Saturday-only, FIRST: LOCK PASS 3. Same endpoint, idempotent; anyone still without a charge
       // outcome at 13:00 UTC (7am MDT) is handled before the pre-shop audit below judges the week.
       if (day === SAT) ctx.waitUntil(lockWeekLoop(env, 3));

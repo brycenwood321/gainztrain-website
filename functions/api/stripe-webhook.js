@@ -169,8 +169,21 @@ async function safeFuel8Cap(env, event) {
 
     const row = await one(env.DB, `SELECT weeks_discounted FROM promo_redemptions WHERE customer_id = ? AND code = 'FUEL8'`, customerId);
     if (row && row.weeks_discounted >= 4) {
-      try { await stripe(env, 'DELETE', `subscriptions/${subId}/discount`); } catch { /* discount may already be cleared */ }
-      try { await audit(env, `subscription:${subId}`, 'fuel8_completed', { customerId, weeks: row.weeks_discounted }); } catch { /* non-fatal */ }
+      // 2026-09-14: the cap was NOT holding. Five subscriptions logged fuel8_completed at weeks:4 on 09-05
+      // and 09-07, then paid a FIFTH discounted invoice on 09-12 (audit_log weeks:5). The DELETE below was
+      // swallowed by its catch, so nothing ever said so. Now: clear the subscription's discounts array the
+      // way the pinned API version expects (POST with an empty `discounts`), keep the legacy DELETE as a
+      // second attempt, re-read the subscription, and write an audit row either way so a failure is visible.
+      const errors = [];
+      try { await stripe(env, 'POST', `subscriptions/${subId}`, { discounts: '' }); } catch (e) { errors.push(`post_discounts_empty: ${e?.message || e}`); }
+      try { await stripe(env, 'DELETE', `subscriptions/${subId}/discount`); } catch (e) { errors.push(`delete_discount: ${e?.message || e}`); }
+      let stillDiscounted = null;
+      try {
+        const after = await stripe(env, 'GET', `subscriptions/${subId}`);
+        stillDiscounted = !!after?.discount || (Array.isArray(after?.discounts) && after.discounts.length > 0);
+      } catch (e) { errors.push(`reread: ${e?.message || e}`); }
+      const action = stillDiscounted === false ? 'fuel8_completed' : 'fuel8_cap_failed';
+      try { await audit(env, `subscription:${subId}`, action, { customerId, weeks: row.weeks_discounted, stillDiscounted, errors }); } catch { /* non-fatal */ }
     }
   } catch { /* promo cap must never fail the webhook */ }
 }

@@ -134,10 +134,38 @@ async function lockWeekLoop(env, pass) {
 // plan of a separate 08:30 trigger could not ship. A final pass 3 rides the 13:00 Saturday trigger.
 async function lockWithRetry(env) {
   const retries = await lockWeekLoop(env, 1);
-  if (!retries) return;
-  console.log(`[gainztrain-cron] lock pass 1 left ${retries} retry, waiting 5 min for pass 2`);
-  await new Promise((res) => setTimeout(res, 5 * 60 * 1000));
-  await lockWeekLoop(env, 2);
+  if (retries) {
+    console.log(`[gainztrain-cron] lock pass 1 left ${retries} retry, waiting 5 min for pass 2`);
+    await new Promise((res) => setTimeout(res, 5 * 60 * 1000));
+    await lockWeekLoop(env, 2);
+  }
+  await verifyLocked(env);
+}
+
+// GROUND TRUTH AFTER THE LOCK (2026-09-14). On 2026-09-12 the lock ran zero times and the first human
+// signal was Jayson at the store with no list, six hours later. The lock endpoint pages the owners
+// only when it RUNS; this reads the locked count back from the shopping list and pages when the
+// answer is nobody, so a lock that never happened is loud at 01:30 MT, not at 08:00 MT.
+async function verifyLocked(env) {
+  const list = await callJson(env, 'GET', '/api/admin/shopping-list');
+  const orders = list && list.totals ? list.totals.orders : null;
+  const meals = list && list.totals ? list.totals.meals : null;
+  if (orders == null) {
+    await callJson(env, 'POST', '/api/admin/alert', {
+      summary: 'LOCK UNVERIFIED: could not read the shopping list after the Saturday lock',
+      lines: ['The lock may be fine. Nothing confirmed it. Check /api/admin/lock-week and the ops Shopping tab by hand.'],
+    });
+    return;
+  }
+  if (orders === 0) {
+    await callJson(env, 'POST', '/api/admin/alert', {
+      summary: 'LOCK LOCKED NOBODY: 0 orders locked for this Sunday after the Saturday lock ran',
+      lines: ['Jayson has no shopping list.', 'Run by hand: POST /api/admin/lock-week?limit=3 until remaining is 0.', 'Pass 3 at 13:00 UTC will also retry on its own.'],
+    });
+    console.error('[gainztrain-cron] lock verify: 0 orders locked');
+    return;
+  }
+  console.log(`[gainztrain-cron] lock verified: ${orders} orders, ${meals} meals locked`);
 }
 
 export default {
@@ -150,7 +178,9 @@ export default {
     // for it, so the lock ran zero times and Stripe charged 22 customers on its own at 08:15 with no order
     // locked and no shopping list. The hour is what the branch actually means; a stale trigger string
     // must still land in the right branch. (The stale slot is 07:30, after the 07:15 anchor, so the lock
-    // path is correct from either.)
+    // path is correct from either.) CONFIRMED 2026-09-14: a full redeploy on 09-12 re-registered "0 8" and
+    // Cloudflare STILL fires 07:30 daily and 08:00 never. Treat the schedule record as decorative; the
+    // hour dispatch is what makes Saturday work.
     const hour = when.getUTCHours();
     console.log(`[gainztrain-cron] fired cron="${event.cron}" at ${when.toISOString()} (utc hour ${hour}, day ${day})`);
 

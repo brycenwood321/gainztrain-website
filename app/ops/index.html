@@ -5075,7 +5075,11 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             week_of: wkPretty,
-            meals: confirmed.map(m => ({ name: m.name, macros: m.macros, upcharge_per_meal: m.upcharge || 0, image: mealImage(m) })),
+            // ingredients ride along so finalize-menu can snapshot their NAMES onto the published menu
+            // for the public "What is in it" popout. Stripping them here is why the first attempt
+            // published empty lists: the server change had nothing to read. Server takes names only.
+            meals: confirmed.map(m => ({ name: m.name, macros: m.macros, upcharge_per_meal: m.upcharge || 0,
+                                         image: mealImage(m), ingredients: m.ingredients || [] })),
           }),
         });
         const data = await res.json().catch(() => ({}));

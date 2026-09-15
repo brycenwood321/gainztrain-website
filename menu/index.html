@@ -64,7 +64,26 @@
     .cartbar-cta:disabled { opacity:.5; cursor:default; }
     .cartbar-sub { font-size:.78rem; color:#bbb; margin-top:.15rem; }
     body.has-cartbar { padding-bottom:5.5rem; }
-  </style>
+  
+    /* Ingredient popout */
+    .meal-ing-btn{display:block;width:100%;margin:.65rem 0 0;padding:.5rem .75rem;font:inherit;
+      font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;
+      color:var(--gray,#4a4440);background:transparent;border:1px solid var(--surface-dark,#ede9e3);border-radius:8px}
+    .meal-ing-btn:hover{background:var(--surface-mid,#f5f2ee)}
+    .meal-ing-btn:focus-visible{outline:2px solid var(--orange,#ff6b35);outline-offset:2px}
+    .ing-dialog{border:none;border-radius:14px;padding:1.25rem 1.35rem 1.4rem;max-width:26rem;width:calc(100% - 2rem);
+      color:var(--black,#1a1614);background:var(--surface,#fff);box-shadow:0 18px 50px rgba(0,0,0,.22)}
+    .ing-dialog::backdrop{background:rgba(26,22,20,.55)}
+    .ing-head{display:flex;align-items:flex-start;gap:1rem}
+    .ing-head h3{margin:0;font-size:1.12rem;font-weight:800;line-height:1.25;flex:1}
+    .ing-close{border:none;background:none;font-size:1.6rem;line-height:1;cursor:pointer;color:var(--text-muted,#7a7270);padding:0 .15rem}
+    .ing-close:focus-visible{outline:2px solid var(--orange,#ff6b35);outline-offset:2px}
+    .ing-sub{margin:.3rem 0 .85rem;font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted,#7a7270)}
+    .ing-list{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:.4rem}
+    .ing-list li{background:var(--surface-mid,#f5f2ee);border:1px solid var(--surface-dark,#ede9e3);
+      border-radius:999px;padding:.35rem .7rem;font-size:.88rem;font-weight:600}
+    .ing-note{margin:1rem 0 0;font-size:.76rem;line-height:1.5;color:var(--text-muted,#7a7270)}
+</style>
 <script src="/assets/js/attribution.js?v=20260805" defer></script>
 </head>
 <body>
@@ -342,6 +361,10 @@
             : '<div class="pick-row"><span class="pick-label">' +
               (cur.ordering_closed ? 'Ordering reopens Sunday with the new menu' : 'New menu drops soon') +
               '</span></div>';
+          var hasIng = Array.isArray(m.ingredients) && m.ingredients.length > 0;
+          var ingBtn = hasIng
+            ? '<button type="button" class="meal-ing-btn" data-ing="' + m.position + '">What is in it</button>'
+            : '';
           return '<div class="meal-card fade-up">' + img +
             '<div class="meal-card-body">' +
             '<p class="meal-card-name">' + esc(m.name) + up + '</p>' +
@@ -354,8 +377,17 @@
             '<div class="macro-pill"><span class="macro-val">' + esc(m.fat) + 'g</span><span class="macro-key">Fat</span></div>' +
             '<div class="macro-divider"></div>' +
             '<div class="macro-pill"><span class="macro-val">' + esc(m.calories) + '</span><span class="macro-key">Cal</span></div>' +
-            '</div>' + picker + '</div></div>';
+            '</div>' + ingBtn + picker + '</div></div>';
         }).join('');
+        // Ingredient popout. Names only, snapshotted onto the menu when it was finalized, so renaming a
+        // meal later never changes what a published week said it contained.
+        grid.querySelectorAll('[data-ing]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var meal = cur.meals.filter(function (x) { return String(x.position) === String(b.dataset.ing); })[0];
+            if (meal) openIngredients(meal);
+          });
+        });
+
         // Reveal the meals + hide the loader/empty message IMMEDIATELY, before any picker/cart wiring.
         // Previously an error in the cart wiring (which runs AFTER the meals are built) hit the outer catch
         // and hid the WHOLE menu behind "being updated" with the meals left invisible. The menu must always
@@ -393,5 +425,47 @@
     })();
   </script>
   <script src="../assets/js/main.js"></script>
+
+  <!-- Ingredient popout. Names come from the published menu, snapshotted at finalize. -->
+  <dialog id="ingDialog" class="ing-dialog" aria-labelledby="ingTitle">
+    <div class="ing-head">
+      <h3 id="ingTitle"></h3>
+      <button type="button" class="ing-close" id="ingClose" aria-label="Close">&times;</button>
+    </div>
+    <p class="ing-sub">What goes into this meal</p>
+    <ul class="ing-list" id="ingList"></ul>
+    <p class="ing-note" id="ingAllergen" hidden></p>
+  </dialog>
+
+  <script>
+    // Ingredient popout. Deliberately shows NAMES only: no grams, no percentages.
+    // The allergen line stays hidden until there is real per-meal allergen data behind it. Do NOT
+    // infer allergens from these names: the list comes from the portioning model, which never needed
+    // to track oils, marinades or seasonings, so it can be incomplete in exactly the way that matters.
+    function openIngredients(meal) {
+      var dlg = document.getElementById('ingDialog');
+      if (!dlg) return;
+      document.getElementById('ingTitle').textContent = meal.name || 'Meal';
+      var ul = document.getElementById('ingList');
+      ul.innerHTML = '';
+      (meal.ingredients || []).forEach(function (n) {
+        var li = document.createElement('li');
+        li.textContent = n;
+        ul.appendChild(li);
+      });
+      var al = document.getElementById('ingAllergen');
+      if (meal.allergens && String(meal.allergens).trim()) {
+        al.textContent = 'Allergens: ' + meal.allergens;
+        al.hidden = false;
+      } else { al.hidden = true; }
+      if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+      var dlg = document.getElementById('ingDialog');
+      var x = document.getElementById('ingClose');
+      if (x && dlg) x.addEventListener('click', function () { dlg.close ? dlg.close() : dlg.removeAttribute('open'); });
+      if (dlg) dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+    });
+  </script>
 </body>
 </html>

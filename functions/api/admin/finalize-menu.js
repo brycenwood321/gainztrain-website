@@ -29,8 +29,36 @@ function slugify(s) {
 }
 
 // One dashboard meal → the canonical weekly_menus meal shape the customer picker + ops + lock-week read.
-// Marissa's Menu tab supplies name + macros (and ingredients, which are kitchen-only and not needed here);
-// the marketing/billing fields are defaulted so the customer picker renders identically to a menus.json menu.
+// Marissa's Menu tab supplies name + macros; the marketing/billing fields are defaulted so the customer
+// picker renders identically to a menus.json menu.
+//
+// INGREDIENT NAMES ARE SNAPSHOTTED HERE (2026-09-15). They used to be dropped as "kitchen-only", so the
+// public menu had no way to show what is in a dish. Names only: no grams and no percentages, because
+// those are the recipe and they differ per customer anyway.
+// Snapshotting rather than looking them up live is deliberate. A live lookup matches the library by
+// NAME, and the whole point of showing ingredients is that Marissa can then rename the meals back to
+// short ones, which would orphan every past menu the moment a library entry is renamed. A snapshot
+// travels with the published week and survives any later rename.
+// ⚠️ These lists come from the PORTIONING model, which only ever needed the components it buys by
+// weight. Oils, marinades, seasonings and coatings may simply not be in there. Treat them as a
+// starting point that the kitchen reviews, NOT as a complete ingredient declaration, and never derive
+// allergens from them: an inference that is usually right is exactly the kind that hurts someone.
+function ingredientNames(m) {
+  const seen = new Set();
+  const out = [];
+  for (const line of ((m && m.ingredients) || [])) {
+    const raw = line && (typeof line === 'string' ? line : line.item);
+    const name = String(raw || '').trim();
+    if (!name) continue;
+    const k = name.toLowerCase();
+    if (seen.has(k)) continue;          // the same item can appear twice across categories
+    seen.add(k);
+    out.push(name.slice(0, 60));
+    if (out.length >= 30) break;        // a ceiling so a bad row cannot bloat every published menu
+  }
+  return out;
+}
+
 function normalizeMeal(m, i) {
   const macros = (m && m.macros) || {};
   const protein = Math.round(Number(macros.protein) || 0);
@@ -46,6 +74,7 @@ function normalizeMeal(m, i) {
     emoji: String((m && m.emoji) || '🍱'),
     upcharge_per_meal: Number(m && m.upcharge_per_meal) || 0, // no upcharge UI in the dashboard yet → standard
     slug: slugify((m && m.slug) || (m && m.name)),
+    ingredients: ingredientNames(m),
   };
 }
 

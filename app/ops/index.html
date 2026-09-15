@@ -264,6 +264,18 @@
     #tab-assembly .pack-row.on .pack-lbl { color: #9a908c; }
     #tab-assembly .pack-empty { color: #9a908c; }
 
+    /* Portioning view: the weight editor affordance and the model-vs-kitchen note. */
+    .portion-edit {
+      flex: 0 0 auto; font-size: .64rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+      color: #7a7270; border: 1px solid #e8e4df; border-radius: 999px; padding: 5px 9px; align-self: center;
+    }
+    #tab-assembly .portion-edit { color: #9a908c; border-color: #37302c; }
+    .portion-note {
+      font-size: .66rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+      color: #b3aaa4; padding: 0 14px 8px 56px; margin-top: -6px;
+    }
+    #tab-assembly .portion-note { color: #6f655f; }
+
     /* Tabs retired from the bar but kept in the file. Assembly's pack list made Pickup redundant, and
        Activity moved under Overview. Delete this class from an element to bring its tab back. */
     .tab-hidden { display: none !important; }
@@ -2453,6 +2465,7 @@
         <div class="pack-seg">
           <button type="button" id="pack-by-client" aria-pressed="true">By client</button>
           <button type="button" id="pack-by-meal" aria-pressed="false">By meal</button>
+          <button type="button" id="pack-by-portion" aria-pressed="false">Portions</button>
         </div>
         <div id="pack-list"></div>
       </div>
@@ -2818,6 +2831,8 @@
         return;
       }
 
+      if (packView === "portion") { renderPortions(orders, host); syncSegButtons(); return; }
+
       let html = "";
       if (packView === "client") {
         [["pickup", "Pickup"], ["delivery", "Delivery"]].forEach(([method, title]) => {
@@ -2878,10 +2893,153 @@
         if (packed.has(packKey(o.customer_id, m.meal_name))) done += qtyOf(m);
       }));
       packProgress(done, total);
-      const byClient = document.getElementById("pack-by-client");
-      const byMealBtn = document.getElementById("pack-by-meal");
-      if (byClient) byClient.setAttribute("aria-pressed", packView === "client");
-      if (byMealBtn) byMealBtn.setAttribute("aria-pressed", packView === "meal");
+      syncSegButtons();
+    }
+
+    function syncSegButtons() {
+      const map = { "pack-by-client": "client", "pack-by-meal": "meal", "pack-by-portion": "portion" };
+      Object.entries(map).forEach(([id, v]) => {
+        const el = document.getElementById(id);
+        if (el) el.setAttribute("aria-pressed", packView === v);
+      });
+    }
+
+    // ── PORTIONING VIEW (2026-09-15) ────────────────────────────────────────────────────────────
+    // A third grouping that deliberately shares NOTHING with By client / By meal. Those two are the
+    // same line items (one client's order of one meal) grouped two ways, so a tick in one shows in the
+    // other. This one answers a different question at a different time: before any bagging, how many
+    // portions of each meal at each size do I weigh out. Its own ticks, its own keys.
+    //
+    // SIX buckets (M/F x Cut/Maintain/Bulk) even though grams currently vary by SEX only and most
+    // customers default to Male/Maintain. Marissa's call: the categories are about to start mattering
+    // and she will blast customers to set them, so the shape is built now rather than retrofitted.
+    const SEXES = [['M', 'Male'], ['F', 'Female']];
+    const GOALS = ['Cut', 'Maintain', 'Bulk'];
+    const PORTION_LS = 'gainztrain_portioned';
+    const AW_LS = 'gainztrain_assembly_weights';
+    const portionKey = (meal, sex, goal) => `${meal}::${sex}::${goal}`;
+    const portionWeekKey = () => 'portioned_' + getWeekStr();
+
+    function loadPortioned() {
+      try { return new Set(JSON.parse(localStorage.getItem(PORTION_LS) || '[]')); } catch { return new Set(); }
+    }
+    function savePortioned(set) {
+      const arr = [...set];
+      localStorage.setItem(PORTION_LS, JSON.stringify(arr));
+      try { pushSharedStore(portionWeekKey(), arr); } catch { /* offline, local copy holds */ }
+    }
+    function loadAssemblyWeights() {
+      try { return JSON.parse(localStorage.getItem(AW_LS) || '{}') || {}; } catch { return {}; }
+    }
+    function saveAssemblyWeights(obj) {
+      localStorage.setItem(AW_LS, JSON.stringify(obj));
+      try { pushSharedStore('assembly_weights', obj); } catch { /* offline */ }
+    }
+    async function hydratePortioning() {
+      try {
+        const [a, b] = await Promise.all([
+          fetch('/api/admin/ops-store?key=' + portionWeekKey(), { credentials: 'include' }),
+          fetch('/api/admin/ops-store?key=assembly_weights', { credentials: 'include' }),
+        ]);
+        if (a.ok) {
+          const d = await a.json();
+          if (Array.isArray(d.value) && d.value.length) localStorage.setItem(PORTION_LS, JSON.stringify(d.value));
+        }
+        if (b.ok) {
+          const d = await b.json();
+          if (d.value && !Array.isArray(d.value) && Object.keys(d.value).length) {
+            localStorage.setItem(AW_LS, JSON.stringify(d.value));
+          }
+        }
+        if (packView === 'portion') renderAssembly();
+      } catch { /* offline */ }
+    }
+
+    // What the MODEL says a portion weighs, mirroring the shopping list: batched categories pool into
+    // one combined mix, unbatched ones stay separate. Shown in grey next to the kitchen's real number
+    // so a disagreement is visible rather than silent. Ziti male reads 410 here and 300 in the kitchen.
+    function computedPortion(mealName, sex) {
+      const lib = (loadMealLibrary() || []).find(m => (m.name || '').trim().toLowerCase() === String(mealName || '').trim().toLowerCase());
+      if (!lib) return null;
+      const T = (MACROS[sex] || {}).Maintain;
+      if (!T) return null;
+      const MAP = { protein: 'protein', carbs: 'carbs', veggies: 'veggies' };
+      const batch = (lib.mode === 'batch' && Array.isArray(lib.batch_categories)) ? lib.batch_categories : [];
+      const cats = [];
+      (lib.ingredients || []).forEach(i => {
+        const c = i.category;
+        if (c && c !== 'misc' && MAP[c] && !cats.includes(c)) cats.push(c);
+      });
+      if (!cats.length) return null;
+      const parts = [];
+      if (batch.length) {
+        const total = batch.reduce((s, c) => s + (T[MAP[c]] || 0), 0);
+        parts.push(`${total}g ${batch.join('+')} mix`);
+        cats.filter(c => !batch.includes(c)).forEach(c => parts.push(`${T[MAP[c]] || 0}g ${c}`));
+      } else {
+        cats.forEach(c => parts.push(`${T[MAP[c]] || 0}g ${c}`));
+      }
+      return parts.join(' + ');
+    }
+
+    function renderPortions(orders, host) {
+      const done = loadPortioned();
+      const weights = loadAssemblyWeights();
+      const esc = t => String(t == null ? '' : t)
+        .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+      // meal -> bucket -> portion count. A bucket is one sex + one goal.
+      const byMeal = new Map();
+      orders.forEach(o => {
+        const sex = o.gender === 'F' ? 'F' : 'M';
+        const goal = GOALS.includes(o.goal) ? o.goal : 'Maintain';
+        (o.meals || []).forEach(m => {
+          const n = (m.meal_name || '').trim();
+          if (!n) return;
+          if (!byMeal.has(n)) byMeal.set(n, {});
+          const b = byMeal.get(n);
+          const k = sex + '|' + goal;
+          b[k] = (b[k] || 0) + (Number(m.quantity) || 0);
+        });
+      });
+      if (!byMeal.size) {
+        host.innerHTML = '<div class="pack-empty">No orders loaded. Use <strong>Pull Orders</strong> on the Orders tab first.</div>';
+        return;
+      }
+
+      const meals = [...byMeal.entries()]
+        .map(([meal, b]) => ({ meal, b, total: Object.values(b).reduce((s, n) => s + n, 0) }))
+        .sort((a, b) => b.total - a.total);
+
+      let html = '<div class="pack-ghead"><span>Portions &middot; ' + meals.length + ' meals</span><span class="rule"></span></div>';
+      meals.forEach(({ meal, b, total }) => {
+        const allDone = SEXES.every(([sx]) => GOALS.every(g => !b[sx + '|' + g] || done.has(portionKey(meal, sx, g))));
+        let rows = '';
+        SEXES.forEach(([sx, sxLabel]) => {
+          const computed = computedPortion(meal, sx);
+          GOALS.forEach(g => {
+            const n = b[sx + '|' + g] || 0;
+            if (!n) return;                       // only show buckets that were actually ordered
+            const key = portionKey(meal, sx, g);
+            const on = done.has(key);
+            const ov = weights[key];
+            rows += '<button type="button" class="pack-row portion-row' + (on ? ' on' : '') + '"'
+              + ' data-pk="' + esc(key) + '" aria-pressed="' + on + '">'
+              + '<span class="pack-box">' + PACK_CHECK + '</span>'
+              + '<span class="pack-qty">' + n + '</span>'
+              + '<span class="pack-lbl">' + esc(sxLabel + ' ' + g)
+              + '<span class="pack-size">' + (ov ? esc(ov) + ' &middot; weighed here' : (computed ? esc(computed) : 'no recipe in library'))
+              + '</span></span>'
+              + '<span class="portion-edit" data-edit="' + esc(key) + '" title="Set the real assembly weight">'
+              + (ov ? 'edit' : 'set') + '</span></button>';
+            if (ov && computed) {
+              rows += '<div class="portion-note">model says ' + esc(computed) + '</div>';
+            }
+          });
+        });
+        html += packPill(meal, total + ' PORTIONS', rows, allDone);
+      });
+      host.innerHTML = html;
     }
 
     // Reuse the existing progress header so the top of the tab still means something.
@@ -2912,6 +3070,36 @@
         renderAssembly();
         return;
       }
+      // Portioning view: its own tick namespace and its own weight editor. Handled BEFORE the
+      // pack-row branch below so a portion row never writes into the bagging state.
+      const edit = e.target.closest && e.target.closest("[data-edit]");
+      if (edit) {
+        e.stopPropagation();
+        const k = edit.dataset.edit;
+        const w = loadAssemblyWeights();
+        const cur = w[k] || "";
+        const next = prompt(
+          "Real assembly weight for this portion.\n\n" +
+          "Type what the kitchen actually weighs out, e.g. \"300g total mix\".\n" +
+          "This is a reference for prep day only. It does NOT change the shopping list.\n\n" +
+          "Leave blank to clear it.", cur);
+        if (next === null) return;
+        const v = String(next).trim();
+        if (v) w[k] = v; else delete w[k];
+        saveAssemblyWeights(w);
+        renderAssembly();
+        return;
+      }
+      const prow = e.target.closest && e.target.closest(".portion-row");
+      if (prow) {
+        const k = prow.dataset.pk;
+        const set = loadPortioned();
+        set.has(k) ? set.delete(k) : set.add(k);
+        savePortioned(set);
+        renderAssembly();
+        return;
+      }
+
       const row = e.target.closest && e.target.closest(".pack-row");
       if (!row) return;
       const key = packKey(row.dataset.cid, row.dataset.meal);
@@ -5368,6 +5556,7 @@
         if (tab.dataset.tab === "assembly") {
           renderAssembly();
           hydratePacked();   // pick up ticks another phone made while this one was on a different tab
+          hydratePortioning();
         }
 
         if (tab.dataset.tab === "orders") {
@@ -6428,11 +6617,14 @@
     applyPackMode();       // hide the scanner + manual scan bar while PACK_MODE is on
     renderAssembly();
     hydratePacked();       // pull ticks other staff devices already made this week
+    hydratePortioning();   // pull portioning ticks + the kitchen's real assembly weights
     {
       const bc = document.getElementById("pack-by-client");
       const bm = document.getElementById("pack-by-meal");
       if (bc) bc.addEventListener("click", () => { packView = "client"; renderAssembly(); });
       if (bm) bm.addEventListener("click", () => { packView = "meal"; renderAssembly(); });
+      const bp = document.getElementById("pack-by-portion");
+      if (bp) bp.addEventListener("click", () => { packView = "portion"; renderAssembly(); });
     }
 
     // If there were already scanned items (page refresh), show the last one

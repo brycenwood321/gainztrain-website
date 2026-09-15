@@ -8,7 +8,7 @@ import { json, fail } from '../../_lib/respond.js';
 import { requireStaffOrAdmin, requireOwner } from '../../_lib/admin.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 
-const ALLOWED = new Set(['meal_library', 'custom_ingredients', 'ingredient_library']);
+const ALLOWED = new Set(['meal_library', 'custom_ingredients', 'ingredient_library', 'assembly_weights']);
 // Keys whose WRITES are owner-only (reads stay staff-level so the kitchen shopping list can use them).
 // The ingredient library drives shopping-list quantities + costs, so only owners may edit it.
 const OWNER_WRITE = new Set(['ingredient_library']);
@@ -21,7 +21,13 @@ const PREP_ORDERS_RE = /^prep_orders_\d{8}$/;
 // Assembly pack-list ticks for a week (packed_YYYYMMDD): which client+meal lines are bagged. Shared so
 // two staff bagging on two phones see one set of ticks. Staff-writable, same as the order list.
 const PACKED_RE = /^packed_\d{8}$/;
-const keyAllowed = (k) => ALLOWED.has(k) || MENU_DRAFT_RE.test(k) || PREP_ORDERS_RE.test(k) || PACKED_RE.test(k);
+// Portioning tab (2026-09-15): which meal+portion buckets have been weighed out for a week, and the
+// kitchen's REAL assembly weights per meal. The weights are a display reference only and deliberately
+// do NOT feed the shopping list: the computed macro sum says Ziti male is 410g, the kitchen portions
+// 300g, and buying has been correct in practice, so the model is what is wrong, not the buying.
+const PORTIONED_RE = /^portioned_\d{8}$/;
+const keyAllowed = (k) => ALLOWED.has(k) || MENU_DRAFT_RE.test(k) || PREP_ORDERS_RE.test(k)
+  || PACKED_RE.test(k) || PORTIONED_RE.test(k);
 const MAX_BYTES = 800000; // generous ceiling; the meal catalog is small JSON
 
 export async function onRequestGet(context) {

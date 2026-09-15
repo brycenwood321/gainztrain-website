@@ -34,6 +34,27 @@ export async function onRequestGet(context) {
     ? `status NOT IN ('skipped_paused','skipped_canceled')`
     : `status = 'locked'`;
 
+  const wm = await one(env.DB, `SELECT meals_json FROM weekly_menus WHERE week_of = ?`, week);
+  const slugByPosition = {}, macroByPosition = {}, nameByPosition = {};
+  try {
+    (JSON.parse(wm?.meals_json || '[]') || []).forEach((m) => {
+      if (m && m.position != null) {
+        slugByPosition[m.position] = m.slug;
+        macroByPosition[m.position] = { calories: m.calories, protein: m.protein, carbs: m.carbs, fat: m.fat };
+        nameByPosition[m.position] = m.name;
+      }
+    });
+  } catch { /* ignore */ }
+
+  // ⚠️ THE MENU'S CURRENT NAME WINS OVER THE COPY STORED ON THE SELECTION (2026-09-15).
+  // meal_selections.meal_name is a snapshot taken when the customer picked. Rename or swap a meal
+  // mid-week and every order placed before that keeps the OLD name, so one dish reports as two lines:
+  // week 2026-09-20 showed Steak Fajita as 4 + 3 and Tomato Chicken as 3 + 2 after a spelling fix.
+  // Recipes already resolved correctly because they go by POSITION, so this was never a buying
+  // problem, only a counting one, and it split the number the kitchen cooks against. Falls back to
+  // the stored name when the position is no longer on the menu (a meal removed after someone ordered).
+  const displayName = (position, stored) => nameByPosition[position] || stored;
+
   // Original tally (unchanged).
   const meals = await all(env.DB,
     `SELECT ms.meal_position AS position, ms.meal_name AS name, SUM(ms.qty) AS total_qty
@@ -69,26 +90,6 @@ export async function onRequestGet(context) {
       ORDER BY c.last_name, ms.meal_position`, week);
 
   // Menu position → slug + macros (for batch matching + label macros).
-  const wm = await one(env.DB, `SELECT meals_json FROM weekly_menus WHERE week_of = ?`, week);
-  const slugByPosition = {}, macroByPosition = {}, nameByPosition = {};
-  try {
-    (JSON.parse(wm?.meals_json || '[]') || []).forEach((m) => {
-      if (m && m.position != null) {
-        slugByPosition[m.position] = m.slug;
-        macroByPosition[m.position] = { calories: m.calories, protein: m.protein, carbs: m.carbs, fat: m.fat };
-        nameByPosition[m.position] = m.name;
-      }
-    });
-  } catch { /* ignore */ }
-
-  // ⚠️ THE MENU'S CURRENT NAME WINS OVER THE COPY STORED ON THE SELECTION (2026-09-15).
-  // meal_selections.meal_name is a snapshot taken when the customer picked. Rename or swap a meal
-  // mid-week and every order placed before that keeps the OLD name, so one dish reports as two lines:
-  // week 2026-09-20 showed Steak Fajita as 4 + 3 and Tomato Chicken as 3 + 2 after a spelling fix.
-  // Recipes already resolved correctly because they go by POSITION, so this was never a buying
-  // problem, only a counting one, and it split the number the kitchen cooks against. Falls back to
-  // the stored name when the position is no longer on the menu (a meal removed after someone ordered).
-  const displayName = (position, stored) => nameByPosition[position] || stored;
 
   let batches = [], unmatched = [], recipesLoaded = false;
   try {

@@ -38,6 +38,8 @@ import { repeatLastWeek, evenSpread } from '../../_lib/substitute.js';
 import { notify } from '../../_lib/notify.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
 import { stripe } from '../../_lib/stripe.js';
+import { applyCreditsToDraft } from '../../_lib/credits.js';
+import { creditReferralIfEarned } from '../../_lib/referral.js';
 import {
   COOKABLE, cookDecision, lockAction, lockPolicies, pickCycleDraft, pickCycleInvoice, chargeOutcome, feedAfterCharge,
 } from '../../_lib/decide.js';
@@ -203,7 +205,7 @@ export async function onRequestPost(context) {
   // is never selected again, which is what makes a re-run safe. Pulls the fields the guards need.
   const subs = await all(env.DB,
     `SELECT s.id, s.customer_id, s.meals_per_week, s.cancel_at_period_end, s.created_at, s.stripe_subscription_id,
-            c.email, c.first_name, c.ghl_contact_id, c.delivery_method, c.stripe_customer_id,
+            c.email, c.first_name, c.ghl_contact_id, c.delivery_method, c.stripe_customer_id, c.size_key,
             (SELECT COUNT(*) FROM invoices i WHERE i.customer_id = s.customer_id AND i.status = 'open') AS open_invoices
        FROM subscriptions s
        JOIN customers c ON c.id = s.customer_id
@@ -290,6 +292,10 @@ export async function onRequestPost(context) {
         }
       } else {
         await attachUpchargeToDraft(env, sub, weekOf, order.upchargeCents, draft.id);
+        // Meal credits (referral, week-4 bonus) go on THIS draft, before the charge, capped at the draft
+        // total (credits.js). Non-fatal, same rule as the upcharge.
+        try { await applyCreditsToDraft(env, sub, weekOf, draft, auditRow); }
+        catch (e) { await auditRow(env, `subscription:${sub.id}`, 'credit_apply_threw', { weekOf, error: String(e).slice(0, 160) }); }
         ({ inv, error } = await chargeDraft(env, draft.id));
         invoiceId = draft.id;
       }
@@ -305,6 +311,9 @@ export async function onRequestPost(context) {
         { order_status: feed.order_status, charge_status: feed.charge_status, invoice_id: invoiceId, charged_at: now });
       const amt = ((inv?.amount_paid || 0) / 100).toFixed(2);
       const lastWeek = (act.reason === 'queued_cancel_last_week' || (act.action === 'settled' && live?.cancel_at_period_end)) ? ', LAST WEEK (cancel queued)' : '';
+      // A paid first order settles a pending referral: both credits are granted here (referral.js),
+      // AFTER the order row carries charge_status, never before the charge. Never throws.
+      if (outcome === 'paid') await creditReferralIfEarned(env, sub.customer_id, sub, weekOf);
       if (feed.cook) {
         try { await notifyLocked(env, cust, sub, weekOf, order); } catch { /* non-fatal */ }
         if (outcome === 'paid') s.paid.push(`${who}: $${amt}, ${order.total} meals${lastWeek}${via}`);

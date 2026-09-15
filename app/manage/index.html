@@ -55,6 +55,9 @@
     .acts{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem;}
     .ck{display:flex;align-items:flex-start;gap:.55rem;margin:.6rem 0;font-weight:500;color:var(--gray);font-size:.92rem;cursor:pointer;}
     .ck input{width:auto;margin-top:.15rem;accent-color:var(--orange);}
+    .reasons{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:.6rem 0 .2rem;}
+    .reasons .opt{font-size:.88rem;padding:.6rem .4rem;}
+    @media (max-width:380px){.reasons{grid-template-columns:1fr;}}
   </style>
 </head>
 <body>
@@ -79,6 +82,22 @@
           <button class="btn ghost" id="resumeBtn">Resume</button>
           <button class="btn ghost" id="cardBtn">Update card &amp; billing</button>
           <button class="btn danger" id="cancelBtn">Cancel plan</button>
+        </div>
+      </div>
+
+      <!-- Pause / cancel reason (2026-09-14). One tap, optional, never blocks the action. The list
+           mirrors functions/_lib/reasons.js; test/reasons.test.mjs fails if the two drift. For a
+           cancel this card IS the confirmation (it replaced the native confirm()). -->
+      <div class="card hidden" id="reasonCard">
+        <h2 id="reasonTitle">Before you pause</h2>
+        <div class="sub" id="reasonSub">One tap so we can fix it if it's on us. Optional.</div>
+        <div class="reasons" id="reasonOpts"></div>
+        <label>Anything else? (optional)</label>
+        <input id="reasonText" type="text" maxlength="280" placeholder="Your words, if you want" />
+        <div class="acts">
+          <button class="btn" id="reasonGo">Pause plan</button>
+          <button class="btn ghost" id="reasonSkip">Skip this</button>
+          <button class="btn ghost" id="reasonBack">Never mind</button>
         </div>
       </div>
 
@@ -227,13 +246,38 @@
       if(r.status===200&&r.body.ok!==false){msg(typeof okMsg==='function'?okMsg(r.body):(okMsg||'Saved.'),'ok');await load();}else{msg(r.body.detail||'Could not save. Try again.','err');}}
     $('tSave').onclick=()=>act('tSave',()=>post('/api/account/tier',{meals:tier}),
       b=>b.effective==='next_week'?'Saved — your new meal count starts next week (this week’s order is already locked).':'Saved — pick your meals for the new count on the menu page.');
-    $('pauseBtn').onclick=()=>act('pauseBtn',()=>post('/api/account/pause'),'Plan paused — no meals or charges until you resume.');
+    // Mirror of functions/_lib/reasons.js (codes must match; the server maps an unknown code to 'other').
+    const REASONS=[['pickup_time','The Sunday pickup time'],['too_much_food','Too much food'],['price','Price'],['menu','The menu'],['delivery','Delivery'],['break','Taking a break (travel, schedule)'],['other','Something else']];
+    // askReason(kind, note) -> Promise of {reason, reason_text} (picked or skipped) or null (never mind).
+    let reasonSel='';
+    function askReason(kind,note){
+      return new Promise(resolve=>{
+        reasonSel='';$('reasonText').value='';
+        $('reasonTitle').textContent=kind==='cancel'?'Before you cancel':'Before you pause';
+        $('reasonSub').textContent=(note||'')+' One tap so we can fix it if it\'s on us. Optional.';
+        $('reasonGo').textContent=kind==='cancel'?'Cancel plan':'Pause plan';
+        $('reasonGo').className=kind==='cancel'?'btn danger':'btn';
+        $('reasonOpts').innerHTML=REASONS.map(([c,l])=>`<div class="opt" data-code="${c}">${l}</div>`).join('');
+        [...$('reasonOpts').children].forEach(el=>{el.onclick=()=>{reasonSel=el.dataset.code;[...$('reasonOpts').children].forEach(x=>x.classList.toggle('sel',x===el));};});
+        const card=$('reasonCard');card.classList.remove('hidden');card.scrollIntoView({behavior:'smooth',block:'start'});
+        const done=v=>{card.classList.add('hidden');$('reasonGo').onclick=$('reasonSkip').onclick=$('reasonBack').onclick=null;resolve(v);};
+        $('reasonGo').onclick=()=>done({reason:reasonSel||'declined',reason_text:$('reasonText').value.trim()});
+        $('reasonSkip').onclick=()=>done({reason:'declined',reason_text:''});
+        $('reasonBack').onclick=()=>done(null);
+      });
+    }
+    $('pauseBtn').onclick=async()=>{
+      const r=await askReason('pause','No meals or charges until you resume.');
+      if(r===null)return;
+      act('pauseBtn',()=>post('/api/account/pause',r),'Plan paused — no meals or charges until you resume.');
+    };
     $('resumeBtn').onclick=()=>act('resumeBtn',()=>post('/api/account/resume'),'Welcome back — your plan is active again.');
-    $('cancelBtn').onclick=()=>{
+    $('cancelBtn').onclick=async()=>{
       const undo=!!(sub&&sub.cancel_at_period_end);
-      if(!undo){const through=sub&&sub.current_period_end?(' You keep your meals through '+fmtDate(sub.current_period_end)+'.'):'';
-        if(!confirm('Cancel your plan?'+through+' You can undo any time before then.'))return;}
-      act('cancelBtn',()=>post('/api/account/cancel',{undo}),
+      let r={};
+      if(!undo){const through=sub&&sub.current_period_end?('You keep your meals through '+fmtDate(sub.current_period_end)+'. You can undo any time before then.'):'You can undo any time before it ends.';
+        r=await askReason('cancel',through);if(r===null)return;}
+      act('cancelBtn',()=>post('/api/account/cancel',Object.assign({undo},r)),
         b=>undo?'Cancellation undone — your plan will keep renewing.':('Plan cancelled.'+(b.ends?(' You keep meals through '+fmtDate(b.ends)+'.'):'')+' Changed your mind? Tap “Undo cancellation”.'));
     };
     $('goalSave').onclick=()=>act('goalSave',()=>post('/api/account/goal',{goal:$('goal').value,sex:$('sex').value}),'Saved — your new macros apply to next week\'s meals.');

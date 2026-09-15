@@ -13,6 +13,8 @@ const ACTIVE = ['active', 'trialing', 'past_due'];
 const BILLING = ['active', 'trialing'];
 const money = (c) => '$' + ((c || 0) / 100).toFixed(2);
 
+export const STOP_TRIGGER = 12;
+
 export async function onRequestPost(context) {
   const { env } = context;
   const denied = await requireAdmin(context);
@@ -32,6 +34,17 @@ export async function onRequestPost(context) {
     `SELECT COUNT(*) AS n FROM subscriptions WHERE status IN (${ACTIVE.map(() => '?').join(',')})`, ...ACTIVE);
   const prod = await one(env.DB,
     `SELECT COUNT(*) AS orders, COALESCE(SUM(total_meals),0) AS meals FROM orders WHERE week_of = ? AND status = 'locked'`, week);
+  // Delivery STOPS for the same week (plan rev 4, 09-28 build). Jayson's real ceiling is stops per Sunday,
+  // not meals, and until 09-14 it was counted nowhere. Same `week` as the meals count on purpose: the
+  // capacity block below uses orderableWeek(), which differs on Saturday and Sunday, and one sentence
+  // must never carry two weeks. STOP_TRIGGER is the 12 he said out loud; his written number (due
+  // Tue 09-16) replaces it here, nowhere else.
+  // Same stop definition as route.js (one stop per locked delivery order; the order's method is a
+  // lock-time snapshot and the customer's is the fallback), so the digest and the route sheet agree.
+  const stopsRow = await one(env.DB,
+    `SELECT COUNT(*) AS n FROM orders o JOIN customers c ON c.id = o.customer_id
+      WHERE o.week_of = ? AND o.status = 'locked' AND COALESCE(o.delivery_method, c.delivery_method) = 'delivery'`, week);
+  const stops = stopsRow?.n || 0;
   // tier_price_cents is NULL on almost every sub (see weeklyListCents) — derive from the plan bands.
   const wrrRows = await all(env.DB,
     `SELECT meals_per_week, tier_price_cents FROM subscriptions WHERE status IN (${BILLING.map(() => '?').join(',')})`, ...BILLING);
@@ -67,12 +80,13 @@ export async function onRequestPost(context) {
   recent.slice(0, 8).forEach((r) => { try { const d = JSON.parse(r.detail_json || '{}'); if (d.summary) lines.push('• ' + d.summary); } catch { /* skip */ } });
   lines.push('—');
   lines.push(`Active subscriptions: ${activeCount?.n || 0}`);
-  lines.push(`This week locked: ${prod?.orders || 0} orders / ${prod?.meals || 0} meals (${week})`);
+  lines.push(`This week locked: ${prod?.orders || 0} orders / ${prod?.meals || 0} meals / ${stops} delivery stops (${week})` +
+    (stops >= STOP_TRIGGER ? ` ⚠️ at or over Jayson's ${STOP_TRIGGER}-stop line` : ''));
   lines.push(`Weekly recurring (list): ${money(wrrCents)}`);
   lines.push(`Net revenue 30d: ${money((rev30?.cents || 0) + (refunds30?.cents || 0))}`);
   lines.push(`Health: ${healthOk ? 'all clear ✅' : `⚠️ ${failed} failed comms, ${stuck} stuck webhooks`}`);
 
-  const summary = `Daily digest — ${activeCount?.n || 0} active, ${prod?.meals || 0} meals this week` + (healthOk ? '' : ' · ⚠️ HEALTH');
+  const summary = `Daily digest — ${activeCount?.n || 0} active, ${prod?.meals || 0} meals / ${stops} stops this week` + (healthOk ? '' : ' · ⚠️ HEALTH');
   await ownerNotify(env, 'owner_daily_digest', summary, { entity: 'system', lines });
 
   // Escalate health problems as a BIG (SMS-eligible) alert so they don't sit unseen until morning.

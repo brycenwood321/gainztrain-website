@@ -30,11 +30,14 @@ export async function onRequestGet(context) {
   if (id) {
     const customer = await one(env.DB,
       `SELECT id, email, first_name, last_name, phone, delivery_method, delivery_zone, address, city, zip,
-              goal, sex, created_at FROM customers WHERE id = ?`, id);
+              goal, sex, created_at, last_inbound_at, last_inbound_text, last_inbound_channel, inbound_synced_at
+         FROM customers WHERE id = ?`, id);
     if (!customer) return fail(404, 'not_found', 'No such customer.');
     const subscriptions = await all(env.DB,
       `SELECT id, stripe_subscription_id, status, meals_per_week, tier_price_cents, coupon_code,
-              current_period_end, cancel_at_period_end, created_at FROM subscriptions WHERE customer_id = ? ORDER BY created_at DESC`, id);
+              current_period_end, cancel_at_period_end, created_at,
+              reason_kind, reason_code, reason_text, reason_at
+         FROM subscriptions WHERE customer_id = ? ORDER BY created_at DESC`, id);
     // ⚠️ `hosted_invoice_url` is a CREDENTIAL, not a field. A Stripe hosted invoice link opens that
     // customer's billing detail — and a pay button — to ANYONE holding it, with no login. When the
     // Customers tab was opened to staff (commit 2ff2442) this came along with it, so every kitchen
@@ -71,7 +74,12 @@ export async function onRequestGet(context) {
 
   const customers = await all(env.DB,
     `SELECT c.id, c.email, c.first_name, c.last_name, c.delivery_method, c.delivery_zone,
+            c.last_inbound_at, c.last_inbound_text, c.last_inbound_channel,
             (SELECT status FROM subscriptions s WHERE s.customer_id = c.id ORDER BY created_at DESC LIMIT 1) AS sub_status,
+            (SELECT reason_kind FROM subscriptions s WHERE s.customer_id = c.id ORDER BY created_at DESC LIMIT 1) AS reason_kind,
+            (SELECT reason_code FROM subscriptions s WHERE s.customer_id = c.id ORDER BY created_at DESC LIMIT 1) AS reason_code,
+            (SELECT reason_text FROM subscriptions s WHERE s.customer_id = c.id ORDER BY created_at DESC LIMIT 1) AS reason_text,
+            (SELECT reason_at FROM subscriptions s WHERE s.customer_id = c.id ORDER BY created_at DESC LIMIT 1) AS reason_at,
             (SELECT meals_per_week FROM subscriptions s WHERE s.customer_id = c.id ORDER BY created_at DESC LIMIT 1) AS meals_per_week,
             (SELECT COALESCE(SUM(amount_paid_cents),0) FROM invoices i WHERE i.customer_id = c.id AND i.status = 'paid')
               + (SELECT COALESCE(SUM(amount_cents),0) FROM payments p WHERE p.customer_id = c.id AND p.status = 'refunded') AS spent_cents

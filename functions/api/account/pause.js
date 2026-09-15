@@ -1,6 +1,9 @@
 // POST /api/account/pause — pause the customer's subscription (no billing, no meals while paused).
 // Stripe pause_collection=void is the source of truth; D1 mirrors it.
-import { ok, fail } from '../../_lib/respond.js';
+// Body (optional): { reason: <code from _lib/reasons.js>, reason_text: <their words> }. A missing reason
+// is stored as 'declined', never blocks the pause (see the note above lockedWeekForCustomer).
+import { ok, fail, readJson } from '../../_lib/respond.js';
+import { readReason, reasonLabel } from '../../_lib/reasons.js';
 import { run, nowIso } from '../../_lib/db.js';
 import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
@@ -45,7 +48,8 @@ function afterLockNote(lockedOrder) {
 export async function onRequestPost(context) {
   const auth = await getSessionCustomer(context);
   if (!auth) return fail(401, 'not_authenticated', 'Please log in.');
-  const { env } = context;
+  const { env, request } = context;
+  const reason = readReason(await readJson(request));
 
   const sub = await currentSub(env, auth.customer.id, ['active', 'trialing', 'past_due']);
   if (!sub || !sub.stripe_subscription_id) return fail(400, 'no_active_sub', 'You have no active plan to pause.');
@@ -59,13 +63,18 @@ export async function onRequestPost(context) {
     return fail(502, 'stripe_failed', String(e?.message || e).slice(0, 160));
   }
   const now = nowIso();
-  await run(env.DB, `UPDATE subscriptions SET status='paused', paused_at=?, updated_at=? WHERE id=?`, now, now, sub.id);
+  // Reason rides the same statement as the status change (migration 0029): no pause without a reason row.
+  await run(env.DB,
+    `UPDATE subscriptions SET status='paused', paused_at=?, updated_at=?,
+            reason_kind='pause', reason_code=?, reason_text=?, reason_at=? WHERE id=?`,
+    now, now, reason.code, reason.text, now, sub.id);
   try { await notify(env, auth.customer, 'paused', { lockedWeek: lockedOrder?.week_of || null, lockedMeals: lockedOrder?.total_meals || 0 }); } catch { /* non-fatal */ }
   try {
     const c = auth.customer;
     await ownerNotify(env, 'owner_paused',
-      `${c.first_name || c.email} paused their plan (${sub.meals_per_week} meals/wk)` + afterLockNote(lockedOrder),
-      { entity: `customer:${c.id}` });
+      `${c.first_name || c.email} paused their plan (${sub.meals_per_week} meals/wk), reason: ${reasonLabel(reason.code)}` +
+        (reason.text ? ` "${reason.text}"` : '') + afterLockNote(lockedOrder),
+      { entity: `customer:${c.id}`, reason: reason.code, reason_text: reason.text });
   } catch { /* non-fatal */ }
-  return ok({ status: 'paused', week_already_locked: !!lockedOrder, locked_week: lockedOrder?.week_of || null });
+  return ok({ status: 'paused', reason: reason.code, week_already_locked: !!lockedOrder, locked_week: lockedOrder?.week_of || null });
 }

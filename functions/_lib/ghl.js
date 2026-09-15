@@ -145,3 +145,51 @@ export async function ghlAddTag(env, contactId, tag) {
     return false;
   }
 }
+
+// ── Inbound (added 2026-09-14) ─────────────────────────────────────────────────────────────────────
+// Everything above SENDS. This reads: the newest thing the customer said to us, for the ops Customers
+// tab and the Monday email. Two calls per contact (search the contact's conversations, then read the
+// newest conversation's messages), so callers run it in small passes, never across the whole list.
+//
+// pickLastInbound is pure and tested: TYPE_ACTIVITY_* rows are GHL's own log lines (opportunity
+// created, appointment booked) and never a reply; automation emails are outbound anyway.
+export function pickLastInbound(messages) {
+  let best = null;
+  for (const m of Array.isArray(messages) ? messages : []) {
+    if ((m.direction || '') !== 'inbound') continue;
+    const mt = String(m.messageType || '');
+    if (mt.startsWith('TYPE_ACTIVITY')) continue;
+    const at = m.dateAdded ? new Date(m.dateAdded).toISOString() : null;
+    if (!at) continue;
+    if (!best || at > best.at) {
+      const channel = mt === 'TYPE_SMS' ? 'sms' : (mt === 'TYPE_EMAIL' ? 'email' : 'other');
+      best = { at, channel, text: String(m.body || '').replace(/\s+/g, ' ').trim().slice(0, 280) };
+    }
+  }
+  return best;
+}
+
+export async function ghlLastInbound(env, contactId) {
+  if (!env.GAINZ_GHL_TOKEN || env.GAINZ_GHL_TOKEN === 'PLACEHOLDER_SET_LATER' || !env.GAINZ_GHL_LOCATION || !contactId) return { ok: false, reason: 'no_config' };
+  const headers = { Authorization: `Bearer ${env.GAINZ_GHL_TOKEN}`, Version: '2021-07-28' };
+  try {
+    const q = new URLSearchParams({ locationId: env.GAINZ_GHL_LOCATION, contactId, limit: '3' });
+    const r = await fetch(`${GHL_BASE}/conversations/search?${q}`, { headers });
+    if (!r.ok) return { ok: false, reason: `search_${r.status}` };
+    const convos = (await r.json())?.conversations || [];
+    if (!convos.length) return { ok: true, last: null };
+    // Newest conversation first; GHL returns them sorted by last message, but sort anyway.
+    convos.sort((a, b) => (b.lastMessageDate || 0) - (a.lastMessageDate || 0));
+    let best = null;
+    for (const c of convos.slice(0, 2)) {
+      const mr = await fetch(`${GHL_BASE}/conversations/${c.id}/messages?limit=30`, { headers });
+      if (!mr.ok) return { ok: false, reason: `messages_${mr.status}` };
+      const msgs = (await mr.json())?.messages?.messages || [];
+      const cand = pickLastInbound(msgs);
+      if (cand && (!best || cand.at > best.at)) best = cand;
+    }
+    return { ok: true, last: best };
+  } catch (e) {
+    return { ok: false, reason: `threw: ${String(e && e.message).slice(0, 80)}` };
+  }
+}

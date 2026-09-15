@@ -5,6 +5,7 @@
 import { ok, fail } from '../../_lib/respond.js';
 import { one } from '../../_lib/db.js';
 import { rateLimit, clientIp } from '../../_lib/ratelimit.js';
+import { lookupReferralCode, REFERRAL_MEALS } from '../../_lib/referral.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -17,6 +18,9 @@ export async function onRequestGet(context) {
     if (!Number.isNaN(ends) && Date.now() > ends) return ok({ valid: false, reason: 'expired' });
     return ok({ valid: true, label: '8 free meals — 2 free every week for 4 weeks!' });
   }
+  // A customer's referral code (give 2 get 2): the credit lands on the new customer's second week.
+  const ref = await lookupReferralCode(env, code);
+  if (ref) return ok({ valid: true, referral: true, label: `${REFERRAL_MEALS} free meals on your second week, from ${ref.first_name || 'a friend'} (they get ${REFERRAL_MEALS} too)` });
   const c = await one(env.DB, `SELECT is_public, percent_off, expires_at FROM coupons WHERE code = ?`, code);
   if (!c || !c.is_public) return ok({ valid: false, reason: 'invalid' });
   if (c.expires_at && new Date(c.expires_at) < new Date()) return ok({ valid: false, reason: 'expired' });

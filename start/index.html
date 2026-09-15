@@ -221,6 +221,9 @@
     // half-filled cart in localStorage with a 24h TTL so a returning customer never loses their progress.
     const CART_KEY='gt_start_cart';
     function saveCart(){try{localStorage.setItem(CART_KEY,JSON.stringify({meals,method,size:sizeKey,address:$('address').value,city:$('city').value,zip:$('zip').value,code:$('code').value,ts:Date.now()}));}catch(e){}}
+    // /start/?ref=ZAC-7K2Q (a customer's referral link) lands in the promo box. Wins over a saved cart
+    // code on purpose: the link is the newer intent.
+    function applyRefParam(){try{const ref=(new URLSearchParams(location.search).get('ref')||'').trim().toUpperCase();if(ref){$('code').value=ref;saveCart();}}catch(e){}}
     function restoreCart(seedMeals){try{const raw=localStorage.getItem(CART_KEY);if(!raw)return;const c=JSON.parse(raw);
       if(!c||!c.ts||Date.now()-c.ts>864e5){localStorage.removeItem(CART_KEY);return;}
       if(c.zip)$('zip').value=c.zip;if(c.address)$('address').value=c.address;if(c.city)$('city').value=c.city;if(c.code)$('code').value=c.code;
@@ -439,7 +442,7 @@
       const qsMeals=parseInt(new URLSearchParams(location.search).get('meals'),10);
       if(!isNaN(qsMeals))meals=Math.min(MAX,Math.max(MIN,qsMeals));
       // Restore a saved cart (zip/address/method/code, and meals only when ?meals= wasn't supplied).
-      restoreCart(isNaN(qsMeals));
+      restoreCart(isNaN(qsMeals));applyRefParam();
       // Promo handoff: a QR/link (?code=FUEL8) or the /menu banner (localStorage gt_promo) pre-fills the
       // promo field so the discount is already on. Validate it so they see "8 free meals applied".
       try{

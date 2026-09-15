@@ -16,6 +16,7 @@ import { stripe } from '../../_lib/stripe.js';
 import { str } from '../../_lib/validate.js';
 import { tierForMeals, ensureStripePrice, ensureDeliveryPrice, ensureFuel8Coupon, MIN_MEALS, MAX_MEALS,
   sizesEnabled, sizeByKey, perMealCentsFor, ensureStripePriceForCents } from '../../_lib/plans.js';
+import { lookupReferralCode, recordReferral } from '../../_lib/referral.js';
 
 // Stripe statuses that mean "this person already has a plan" — block a second subscription.
 const LIVE_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
@@ -55,6 +56,7 @@ export async function onRequestPost(context) {
   const code = str(body.code).trim().toUpperCase();
   let couponToApply = null;   // the actual Stripe coupon id we attach to the Checkout Session
   let isFuel8 = false;
+  let referrer = null;        // a customer's referral code (give 2 get 2): no coupon, a pending referral row
   if (code === 'FUEL8') {
     // FUEL8: 2 free meals/week for 4 weeks, sized to THIS order's tier. Special-cased (not a static code).
     if (Number.isNaN(FUEL8_ENDS_MS) || Date.now() > FUEL8_ENDS_MS) return fail(400, 'code_expired', 'That promo has ended.');
@@ -64,6 +66,10 @@ export async function onRequestPost(context) {
     if (prior) return fail(400, 'code_used', "You've already used the FUEL8 offer.");
     couponToApply = await ensureFuel8Coupon(env, tier); // tier-sized coupon = 2 meals off/wk
     isFuel8 = true;
+  } else if (code && (referrer = await lookupReferralCode(env, code))) {
+    if (referrer.id === customer.id) return fail(400, 'invalid_code', 'That is your own referral code.');
+    // No Stripe discount: the credits land at the lock (referral.js), so the Full Week Guarantee still
+    // applies to this first order (terms 5 forbids stacking it with a first-order discount).
   } else if (code) {
     const c = await one(env.DB, `SELECT code, is_public, expires_at, cap FROM coupons WHERE code = ?`, code);
     if (!c || !c.is_public) return fail(400, 'invalid_code', "That promo code isn't valid.");
@@ -164,7 +170,7 @@ export async function onRequestPost(context) {
           promo: isFuel8 ? 'FUEL8' : '', // webhook watches this to trim FUEL8 to exactly 4 weeks
         },
       },
-      metadata: { d1_customer_id: customer.id, meals: String(meals), tier: tier.key, delivery_method: deliveryMethod, code: code || '', ...(useSizes ? { size_key: size.key } : {}) },
+      metadata: { d1_customer_id: customer.id, meals: String(meals), tier: tier.key, delivery_method: deliveryMethod, code: code || '', referral: referrer ? code : '', ...(useSizes ? { size_key: size.key } : {}) },
       // Don't force a card when nothing is due now (e.g. a 100%-off plan checks out at $0).
       payment_method_collection: 'if_required',
       success_url: `${base}/app/menu/?checkout=success`,
@@ -183,6 +189,9 @@ export async function onRequestPost(context) {
     if (useSizes) {
       try { await run(env.DB, `UPDATE customers SET size_key = ?, updated_at = ? WHERE id = ?`, size.key, nowIso(), customer.id); } catch { /* column pending 0026 */ }
     }
+
+    // Pending referral, only once the session exists. Idempotent; refuses non-new customers.
+    if (referrer) { try { await recordReferral(env, referrer, customer.id, code); } catch { /* never fail a checkout on this */ } }
 
     // Persist the delivery choice only AFTER the session is created (not on a validation failure).
     await run(env.DB,

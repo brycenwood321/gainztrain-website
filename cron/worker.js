@@ -31,6 +31,17 @@ const isoDate = (d) => d.toISOString().slice(0, 10);
 // Fire an admin endpoint AND check the result — a 401 (token drift) / 404 (no menu) / 500 must NOT pass
 // silently or a whole week's cook/reminders is skipped with no trace. Surfaces in `wrangler tail` + the
 // CF Workers logs. (A push alert / gt_health probe is the proper next step.)
+// Loop /api/admin/inbound-sync until remaining is 0 (bounded). Failures are counted in `remaining` by
+// the endpoint, so a dead token ends the loop at the cap instead of spinning.
+async function inboundSyncAll(env) {
+  for (let pass = 1; pass <= 8; pass++) {
+    const r = await hit(env, '/api/admin/inbound-sync?max=8');
+    if (!r || !r.ok) return;
+    const body = await r.json().catch(() => null);
+    if (!body || !body.remaining || body.failed) return;
+  }
+}
+
 async function hit(env, path) {
   try {
     const r = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'X-Admin-Token': env.ADMIN_TOKEN } });
@@ -209,6 +220,10 @@ export default {
       // Daily 13:00 UTC (~7am MDT / 6am MST) — owner morning digest + health probe. Emails the owners
       // only if OWNER_NOTIFY_ENABLED=true; escalates an SMS if a health signal trips.
       ctx.waitUntil(hit(env, '/api/admin/daily-digest'));
+      // Refresh customers.last_inbound_* from GHL (plan rev 4, 09-28 build) in passes of 8 until the
+      // endpoint reports nothing left; each pass is two GHL reads per customer. Runs AFTER the digest
+      // request is issued so a slow GHL cannot delay it; the Monday email reads the cache the next day.
+      ctx.waitUntil(inboundSyncAll(env));
       // Daily — pull yesterday's per-ad spend from Meta into marketing_spend and audit the variant
       // registry for drift. Runs BEFORE anyone reads /app/ops/marketing/ in the morning, so the cost
       // half of the funnel is as current as the signup half. Was a laptop-only Python script, which

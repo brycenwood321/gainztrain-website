@@ -183,6 +183,13 @@
         <div id="thisWeek"></div>
       </div>
 
+      <!-- Referral, give 2 get 2 (plan rev 4). Shown once the customer has a plan; the code only works
+           while their plan is live or paused (functions/_lib/referral.js). Credits land at a lock, never as cash. -->
+      <div class="card full hidden" id="referralCard" style="margin-bottom:1rem;">
+        <h2>Give 2 meals, get 2 meals</h2>
+        <div id="referralBody" class="stat-sub">Loading…</div>
+      </div>
+
       <div class="grid">
         <div class="card">
           <h2>Recent orders</h2>
@@ -388,6 +395,29 @@
     });
 
     // ── Boot: are we logged in? ──
+    async function loadReferral(){
+      const card = $('referralCard'); const el = $('referralBody');
+      try {
+        const r = await fetch('/api/account/referral', { credentials: 'same-origin' });
+        const b = await r.json().catch(() => ({}));
+        if (!r.ok || !b.ok || !b.code) { card.classList.add('hidden'); return; }
+        card.classList.remove('hidden');
+        const rows = (b.referrals || []).map((x) => `<div class="row"><span class="k">${x.first_name || 'A friend'}</span><span class="v">${x.status === 'credited' ? '2 free meals queued for you' : (x.status === 'pending' ? 'signed up, credits land when their first week is paid' : x.status)}</span></div>`).join('');
+        const credits = (b.credits || []).filter((c) => c.status !== 'void').map((c) => `<div class="row"><span class="k">${c.meals} free meals</span><span class="v">${c.status === 'applied' ? 'applied to the week of ' + (c.week_of || '') : 'lands on your next order'}</span></div>`).join('');
+        el.innerHTML =
+          `<div style="color:var(--black,#1a1614);font-size:.95rem;margin-bottom:.5rem;">Send a friend your code. When their first week is paid, you both get <b>${b.meals} free meals</b> on your next order.</div>` +
+          `<div class="stat" style="font-size:1.6rem;letter-spacing:.06em;">${b.code}</div>` +
+          `<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0;">` +
+            `<button class="btn" id="refCopy" style="padding:.5rem .9rem;">Copy link</button>` +
+            `<a class="btn" style="padding:.5rem .9rem;text-decoration:none;" href="sms:?&body=${encodeURIComponent(b.share_text)}">Text it</a>` +
+          `</div>` +
+          `<div class="stat-sub" style="word-break:break-all;">${b.link}</div>` +
+          (rows ? `<div style="margin-top:.6rem;">${rows}</div>` : '') +
+          (credits ? `<div style="margin-top:.4rem;">${credits}</div>` : '');
+        const btn = $('refCopy');
+        if (btn) btn.onclick = async () => { try { await navigator.clipboard.writeText(b.link); btn.textContent = 'Copied'; setTimeout(() => (btn.textContent = 'Copy link'), 1500); } catch { btn.textContent = b.link; } };
+      } catch { card.classList.add('hidden'); }
+    }
     async function loadAccount(){
       const { status, body } = await api('/api/me');
       $('loading').classList.add('hidden');
@@ -398,6 +428,7 @@
         $('bellWrap').classList.remove('hidden');
         render(body);
         loadFeed();
+        if (body.subscription) loadReferral();
       } else {
         $('dashView').classList.add('hidden');
         $('logoutBtn').classList.add('hidden');

@@ -5447,12 +5447,27 @@
       const el = document.getElementById("cust-view");
       el.innerHTML = ownHead("Customers", (count != null ? count : list.length) + " customers", "ownRenderCustomers") +
         '<div class="ownv-ctl"><input id="own-csearch" placeholder="Search name or email" style="flex:1;" /></div>' +
-        '<div class="ownv-card"><table><thead><tr><th>Name</th><th>Status</th><th>Meals</th><th>Spent</th></tr></thead><tbody>' +
-        list.map((c) => '<tr><td><span class="link" data-id="' + ownEsc(c.id) + '">' + (ownEsc((c.first_name || "") + " " + (c.last_name || "")).trim() || ownEsc(c.email)) + '</span><div class="stat-sub">' + ownEsc(c.email) + "</div></td><td>" + (c.sub_status ? '<span class="badge ' + ownEsc(c.sub_status) + '">' + ownEsc(c.sub_status) + "</span>" : "—") + "</td><td>" + (c.meals_per_week || "—") + "</td><td>" + ownMoney(c.spent_cents) + "</td></tr>").join("") +
+        '<div class="ownv-card"><table><thead><tr><th>Name</th><th>Status</th><th>Meals</th><th>Spent</th><th>Reason</th><th>Last reply</th></tr></thead><tbody>' +
+        list.map((c) => '<tr><td><span class="link" data-id="' + ownEsc(c.id) + '">' + (ownEsc((c.first_name || "") + " " + (c.last_name || "")).trim() || ownEsc(c.email)) + '</span><div class="stat-sub">' + ownEsc(c.email) + "</div></td><td>" + (c.sub_status ? '<span class="badge ' + ownEsc(c.sub_status) + '">' + ownEsc(c.sub_status) + "</span>" : "—") + "</td><td>" + (c.meals_per_week || "—") + "</td><td>" + ownMoney(c.spent_cents) + "</td><td>" + ownReasonCell(c) + "</td><td>" + ownReplyCell(c) + "</td></tr>").join("") +
         "</tbody></table></div>";
       const cs = document.getElementById("own-csearch");
-      cs.oninput = (e) => { const q = e.target.value.toLowerCase(); ownDrawCustList(OWN_CUSTS.filter((c) => ((c.first_name || "") + " " + (c.last_name || "") + " " + c.email).toLowerCase().includes(q)), null); document.getElementById("own-csearch").focus(); };
+      cs.oninput = (e) => { const q = e.target.value.toLowerCase(); ownDrawCustList(OWN_CUSTS.filter((c) => ((c.first_name || "") + " " + (c.last_name || "") + " " + c.email + " " + ownReasonLabel(c.reason_code) + " " + (c.reason_text || "") + " " + (c.last_inbound_text || "")).toLowerCase().includes(q)), null); document.getElementById("own-csearch").focus(); };
       el.querySelectorAll(".link[data-id]").forEach((x) => (x.onclick = () => ownShowCustomer(x.dataset.id)));
+    }
+    // Pause / cancel reason (migration 0029) and last inbound reply (0030, cached from GHL by inbound-sync).
+    // Labels mirror functions/_lib/reasons.js.
+    const OWN_REASONS = { pickup_time: "pickup time", too_much_food: "too much food", price: "price", menu: "menu", delivery: "delivery", break: "taking a break", other: "other", declined: "declined to say" };
+    function ownReasonLabel(code) { return code ? (OWN_REASONS[code] || code) : ""; }
+    function ownReasonCell(c) {
+      if (!c.reason_code) return '<span class="stat-sub">—</span>';
+      const strong = c.reason_code === "pickup_time";
+      return '<span title="' + ownEsc(c.reason_text || "") + '"' + (strong ? ' style="color:#dc2626;font-weight:700;"' : '') + '>' + ownEsc(ownReasonLabel(c.reason_code)) + '</span>' +
+        '<div class="stat-sub">' + ownEsc(c.reason_kind || "") + (c.reason_at ? " " + ownFmtDate(c.reason_at) : "") + (c.reason_text ? ' · “' + ownEsc(c.reason_text.slice(0, 60)) + (c.reason_text.length > 60 ? "…" : "") + '”' : "") + "</div>";
+    }
+    function ownReplyCell(c) {
+      if (!c.last_inbound_at) return '<span class="stat-sub">—</span>';
+      const t = c.last_inbound_text || "";
+      return '<span title="' + ownEsc(t) + '">' + ownEsc(t.slice(0, 70)) + (t.length > 70 ? "…" : "") + '</span><div class="stat-sub">' + ownEsc(c.last_inbound_channel || "") + " " + ownFmtDate(c.last_inbound_at) + "</div>";
     }
     async function ownShowCustomer(id) {
       const el = document.getElementById("cust-view"); el.innerHTML = '<div class="ownv-loading">Loading…</div>';
@@ -5512,8 +5527,9 @@
             '<div class="stat-sub">' + ownEsc(c.email) + (c.phone ? " · " + ownEsc(c.phone) : "") + "</div>" +
             '<div class="stat-sub">' + (c.delivery_method === "delivery" ? "Delivery zone " + (c.delivery_zone == null ? "—" : c.delivery_zone) + " · " + ownEsc(c.address || "") + ", " + ownEsc(c.city || "") + " " + ownEsc(c.zip || "") : "Pickup") + "</div>" +
             '<div class="stat-sub">Goal: ' + ownEsc(c.goal || "—") + " · " + ownEsc(c.sex || "—") + " · joined " + ownFmtDate(c.created_at) + "</div>" +
+            (c.last_inbound_at ? '<div class="stat-sub" style="margin-top:.35rem;">Last reply (' + ownEsc(c.last_inbound_channel || "") + ", " + ownFmtDate(c.last_inbound_at) + '): “' + ownEsc(c.last_inbound_text || "") + '”</div>' : '<div class="stat-sub" style="margin-top:.35rem;">No inbound reply on record' + (c.inbound_synced_at ? " (checked " + ownFmtDate(c.inbound_synced_at) + ")" : " (never checked)") + "</div>") +
             '<div class="stat" style="margin-top:.5rem;">' + ownMoney(d.total_spent_cents) + ' <span class="stat-sub">lifetime</span></div></div>' +
-          '<div class="ownv-card"><h2>Subscriptions</h2><table><tbody>' + ((d.subscriptions || []).map((s) => "<tr><td><span class=\"badge " + ownEsc(s.status) + "\">" + ownEsc(s.status) + "</span></td><td>" + s.meals_per_week + " meals</td><td>" + (s.coupon_code ? ownEsc(s.coupon_code) : "") + "</td><td>" + (s.cancel_at_period_end ? "cancels " + ownFmtDate(s.current_period_end) : (s.current_period_end ? "renews " + ownFmtDate(s.current_period_end) : "")) + "</td></tr>").join("") || '<tr><td class="stat-sub">none</td></tr>') + "</tbody></table></div>" +
+          '<div class="ownv-card"><h2>Subscriptions</h2><table><tbody>' + ((d.subscriptions || []).map((s) => "<tr><td><span class=\"badge " + ownEsc(s.status) + "\">" + ownEsc(s.status) + "</span></td><td>" + s.meals_per_week + " meals</td><td>" + (s.coupon_code ? ownEsc(s.coupon_code) : "") + "</td><td>" + (s.reason_code ? ownEsc(s.reason_kind || "") + ": " + ownEsc(ownReasonLabel(s.reason_code)) + (s.reason_text ? ' “' + ownEsc(s.reason_text) + '”' : "") + (s.reason_at ? ' <span class="stat-sub">' + ownFmtDate(s.reason_at) + "</span>" : "") : "") + "</td><td>" + (s.cancel_at_period_end ? "cancels " + ownFmtDate(s.current_period_end) : (s.current_period_end ? "renews " + ownFmtDate(s.current_period_end) : "")) + "</td></tr>").join("") || '<tr><td class="stat-sub">none</td></tr>') + "</tbody></table></div>" +
           manageCard +
           editCard +
           mealsCard +
@@ -5614,7 +5630,9 @@
     async function ownRenderMarketing() {
       const el = document.getElementById("mkt-view"); el.innerHTML = '<div class="ownv-loading">Loading…</div>';
       try {
-        const [a, sp, cr] = await Promise.all([ownGet("/api/admin/attribution"), ownGet("/api/admin/spend"), ownGet("/api/admin/channel-report?days=" + mktDays)]);
+        const [a, sp, cr, mt] = await Promise.all([ownGet("/api/admin/attribution"), ownGet("/api/admin/spend"), ownGet("/api/admin/channel-report?days=" + mktDays), ownGet("/api/admin/marketing-time").catch(() => ({ entries: [], totals: [] }))]);
+        const timeRows = ((mt.entries) || []).slice(0, 20).map((e) => "<tr><td>" + ownEsc(e.day) + "</td><td>" + ownEsc(e.who) + "</td><td>" + e.minutes + "</td><td>" + ownEsc(e.what || "") + "</td></tr>").join("");
+        const timeTotals = ((mt.totals) || []).map((t) => ownEsc(t.who) + " " + (t.last7 || 0) + " min this week, " + (t.last30 || 0) + " in 30d").join(" · ") || "nothing logged yet";
         const num = (v) => (v == null ? "—" : v.toLocaleString());
         const cents = (v) => (v == null ? "—" : ownMoney(v));
         const funnelRows = (a.funnel || []).map((f) => "<tr><td><b>" + ownEsc(f.channel) + "</b></td><td>" + num(f.views) + "</td><td>" + num(f.views_30d) + "</td><td>" + num(f.signups) + "</td><td>" + num(f.paying) + "</td><td>" + cents(f.revenue_cents) + "</td><td>" + cents(f.spend_cents) + "</td><td>" + cents(f.cpl_cents) + "</td><td>" + cents(f.cac_cents) + "</td></tr>").join("");
@@ -5632,7 +5650,18 @@
           '<div class="ownv-card"><h2>Log ad spend</h2><div class="ownv-ctl">' +
             '<input id="own-spDay" type="date" /><select id="own-spCh"><option value="meta">Meta</option><option value="google">Google</option><option value="gbp">GBP</option><option value="tiktok">TikTok</option><option value="marketplace">Marketplace</option><option value="other">Other</option></select>' +
             '<input id="own-spCamp" type="text" placeholder="campaign (optional)" style="width:11rem;" /><input id="own-spAmt" type="number" min="0" step="0.01" placeholder="$ spend" style="width:7rem;" /><button class="ownv-btn" id="own-spGo">Log</button></div>' +
-            tbl(["Day", "Channel", "Campaign", "Spend", "Notes"], spendRows, "No spend logged yet.") + "</div>";
+            tbl(["Day", "Channel", "Campaign", "Spend", "Notes"], spendRows, "No spend logged yet.") + "</div>" +
+          '<div class="ownv-card"><h2>Log marketing time</h2><div class="stat-sub" style="margin-bottom:.5rem;">' + timeTotals + '</div><div class="ownv-ctl">' +
+            '<input id="own-mtDay" type="date" /><select id="own-mtWho"><option value="brycen">Brycen</option><option value="jayson">Jayson</option><option value="other">Other</option></select>' +
+            '<input id="own-mtMin" type="number" min="1" max="600" step="1" placeholder="minutes" style="width:6.5rem;" /><input id="own-mtWhat" type="text" placeholder="what (optional)" style="width:14rem;" /><button class="ownv-btn" id="own-mtGo">Log</button></div>' +
+            tbl(["Day", "Who", "Minutes", "What"], timeRows, "No time logged yet. The Monday email sums this per person.") + "</div>";
+        document.getElementById("own-mtDay").value = new Date().toISOString().slice(0, 10);
+        document.getElementById("own-mtGo").onclick = async () => {
+          const body = { day: document.getElementById("own-mtDay").value, who: document.getElementById("own-mtWho").value, minutes: parseInt(document.getElementById("own-mtMin").value, 10), what: document.getElementById("own-mtWhat").value.trim() };
+          if (!body.day || !(body.minutes >= 1)) { showToast("Enter a date and minutes."); return; }
+          const r = await ownPost("/api/admin/marketing-time", body);
+          if (r.ok) { showToast("Time logged."); ownRenderMarketing(); } else showToast(r.detail || "Could not log time.");
+        };
         document.getElementById("own-spDay").value = new Date().toISOString().slice(0, 10);
         document.getElementById("own-spGo").onclick = async () => {
           const body = { day: document.getElementById("own-spDay").value, channel: document.getElementById("own-spCh").value, campaign: document.getElementById("own-spCamp").value.trim(), spend: parseFloat(document.getElementById("own-spAmt").value) };

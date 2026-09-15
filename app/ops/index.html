@@ -6093,25 +6093,34 @@
     function buildDeliveryStops() {
       const addressMap = {};
 
+      const packed = typeof loadPacked === "function" ? loadPacked() : new Set();
+
       orders.forEach(order => {
         if (order.fulfillment !== "delivery" || !order.address) return;
-        const allIds = order.meals.flatMap(m => m.meal_ids || []);
-        const scannedCount = allIds.filter(id => scanned.includes(id)).length;
-        if (scannedCount === 0) return; // hide until at least one meal scanned
+        // EVERY delivery stop for the week shows (Marissa, 2026-09-15). This used to hide a customer
+        // until one of their meals had been SCANNED, which made the whole tab permanently empty once
+        // per-meal labels and scanning were retired: `scanned` is never populated any more. The route
+        // is also wanted BEFORE bagging finishes, so gating it on packing progress was backwards.
+        // Bagged state is still surfaced, as a flag on the stop rather than as a filter.
+        const meals = (order.meals || []).reduce((s, m) => s + (Number(m.quantity) || 0), 0);
+        const allBagged = (order.meals || []).length > 0
+          && (order.meals || []).every(m => packed.has(packKey(order.customer_id, m.meal_name)));
 
         const firstName = order.first_name || "";
         const lastInitial = order.last_name ? order.last_name[0] + "." : "";
         const key = order.address.trim().toLowerCase();
 
         if (addressMap[key]) {
-          // Multiple customers at same address — combine onto one pin
+          // Housemates: combine onto one pin, one stop.
           addressMap[key].names.push(`${firstName} ${lastInitial}`);
-          addressMap[key].totalMeals += allIds.length;
+          addressMap[key].totalMeals += meals;
+          addressMap[key].allBagged = addressMap[key].allBagged && allBagged;
         } else {
           addressMap[key] = {
             address: order.address,
             names: [`${firstName} ${lastInitial}`],
-            totalMeals: allIds.length
+            totalMeals: meals,
+            allBagged
           };
         }
       });
@@ -6356,7 +6365,7 @@
         document.getElementById("delivery-map").style.display = "none";
         document.getElementById("route-list").style.display = "none";
         document.getElementById("delivery-empty").style.display = "block";
-        document.getElementById("delivery-status").textContent = "No scanned deliveries yet.";
+        document.getElementById("delivery-status").textContent = "No delivery orders for this week. Pull Orders on the Orders tab first.";
         return;
       }
 

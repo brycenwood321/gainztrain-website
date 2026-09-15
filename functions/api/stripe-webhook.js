@@ -144,9 +144,15 @@ async function safeFuel8Cap(env, event) {
     const inv = event.data?.object || {};
     const subId = invoiceSubscriptionId(inv);   // see mirror.js — the flat field moved under parent
     if (!subId || !inv.id) return;
-    const hadDiscount = (Array.isArray(inv.total_discount_amounts) && inv.total_discount_amounts.length > 0)
-      || !!inv.discount || (Array.isArray(inv.discounts) && inv.discounts.length > 0);
-    if (!hadDiscount) return; // no discount on this invoice -> not a FUEL8 week (skip the extra Stripe fetch)
+    // 2026-09-14: count a FUEL8 week only when the invoice actually gave money away. After the cap cleared
+    // the subscription discount, later invoices still carried the old discount ID in `discounts` and in
+    // `total_discount_amounts` with amount 0, so this check (which used to test array presence) counted
+    // phantom weeks 5 and 6 and the audit log claimed free food that was never given. Courtney's 09-12
+    // invoice DECUOBV4-0007: total_discount_amounts [{amount: 0}], paid $104.61 in full.
+    const discountCents = Array.isArray(inv.total_discount_amounts)
+      ? inv.total_discount_amounts.reduce((s, d) => s + (Number(d?.amount) || 0), 0)
+      : 0;
+    if (discountCents <= 0) return; // nothing discounted on this invoice -> not a FUEL8 week
 
     const sub = await stripe(env, 'GET', `subscriptions/${subId}`);
     if (!sub || sub.metadata?.promo !== 'FUEL8') return;

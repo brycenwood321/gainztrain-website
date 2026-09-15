@@ -227,7 +227,7 @@ export default {
       // 'pending' instead of 'locked' (Jeferson) — i.e. money in, no food out — while Jayson can still
       // act on it. The post-billing pass at 17:00 UTC catches the money-out-no-money direction.
       if (day === SAT) ctx.waitUntil(hit(env, '/api/admin/payment-order-audit'));
-      // Sunday-only: PICKUP REMINDER, ~7am MDT / 6am MST, three hours before the 10:00-10:45 window.
+      // Sunday-only: PICKUP REMINDER, ~7am MDT / 6am MST, hours before the window (functions/_lib/pickup.js).
       // This replaces ~/Library/Scripts/BrycenHQ/gt_pickup_reminder.py, which was deliberately
       // one-shot for 2026-08-23 and therefore sent NOTHING on 08-30 or any Sunday after. Brycen
       // asked for a standing weekly job on 2026-08-31, which overrides that script's stated reason

@@ -53,8 +53,8 @@ function appBase(env) { return (env && (env.APP_BASE_URL || env.GT_APP_BASE_URL)
 // SMS_STAGED below. Promote them deliberately, ideally one at a time, starting with payment_failed
 // (it is the one that recovers money). Moving a line from STAGED to SMS_EVENTS is the whole change.
 const SMS_EVENTS = new Set([
-  'pickup_change',          // Saturday: the window and location changed
-  'pickup_reminder',        // Sunday morning: last call before a 45-minute window
+  'pickup_change',          // Saturday: the window changed (cutover in functions/_lib/pickup.js)
+  'pickup_reminder',        // Sunday morning: last call before the window opens
 ]);
 
 // Written and ready, deliberately NOT sending yet. This is not dead code: it is the promotion queue,

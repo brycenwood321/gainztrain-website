@@ -6,7 +6,7 @@
 // `sms` is OPTIONAL. notify() only sends the SMS leg when env.SMS_AUTH_ENABLED === 'true' (A2P gate),
 // so leaving sms set is safe — it just queues until A2P clears.
 
-import { PICKUP, pickupSentence } from './pickup.js';
+import { pickupFor, pickupSentence, changeOn, MISS_FEE_DOLLARS } from './pickup.js';
 
 const ORANGE = '#ff6b35';
 
@@ -302,11 +302,11 @@ export const TEMPLATES = {
       intro: `Ordering for the week of ${prettyDate(d.weekOf)} has closed and your order is locked for prep:`,
       note: mealListHtml(d.meals) +
         (d.method === 'pickup'
-          ? `<p style="font-size:14px;color:#1a1614;background:#fff1ea;padding:10px 12px;border-radius:8px">🥡 ${pickupSentence()}</p>`
+          ? `<p style="font-size:14px;color:#1a1614;background:#fff1ea;padding:10px 12px;border-radius:8px">🥡 ${pickupSentence(d.weekOf)}</p>`
           : `<p style="font-size:13px;color:#7a7270">We\'ll let you know when they\'re on the way.</p>`),
     }),
     sms: `Gainz Train: your ${lockedTotal(d)} meals for ${prettyDate(d.weekOf)} are locked in. ` +
-      (d.method === 'pickup' ? PICKUP.smsLine : 'We\'ll text you when they\'re on the way.'),
+      (d.method === 'pickup' ? pickupFor(d.weekOf).smsLine : 'We\'ll text you when they\'re on the way.'),
   }),
 
   order_autofilled: (d, env) => ({
@@ -318,7 +318,7 @@ export const TEMPLATES = {
       // these are the people LEAST engaged with the app, so they're the likeliest to just turn up.
       note: mealListHtml(d.meals) +
         (d.method === 'pickup'
-          ? `<p style="font-size:14px;color:#1a1614;background:#fff1ea;padding:10px 12px;border-radius:8px">🥡 ${pickupSentence()}</p>`
+          ? `<p style="font-size:14px;color:#1a1614;background:#fff1ea;padding:10px 12px;border-radius:8px">🥡 ${pickupSentence(d.weekOf)}</p>`
           : '') +
         `<p style="font-size:13px;color:#7a7270">Want different meals next week? Just pick them before Friday and we\'ll use your choices.</p>`,
       cta: { label: 'Set next week\'s meals', href: link(env, '/app/menu/') },
@@ -358,61 +358,75 @@ export const TEMPLATES = {
 
   // Was "ready at the Orem kitchen. Swing by anytime during pickup hours" — no address, no hours, and
   // "anytime" against a kitchen that is only staffed for a couple of hours. Both are now stated.
-  order_pickup_ready: (d, env) => ({
-    subject: `Ready for pickup — ${PICKUP.windowLabel} today`,
-    html: layout(env, {
-      heading: 'Ready for pickup 🥡',
-      intro: `Your meals for the week of ${prettyDate(d.weekOf)} are packed and waiting. ${pickupSentence()}`,
-      rows: [['Where', PICKUP.addressLine], ['When', `Today, ${PICKUP.windowLabel}`]],
-      note: 'Can\'t make the window? Reply to this email and we\'ll sort something out.',
-    }),
-    sms: `Gainz Train: your meals are ready! ${PICKUP.smsLine}`,
-  }),
+  order_pickup_ready: (d, env) => {
+    const p = pickupFor(d.weekOf);
+    return {
+      subject: `Ready for pickup — ${p.windowLabel} today`,
+      html: layout(env, {
+        heading: 'Ready for pickup 🥡',
+        intro: `Your meals for the week of ${prettyDate(d.weekOf)} are packed and waiting. ${pickupSentence(d.weekOf)}`,
+        rows: [['Where', p.addressLine], ['When', `Today, ${p.windowLabel}`]],
+        note: 'Can\'t make the window? Reply to this email and we\'ll sort something out.',
+      }),
+      sms: `Gainz Train: your meals are ready! ${p.smsLine}`,
+    };
+  },
 
-  // ── Pickup logistics announcements (added 2026-08-22) ─────────────────────────────────────────────
-  // Pickup moved off Brycen's and Jayson's houses onto a tight 45-minute window at the kitchen. This
-  // changes the collection terms of an order the customer has ALREADY PAID FOR, so both events are
-  // 'critical' class and both are in SMS_EVENTS — somebody who reads neither drives to a house that
-  // nobody is at. Every where/when string comes from PICKUP, so these can never drift away from the
-  // automated order_locked / order_pickup_ready messages that carry the same details.
+  // ── Pickup logistics announcements (added 2026-08-22, reworked 2026-09-14) ───────────────────────
+  // Both events change or restate the collection terms of an order the customer has ALREADY PAID FOR,
+  // so both are 'critical' class and both are in SMS_EVENTS: somebody who reads neither drives to the
+  // kitchen at the wrong time. Every where/when string comes from pickup.js, so these can never drift
+  // away from the automated order_locked / order_pickup_ready messages that carry the same details.
+  //
+  // pickup_change was first written for the 2026-08-23 move off Brycen's and Jayson's houses. It is
+  // now generic: it reads the cutover for `weekOf` from PICKUP_WINDOWS and says what the window was
+  // and what it becomes. Sending it for a Sunday that is not a cutover throws on purpose, because a
+  // "nothing changed" announcement to every pickup customer is exactly the blast this must never be.
   //
   // `when` is the caller's word for the day ('tomorrow' on the Saturday announcement). `firstName` is
   // rendered here in JS, never handed to GHL as a merge tag.
-  pickup_change: (d, env) => ({
-    subject: `Pickup moves to the kitchen ${d.when || 'this Sunday'}, ${PICKUP.windowLabel}`,
-    html: layout(env, {
-      heading: 'Pickup moves to the kitchen',
-      intro:
-        `Hey ${d.firstName || 'there'}, quick but important change to how you grab your meals.` +
-        `<br><br>For the last little while you have been picking up from my house or Jayson's. ` +
-        `Starting ${d.when || 'this Sunday'}, all pickups move to the Gainz Train kitchen.`,
-      rows: [['Where', PICKUP.addressLine], ['When', `Sundays, ${PICKUP.windowLabel}`]],
-      note:
-        `That is the window from here on out, every week. It is tighter than what you are used to, and ` +
-        `that is on purpose: prep wraps up right before 10:00, so your food is as fresh as it gets and ` +
-        `everything is packed and ready the moment you walk in.<br><br>` +
-        `Because it is a short window, we do need you inside it. If you miss it, we can still get your ` +
-        `meals to you, but it will be a flat $10 to deliver them.<br><br>` +
-        `If that time does not work for you on a given week, just reply to this email before Sunday and ` +
-        `we will figure something out. We would rather hear from you than have your food sitting there.`,
-    }),
-    sms: `Gainz Train: pickup moves to the kitchen, no more house pickup. Sun ${PICKUP.windowSms}, ${PICKUP.addressSms}. Miss it and delivery is $10.`,
-  }),
+  pickup_change: (d, env) => {
+    const change = changeOn(d.weekOf);
+    if (!change) throw new Error(`pickup_change: ${d.weekOf} is not a pickup window cutover`);
+    const p = pickupFor(d.weekOf);
+    const when = d.when || 'this Sunday';
+    return {
+      subject: `New pickup window ${when}: ${p.windowLabel}`,
+      html: layout(env, {
+        heading: 'Pickup window is changing',
+        intro:
+          `Hey ${d.firstName || 'there'}, quick heads up on Sunday pickup.` +
+          `<br><br>Starting ${when}, the pickup window at the kitchen is <b>${p.windowLabel}</b>, ` +
+          `not ${change.before.label}. Same place.`,
+        rows: [['Where', p.addressLine], ['When', `Sundays, ${p.windowLabel}`]],
+        note:
+          `A lot of you told us ${change.before.label} was hard to make, so we are giving you a ` +
+          `${p.lengthLabel} window instead. Your food is packed and ready from the moment it opens.<br><br>` +
+          `If you miss the window we can still get your meals to you, but it is a flat $${MISS_FEE_DOLLARS} ` +
+          `to deliver them.<br><br>` +
+          `If a Sunday does not work for you, reply to this email before Saturday and we will figure ` +
+          `something out. We would rather hear from you than have your food sitting there.`,
+      }),
+      sms: `Gainz Train: new pickup window starting ${when}. Sun ${p.windowSms} (was ${change.before.sms}), ${p.addressSms}. Miss it and delivery is $${MISS_FEE_DOLLARS}.`,
+    };
+  },
 
-  pickup_reminder: (d, env) => ({
-    subject: `Pickup today: ${PICKUP.windowLabel} at the Orem kitchen`,
-    html: layout(env, {
-      heading: 'Pickup is today 🥡',
-      intro:
-        `Morning ${d.firstName || 'there'}, reminder that your meals are ready today at the kitchen, ` +
-        `not at a house.`,
-      rows: [['Where', PICKUP.addressLine], ['When', `Today, ${PICKUP.windowLabel}`]],
-      note:
-        `That is a 45 minute window, so set an alarm if you need to. If you cannot make it, reply to ` +
-        `this email and we will deliver instead for a flat $10.`,
-    }),
-    sms: `Gainz Train: pickup is TODAY ${PICKUP.windowSms} at ${PICKUP.addressSms}. 45 min window. Miss it and delivery is $10.`,
-  }),
+  pickup_reminder: (d, env) => {
+    const p = pickupFor(d.weekOf);
+    return {
+      subject: `Pickup today: ${p.windowLabel} at the Orem kitchen`,
+      html: layout(env, {
+        heading: 'Pickup is today 🥡',
+        intro:
+          `Morning ${d.firstName || 'there'}, reminder that your meals are ready today at the kitchen.`,
+        rows: [['Where', p.addressLine], ['When', `Today, ${p.windowLabel}`]],
+        note:
+          `That is a ${p.lengthLabel} window, so set an alarm if you need to. If you cannot make it, reply to ` +
+          `this email and we will deliver instead for a flat $${MISS_FEE_DOLLARS}.`,
+      }),
+      sms: `Gainz Train: pickup is TODAY ${p.windowSms} at ${p.addressSms}. ${p.lengthSms} window. Miss it and delivery is $${MISS_FEE_DOLLARS}.`,
+    };
+  },
 
   // ----- Billing, fired off the Stripe webhook (Step 2) -----
   // ⚠️ The "next step" line used to read "pick your meals for THIS week before the Friday cutoff".

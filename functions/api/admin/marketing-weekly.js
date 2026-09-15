@@ -77,13 +77,14 @@ export async function onRequestPost(context) {
   // Delivery stops on the Sunday just delivered (the week the ops week label calls the prior Monday).
   const lastSunday = await one(env.DB,
     `SELECT o.week_of, COUNT(*) AS orders, COALESCE(SUM(o.total_meals),0) AS meals,
-            SUM(CASE WHEN COALESCE(o.delivery_method, c.delivery_method) = 'delivery' THEN 1 ELSE 0 END) AS stops
+            COUNT(DISTINCT CASE WHEN COALESCE(o.delivery_method, c.delivery_method) = 'delivery'
+                 THEN LOWER(TRIM(COALESCE(c.address,''))) || '|' || LOWER(TRIM(COALESCE(c.city,''))) || '|' || COALESCE(c.zip,'') END) AS stops
        FROM orders o JOIN customers c ON c.id = o.customer_id
       WHERE o.status IN ('locked','prepped') AND o.week_of < ? AND o.week_of >= ?
       GROUP BY o.week_of ORDER BY o.week_of DESC LIMIT 1`, endIso.slice(0, 10), startIso.slice(0, 10));
   if (lastSunday) {
     lines.push(`— kitchen, Sunday ${lastSunday.week_of} —`);
-    lines.push(`• ${lastSunday.orders} orders, ${lastSunday.meals} meals, ${lastSunday.stops} delivery stops` +
+    lines.push(`• ${lastSunday.orders} orders, ${lastSunday.meals} meals, ${lastSunday.stops} delivery stops (distinct addresses)` +
       (lastSunday.stops >= STOP_TRIGGER ? ` ⚠️ at or over Jayson's ${STOP_TRIGGER}-stop line` : ''));
   }
 

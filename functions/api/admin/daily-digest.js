@@ -39,10 +39,12 @@ export async function onRequestPost(context) {
   // capacity block below uses orderableWeek(), which differs on Saturday and Sunday, and one sentence
   // must never carry two weeks. STOP_TRIGGER is the 12 he said out loud; his written number (due
   // Tue 09-16) replaces it here, nowhere else.
-  // Same stop definition as route.js (one stop per locked delivery order; the order's method is a
-  // lock-time snapshot and the customer's is the fallback), so the digest and the route sheet agree.
+  // A stop is a PLACE Jayson drives to: distinct delivery addresses among locked delivery orders (two
+  // housemates are one stop, as on the ops Delivery map; route.js counts one per order, so it can read
+  // higher). The order's method is a lock-time snapshot, the customer's is the fallback.
   const stopsRow = await one(env.DB,
-    `SELECT COUNT(*) AS n FROM orders o JOIN customers c ON c.id = o.customer_id
+    `SELECT COUNT(DISTINCT LOWER(TRIM(COALESCE(c.address,''))) || '|' || LOWER(TRIM(COALESCE(c.city,''))) || '|' || COALESCE(c.zip,'')) AS n
+       FROM orders o JOIN customers c ON c.id = o.customer_id
       WHERE o.week_of = ? AND o.status = 'locked' AND COALESCE(o.delivery_method, c.delivery_method) = 'delivery'`, week);
   const stops = stopsRow?.n || 0;
   // tier_price_cents is NULL on almost every sub (see weeklyListCents) — derive from the plan bands.
@@ -80,7 +82,7 @@ export async function onRequestPost(context) {
   recent.slice(0, 8).forEach((r) => { try { const d = JSON.parse(r.detail_json || '{}'); if (d.summary) lines.push('• ' + d.summary); } catch { /* skip */ } });
   lines.push('—');
   lines.push(`Active subscriptions: ${activeCount?.n || 0}`);
-  lines.push(`This week locked: ${prod?.orders || 0} orders / ${prod?.meals || 0} meals / ${stops} delivery stops (${week})` +
+  lines.push(`This week locked: ${prod?.orders || 0} orders / ${prod?.meals || 0} meals / ${stops} delivery stops (distinct addresses) (${week})` +
     (stops >= STOP_TRIGGER ? ` ⚠️ at or over Jayson's ${STOP_TRIGGER}-stop line` : ''));
   lines.push(`Weekly recurring (list): ${money(wrrCents)}`);
   lines.push(`Net revenue 30d: ${money((rev30?.cents || 0) + (refunds30?.cents || 0))}`);

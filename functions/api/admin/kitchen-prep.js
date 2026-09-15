@@ -46,7 +46,16 @@ export async function onRequestGet(context) {
   const totals = await one(env.DB,
     `SELECT COUNT(*) AS orders, COALESCE(SUM(total_meals),0) AS meals
        FROM orders WHERE week_of = ? AND ${totalsFilter}`, week);
-  const grand = meals.reduce((s, m) => s + (m.total_qty || 0), 0);
+  // Collapse the tally onto the menu's current name. A rename splits one dish into two rows here
+  // (the GROUP BY includes meal_name), so merge by position after resolving the name.
+  const tallyByPos = new Map();
+  for (const m of meals) {
+    const prev = tallyByPos.get(m.position);
+    if (prev) prev.total_qty += (m.total_qty || 0);
+    else tallyByPos.set(m.position, { position: m.position, name: displayName(m.position, m.name), total_qty: m.total_qty || 0 });
+  }
+  const mealsResolved = [...tallyByPos.values()].sort((a, b) => b.total_qty - a.total_qty || a.position - b.position);
+  const grand = mealsResolved.reduce((s, m) => s + (m.total_qty || 0), 0);
 
   // Per order × meal rows (with goal/sex) — drive batches + packing.
   const rows = await all(env.DB,
@@ -61,15 +70,25 @@ export async function onRequestGet(context) {
 
   // Menu position → slug + macros (for batch matching + label macros).
   const wm = await one(env.DB, `SELECT meals_json FROM weekly_menus WHERE week_of = ?`, week);
-  const slugByPosition = {}, macroByPosition = {};
+  const slugByPosition = {}, macroByPosition = {}, nameByPosition = {};
   try {
     (JSON.parse(wm?.meals_json || '[]') || []).forEach((m) => {
       if (m && m.position != null) {
         slugByPosition[m.position] = m.slug;
         macroByPosition[m.position] = { calories: m.calories, protein: m.protein, carbs: m.carbs, fat: m.fat };
+        nameByPosition[m.position] = m.name;
       }
     });
   } catch { /* ignore */ }
+
+  // ⚠️ THE MENU'S CURRENT NAME WINS OVER THE COPY STORED ON THE SELECTION (2026-09-15).
+  // meal_selections.meal_name is a snapshot taken when the customer picked. Rename or swap a meal
+  // mid-week and every order placed before that keeps the OLD name, so one dish reports as two lines:
+  // week 2026-09-20 showed Steak Fajita as 4 + 3 and Tomato Chicken as 3 + 2 after a spelling fix.
+  // Recipes already resolved correctly because they go by POSITION, so this was never a buying
+  // problem, only a counting one, and it split the number the kitchen cooks against. Falls back to
+  // the stored name when the position is no longer on the menu (a meal removed after someone ordered).
+  const displayName = (position, stored) => nameByPosition[position] || stored;
 
   let batches = [], unmatched = [], recipesLoaded = false;
   try {
@@ -87,13 +106,13 @@ export async function onRequestGet(context) {
       profile: profileKey(r.goal, r.sex), goal: r.goal, sex: r.sex, method: r.method, zone: r.zone, meals: [],
     });
     const mac = macroByPosition[r.meal_position] || {};
-    o.meals.push({ name: r.meal_name, qty: r.qty, calories: mac.calories, protein: mac.protein, carbs: mac.carbs, fat: mac.fat });
+    o.meals.push({ name: displayName(r.meal_position, r.meal_name), qty: r.qty, calories: mac.calories, protein: mac.protein, carbs: mac.carbs, fat: mac.fat });
   }
   const packing = Object.values(orders);
 
   return ok({
     week_of: week,
-    meals,
+    meals: mealsResolved,
     totals: { orders: totals?.orders || 0, meals: totals?.meals || 0, summed_qty: grand },
     batches, packing, unmatched, recipes_loaded: recipesLoaded,
   });

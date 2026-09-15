@@ -10,7 +10,7 @@
 //                          meals: [ { meal_name, quantity } ] } ] }
 //   gender → "F"|"M"   goal → "Cut"|"Maintain"|"Bulk"   fulfillment → "delivery"|"pickup"
 import { json } from '../../_lib/respond.js';
-import { all } from '../../_lib/db.js';
+import { all, one } from '../../_lib/db.js';
 import { upcomingSunday } from '../../_lib/menu.js';
 import { requireStaffOrAdmin } from '../../_lib/admin.js';
 
@@ -70,6 +70,23 @@ export async function onRequestGet(context) {
       ORDER BY c.last_name, c.first_name, ms.meal_position`,
     week);
 
+  // ⚠️ THE MENU'S CURRENT NAME WINS OVER THE COPY STORED ON THE SELECTION (2026-09-15).
+  // meal_selections.meal_name is a snapshot taken when the customer picked. Rename or swap a meal
+  // mid-week and every order placed before the change keeps the OLD name, so one dish arrives at the
+  // dashboard as two different meals: week 2026-09-20 showed Steak Fajita as 4 + 3 and Tomato Chicken
+  // as 3 + 2 after a spelling fix. This endpoint feeds Pull Orders, which feeds the cook list, the
+  // Assembly pack list, the portioning view, the labels and the ingredient totals, so resolving it
+  // HERE fixes every one of them at once. Recipes were always resolved by POSITION and were never
+  // wrong; this was a counting and display problem. Falls back to the stored name when the position
+  // is no longer on the menu, which is what happens if a meal is removed after someone ordered it.
+  const wm = await one(env.DB, `SELECT meals_json FROM weekly_menus WHERE week_of = ?`, week);
+  const nameByPosition = {};
+  try {
+    (JSON.parse(wm?.meals_json || '[]') || []).forEach((m) => {
+      if (m && m.position != null && m.name) nameByPosition[m.position] = m.name;
+    });
+  } catch { /* menu unreadable: stored names stand */ }
+
   const byCustomer = new Map();
   for (const r of rows) {
     let entry = byCustomer.get(r.customer_id);
@@ -89,7 +106,11 @@ export async function onRequestGet(context) {
       };
       byCustomer.set(r.customer_id, entry);
     }
-    entry.meals.push({ meal_name: r.meal_name, quantity: r.qty });
+    // Merge onto the resolved name so a mid-week rename does not split one dish into two rows.
+    const nm = nameByPosition[r.meal_position] || r.meal_name;
+    const existing = entry.meals.find((m) => m.meal_name === nm);
+    if (existing) existing.quantity += r.qty;
+    else entry.meals.push({ meal_name: nm, quantity: r.qty });
   }
 
   return json({ week_of: week, orders: [...byCustomer.values()] }, 200);

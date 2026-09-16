@@ -146,6 +146,14 @@ describe('overlaps a table cannot answer', () => {
   });
 });
 
+describe('a failed menu call', () => {
+  test('still tracks the locked order using orderable_week from /api/me', () => {
+    const m = me({ orderable_week: '2026-09-27', orders: [{ week_of: '2026-09-20', delivery_status: 'prepping', total_meals: 10 }] });
+    const r = homeState(m, null, SAT);
+    assert.equal(r.state, 'delivery_prepping');
+  });
+});
+
 describe('greeting', () => {
   test('uses the Mountain-time hour and the first name', () => {
     assert.equal(greeting('Jake', WED), 'Morning, Jake');

@@ -180,7 +180,7 @@
       }
       if (s && !['canceled', 'incomplete', 'incomplete_expired'].includes(s.status)) {
         const rate = s.per_meal_cents ? money(s.per_meal_cents) + ' a meal' : '';
-        rows.push({ k: 'Plan', v: `${s.meals_per_week} meals a week`, small: [rate, s.coupon_code && s.discount_active ? s.coupon_code + ' applied' : ''].filter(Boolean).join(', '), act: { label: 'Manage', href: '/app/manage/' } });
+        rows.push({ k: 'Plan', v: s.meals_per_week ? `${s.meals_per_week} meals a week` : 'Plan on file', small: [rate, s.coupon_code && s.discount_active ? s.coupon_code + ' applied' : ''].filter(Boolean).join(', '), act: { label: 'Manage', href: '/app/manage/' } });
         if (me.next_charge && s.status !== 'paused' && me.next_charge.will_charge !== false) {
           const nc = me.next_charge;
           const bits = [];

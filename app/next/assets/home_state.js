@@ -37,7 +37,8 @@ function homeState(me, menu, now) {
   // The week being delivered is the Sunday on or after today in Mountain time; when that is earlier
   // than the orderable week, there is an order to track and a next week to pick.
   var deliverySunday = sundayOnOrAfter(now);
-  var orderableWeek = menu && menu.week_of;
+  // /api/me carries orderable_week too, so a failed menu call cannot hide a locked order (QA note).
+  var orderableWeek = (menu && menu.week_of) || (me && me.orderable_week) || null;
   var deliveryOrder = findOrder(orders, deliverySunday);
   var trackingWeek = orderableWeek && deliverySunday < orderableWeek && deliveryOrder ? deliverySunday : null;
   out.week_of = trackingWeek || orderableWeek || deliverySunday;

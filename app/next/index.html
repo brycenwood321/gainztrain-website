@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Gainz Train</title>
+  <meta name="description" content="Your meals, your week, your plan." />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="manifest" href="/app/next/manifest.webmanifest" />
+  <meta name="theme-color" content="#ff6b35" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Gainz Train" />
+  <link rel="apple-touch-icon" href="/app/ops/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app/next/assets/app.css" />
+</head>
+<body>
+  <div class="topbar">
+    <a href="/app/next/" class="brand" aria-label="Gainz Train home">GAINZ<span class="t">TRAIN</span></a>
+    <div class="topbar-right">
+      <button class="iconbtn hidden" id="bellBtn" aria-label="Notifications">🔔<span class="dot hidden" id="bellDot"></span></button>
+      <a id="opsLink" href="/app/ops/" class="iconbtn hidden" aria-label="Ops dashboard" title="Ops dashboard">⚙</a>
+      <div class="feed hidden" id="feedPanel">
+        <div class="feed-head"><h3>Notifications</h3><a id="markAllRead">Mark all read</a></div>
+        <div id="feedList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <!-- Skeleton while /api/me loads: the page never shows a spinner -->
+    <div id="skel">
+      <div class="sk" style="height:34px;width:60%;margin:8px 0 14px;border-radius:8px;">.</div>
+      <div class="card hero"><div class="sk" style="height:16px;width:40%;">.</div><div class="sk" style="height:34px;width:75%;margin-top:10px;">.</div><div class="sk" style="height:16px;width:90%;margin-top:10px;">.</div><div class="sk" style="height:50px;margin-top:16px;border-radius:12px;">.</div></div>
+      <div class="card"><div class="sk" style="height:16px;width:30%;">.</div><div class="sk" style="height:18px;width:70%;margin-top:10px;">.</div></div>
+    </div>
+
+    <!-- Login -->
+    <div id="loginView" class="hidden">
+      <div class="card">
+        <h1 style="font-size:2rem;margin-bottom:4px;">Your account</h1>
+        <div class="sub" style="margin-bottom:12px;">Log in to see your meals, your week and your plan.</div>
+        <div class="tabs">
+          <div class="tab active" data-tab="password">Password</div>
+          <div class="tab" data-tab="link">Email me a link</div>
+        </div>
+        <form id="pwForm" class="tabpane" data-pane="password">
+          <div id="nameFields" class="hidden">
+            <label for="firstName">First name</label>
+            <input id="firstName" type="text" autocomplete="given-name" />
+            <label for="regPhone">Phone</label>
+            <input id="regPhone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(801) 555-1234" />
+            <label for="regCity">City</label>
+            <input id="regCity" type="text" autocomplete="address-level2" placeholder="Provo" />
+          </div>
+          <label for="email">Email</label>
+          <input id="email" type="email" autocomplete="email" required />
+          <label for="password">Password</label>
+          <input id="password" type="password" autocomplete="current-password" required />
+          <button type="submit" class="btn primary" id="pwSubmit" style="margin-top:16px;">Log in</button>
+          <div class="switch-link"><a id="forgotPw">Forgot your password?</a></div>
+          <div class="switch-link" id="switchMode">New here? <a id="toRegister">Create an account</a></div>
+        </form>
+        <form id="linkForm" class="tabpane hidden" data-pane="link">
+          <label for="linkEmail">Email</label>
+          <input id="linkEmail" type="email" autocomplete="email" required />
+          <button type="submit" class="btn primary" style="margin-top:16px;">Send login link</button>
+        </form>
+        <div id="loginMsg" class="msg"></div>
+      </div>
+    </div>
+
+    <!-- Home -->
+    <div id="homeView" class="hidden">
+      <h1 id="greet" style="font-size:2rem;margin:6px 0 14px;"></h1>
+      <div class="card hero" id="hero"></div>
+      <div class="card hidden" id="nextCard"></div>
+      <div class="card" id="rows" style="padding-top:4px;padding-bottom:4px;"></div>
+      <div class="card hidden" id="inviteCard"></div>
+      <div style="text-align:center;margin-top:18px;"><button class="btn ghost" id="logoutBtn" style="min-height:44px;">Log out</button></div>
+    </div>
+  </div>
+
+  <script src="/app/next/assets/app.js"></script>
+  <script src="/app/next/assets/home_state.js"></script>
+  <script>
+    const { api, post, money, money0, esc, $, toast, tabbar } = GT;
+    tabbar('home');
+    let mode = 'login';
+
+    // ── Login (same endpoints as /app/, same rules: phone + city required to register) ──
+    function showMsg(text, kind) { const m = $('loginMsg'); m.textContent = text; m.className = 'msg show ' + kind; }
+    function clearMsg() { $('loginMsg').className = 'msg'; }
+    function selectTab(pane) {
+      document.querySelectorAll('.tabs .tab').forEach((x) => x.classList.toggle('active', x.dataset.tab === pane));
+      document.querySelectorAll('.tabpane').forEach((p) => p.classList.toggle('hidden', p.dataset.pane !== pane));
+      clearMsg();
+    }
+    document.querySelectorAll('.tabs .tab').forEach((t) => t.addEventListener('click', () => selectTab(t.dataset.tab)));
+    $('forgotPw').addEventListener('click', () => {
+      const e = $('email').value.trim(); if (e) $('linkEmail').value = e;
+      selectTab('link');
+      showMsg("Enter your email and we'll send you a link to log in. Check spam if you don't see it.", 'info');
+    });
+    function toggleMode() {
+      mode = mode === 'login' ? 'register' : 'login';
+      const reg = mode === 'register';
+      $('nameFields').classList.toggle('hidden', !reg);
+      $('pwSubmit').textContent = reg ? 'Create account' : 'Log in';
+      $('password').setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
+      $('switchMode').innerHTML = reg ? 'Already have an account? <a id="toRegister">Log in</a>' : 'New here? <a id="toRegister">Create an account</a>';
+      $('toRegister').addEventListener('click', toggleMode);
+      clearMsg();
+    }
+    $('toRegister').addEventListener('click', toggleMode);
+    $('pwForm').addEventListener('submit', async (e) => {
+      e.preventDefault(); clearMsg();
+      const email = $('email').value.trim(), password = $('password').value;
+      if (mode === 'register') {
+        if (!$('regPhone').value.trim()) { showMsg('Enter your phone number.', 'err'); return; }
+        if (!$('regCity').value.trim()) { showMsg('Enter your city.', 'err'); return; }
+      }
+      const path = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
+      const payload = mode === 'register'
+        ? { email, password, first_name: $('firstName').value.trim(), phone: $('regPhone').value.trim(), city: $('regCity').value.trim() }
+        : { email, password };
+      $('pwSubmit').disabled = true;
+      const { status, body } = await post(path, payload);
+      $('pwSubmit').disabled = false;
+      if (status === 200 && body.ok) { boot(); return; }
+      showMsg(body.detail || 'Something went wrong. Try again.', 'err');
+    });
+    $('linkForm').addEventListener('submit', async (e) => {
+      e.preventDefault(); clearMsg();
+      const { body } = await post('/api/auth/request-link', { email: $('linkEmail').value.trim() });
+      showMsg((body.message || 'If that email is on file, a login link is on its way.') + ' Check spam and mark it "Not spam".', 'ok');
+    });
+    $('logoutBtn').addEventListener('click', async () => { await post('/api/auth/logout'); location.reload(); });
+
+    // ── Home ──
+    function mealRows(meals) {
+      if (!meals || !meals.length) return '';
+      return '<div class="meals">' + meals.map((m) => `<div class="meal"><div class="ph">${m.image ? `<img src="${esc(m.image)}" alt="" loading="lazy" onerror="this.parentNode.textContent='🍽️'">` : esc(m.emoji || '🍽️')}</div><div class="nm">${esc(m.name)}</div><div class="q">×${m.qty}</div></div>`).join('') + '</div>';
+    }
+    function trackerHtml(t) {
+      if (!t) return '';
+      return '<div class="track">' + t.steps.map((s) => `<div class="st ${s.done ? 'done' : ''} ${s.now ? 'now' : ''}"><div class="bar"></div><div class="lb">${esc(s.label)}</div></div>`).join('') + '</div>';
+    }
+    function cardHtml(c, eyebrow) {
+      return (eyebrow ? `<div class="eyebrow">${esc(eyebrow)}</div>` : '')
+        + `<div class="headline">${esc(c.headline)}</div>`
+        + (c.sub ? `<div class="sub">${esc(c.sub)}</div>` : '')
+        + trackerHtml(c.tracker)
+        + mealRows(c.meals)
+        + (c.note ? `<div class="note ${c.note.tone === 'red' ? 'red' : (c.note.tone === 'green' ? 'green' : '')}">${esc(c.note.text)}</div>` : '')
+        + (c.cta ? `<a class="btn primary" href="${esc(c.cta.href)}">${esc(c.cta.label)}</a>` : '');
+    }
+    function fmtDate(iso) { return iso ? new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/Denver', month: 'short', day: 'numeric' }) : ''; }
+
+    function render(me, menu) {
+      const c = me.customer, s = me.subscription;
+      $('greet').textContent = gtGreeting(c.first_name, Date.now());
+      if (c.role === 'staff') $('opsLink').classList.remove('hidden');
+      const h = homeState(me, menu, Date.now());
+      const weekLabel = h.week_of ? 'Week of ' + new Date(h.week_of + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'America/Denver', month: 'short', day: 'numeric' }) : '';
+      $('hero').innerHTML = cardHtml(h, ['no_plan', 'plan_ended', 'paused', 'past_due_hold', 'past_due_cooks'].includes(h.state) ? '' : weekLabel);
+      if (h.next) { $('nextCard').classList.remove('hidden'); $('nextCard').innerHTML = cardHtml(h.next, 'Next week'); } else $('nextCard').classList.add('hidden');
+
+      // Quiet rows: delivery, plan, next charge.
+      const rows = [];
+      const pk = me.pickup || {};
+      if (c.delivery_method === 'delivery') {
+        rows.push({ k: 'Delivery', v: esc([c.address, c.city].filter(Boolean).join(', ') || 'Address on file'), small: 'Sundays' + (c.delivery_zone ? ', zone ' + c.delivery_zone : ''), act: { label: 'Change', href: '/app/manage/' } });
+      } else {
+        rows.push({ k: 'Pickup', v: esc(pk.addressShort || 'Orem kitchen'), small: 'Sundays ' + (pk.windowLabel || ''), act: { label: 'Change', href: '/app/manage/' } });
+      }
+      if (s && !['canceled', 'incomplete', 'incomplete_expired'].includes(s.status)) {
+        const rate = s.per_meal_cents ? money(s.per_meal_cents) + ' a meal' : '';
+        rows.push({ k: 'Plan', v: `${s.meals_per_week} meals a week`, small: [rate, s.coupon_code && s.discount_active ? s.coupon_code + ' applied' : ''].filter(Boolean).join(', '), act: { label: 'Manage', href: '/app/manage/' } });
+        if (me.next_charge && s.status !== 'paused' && me.next_charge.will_charge !== false) {
+          const nc = me.next_charge;
+          const bits = [];
+          if (nc.coupon) bits.push(nc.coupon + ' applied');
+          if (nc.credit_cents) bits.push(money0(nc.credit_cents) + ' in free meals taken off');
+          if (nc.upcharge_cents) bits.push('includes specialty meals');
+          rows.push({ k: s.cancel_at_period_end ? 'Last charge' : 'Next charge', v: 'about ' + money(nc.amount_cents) + (nc.date ? ' on ' + fmtDate(nc.date) : ''), small: bits.join(', ') || 'Charged Saturday, cooked Saturday, eaten all week', act: { label: 'Billing', href: '/app/manage/#billing' } });
+        }
+      }
+      $('rows').innerHTML = rows.map((r) => `<div class="row"><div><div class="k">${r.k}</div><div class="v">${r.v}${r.small ? `<small>${esc(r.small)}</small>` : ''}</div></div>${r.act ? `<a class="act" href="${r.act.href}">${r.act.label}</a>` : ''}</div>`).join('');
+      if (s) loadReferral();
+    }
+
+    async function loadReferral() {
+      const card = $('inviteCard');
+      try {
+        const r = await fetch('/api/account/referral', { credentials: 'same-origin' });
+        const b = await r.json().catch(() => ({}));
+        if (!r.ok || !b.ok || !b.code) { card.classList.add('hidden'); return; }
+        const credited = (b.referrals || []).filter((x) => x.status === 'credited').length;
+        const pending = (b.referrals || []).filter((x) => x.status === 'pending').length;
+        const line = credited || pending ? `${credited} friend${credited === 1 ? '' : 's'} paid, ${pending} signed up` : `They get ${b.friend_offer || '8 free meals'}. You get ${b.meals || 4} meals off.`;
+        card.classList.remove('hidden');
+        card.innerHTML = `<div class="eyebrow">Invite a friend</div>
+          <div class="row" style="border-top:none;padding-top:4px;"><div><div class="v" style="font-family:var(--head);font-size:1.5rem;letter-spacing:.06em;">${esc(b.code)}</div><div class="k" style="margin-top:2px;">${esc(line)}</div></div>
+          <button class="act" id="refCopy">Copy link</button></div>
+          <div style="display:flex;gap:8px;margin-top:4px;"><a class="btn ghost" style="flex:1;min-height:44px;" href="sms:?&body=${encodeURIComponent(b.share_text || b.link)}">Text it</a><button class="btn ghost" style="flex:1;min-height:44px;" id="refShare">Share</button></div>`;
+        $('refCopy').onclick = async () => { try { await navigator.clipboard.writeText(b.link); toast('Link copied'); } catch { toast(b.link); } };
+        $('refShare').onclick = async () => { if (navigator.share) { try { await navigator.share({ title: 'Gainz Train', text: b.share_text || '', url: b.link }); } catch {} } else { try { await navigator.clipboard.writeText(b.link); toast('Link copied'); } catch {} } };
+      } catch { card.classList.add('hidden'); }
+    }
+
+    // ── Notifications (unchanged behaviour from /app/) ──
+    let feedOpen = false;
+    function relTime(iso) {
+      if (!iso) return '';
+      const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+      if (s < 60) return 'just now';
+      const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+      const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+      const d = Math.floor(h / 24); if (d < 7) return d + 'd ago';
+      return fmtDate(iso);
+    }
+    async function loadFeed() {
+      const { status, body } = await api('/api/notifications');
+      if (status !== 200 || !body.ok) return;
+      $('bellBtn').classList.remove('hidden');
+      $('bellDot').classList.toggle('hidden', !(body.unread > 0));
+      const list = $('feedList');
+      if (!body.notifications || !body.notifications.length) { list.innerHTML = '<div class="feed-empty">Nothing yet. We will let you know when anything changes.</div>'; return; }
+      list.innerHTML = body.notifications.map((it) => `<a class="feed-item ${it.read_at ? '' : 'unread'}" href="${esc(it.href || '/app/next/')}"><div class="ft">${esc(it.title || '')}</div>${it.body ? `<div class="fb">${esc(it.body)}</div>` : ''}<div class="fc">${relTime(it.created_at)}</div></a>`).join('');
+    }
+    async function markRead() { await post('/api/notifications/read', { all: true }); $('bellDot').classList.add('hidden'); document.querySelectorAll('.feed-item.unread').forEach((el) => el.classList.remove('unread')); }
+    $('bellBtn').addEventListener('click', async (e) => {
+      e.stopPropagation(); feedOpen = !feedOpen; $('feedPanel').classList.toggle('hidden', !feedOpen);
+      if (feedOpen) { await loadFeed(); if (!$('bellDot').classList.contains('hidden')) post('/api/notifications/read', { all: true }).then(() => $('bellDot').classList.add('hidden')); }
+    });
+    $('markAllRead').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); markRead(); });
+    document.addEventListener('click', (e) => { if (feedOpen && !$('feedPanel').contains(e.target) && !$('bellBtn').contains(e.target)) { feedOpen = false; $('feedPanel').classList.add('hidden'); } });
+
+    // ── Boot ──
+    async function boot() {
+      const [meR, menuR] = await Promise.all([api('/api/me'), api('/api/menu/current')]);
+      $('skel').classList.add('hidden');
+      if (meR.status === 200 && meR.body.ok) {
+        $('loginView').classList.add('hidden'); $('homeView').classList.remove('hidden');
+        render(meR.body, menuR.status === 200 ? menuR.body : null);
+        loadFeed();
+      } else {
+        $('homeView').classList.add('hidden'); $('loginView').classList.remove('hidden');
+      }
+    }
+    boot();
+  </script>
+</body>
+</html>

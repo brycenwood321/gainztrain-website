@@ -13,7 +13,8 @@
     "db:migrate:local": "wrangler d1 migrations apply gainztrain --local",
     "db:migrate:remote": "wrangler d1 migrations apply gainztrain --remote",
     "dev": "wrangler pages dev",
-    "tail": "wrangler pages deployment tail"
+    "tail": "wrangler pages deployment tail",
+    "guard": "node scripts/diff_guard.mjs --working"
   },
   "devDependencies": {
     "wrangler": "^4.95.0"

@@ -472,9 +472,12 @@ export const TEMPLATES = {
         d.discount ? ['You saved', money(d.discount)] : null,
         d.firstDelivery ? ['Your first delivery', prettyDate(d.firstDelivery)] : null,
       ].filter(Boolean),
-      note: d.firstDelivery
+      note: (d.firstDelivery
         ? `Your first delivery is <b>${prettyDate(d.firstDelivery)}</b>. Pick your meals for that week any time before the Friday midnight cutoff before it — if you don't, we'll choose a balanced set for you so you never miss a week.`
-        : 'Next step: pick your meals before the Friday midnight cutoff. We\'ll email you when each new menu drops.',
+        : 'Next step: pick your meals before the Friday midnight cutoff. We\'ll email you when each new menu drops.')
+        // The ask at the moment of purchase (offers shelf 2026-09-14). Brycen 09-16: every new customer
+        // gets their code in this receipt, not only on the account page and the Monday email.
+        + referralNote(d, '<br><br>'),
       cta: { label: 'Pick your meals', href: link(env, '/app/menu/') },
     }),
     sms: `Gainz Train: you\'re in! Charged ${money(d.amount)}.` +

@@ -177,3 +177,18 @@ describe('the referral code table is on the ops dashboard (source check)', () =>
     assert.match(src, /customers: customers\.map/);
   });
 });
+
+describe('a new customer meets their code in the first receipt (source check)', () => {
+  test('order_receipt_first carries referralNote and the webhook passes referralData', async () => {
+    const tpl = read('../functions/_lib/notify_templates.js');
+    const start = tpl.indexOf('order_receipt_first:');
+    assert.ok(tpl.slice(start, start + 1800).includes("referralNote(d, '<br><br>')"), 'receipt carries the note');
+    const hook = read('../functions/api/stripe-webhook.js');
+    assert.ok(hook.includes("await notify(env, cust, 'order_receipt_first', { ...data, ...(await referralData(env, cust)) }"), 'webhook passes referralData');
+    const { TEMPLATES } = await import('../functions/_lib/notify_templates.js');
+    const html = TEMPLATES.order_receipt_first({ amount: 9500, firstDelivery: '2026-09-20', referral_code: 'ZAC-7K2Q', referral_link: 'https://x.test/start/?ref=ZAC-7K2Q', referral_meals: 4 }, {}).html;
+    assert.ok(html.includes('ZAC-7K2Q') && html.includes('4 free meals'));
+    const bare = TEMPLATES.order_receipt_first({ amount: 9500 }, {}).html;
+    assert.ok(!bare.includes('undefined') && !bare.includes('Know someone'));
+  });
+});

@@ -16,6 +16,7 @@ import { one, run, nowIso } from '../_lib/db.js';
 import { hmacSign, constantTimeEqual } from '../_lib/crypto.js';
 import { ensureCustomer, mirrorSubscription, mirrorInvoice, mirrorPayment, audit, invoiceSubscriptionId } from '../_lib/mirror.js';
 import { notify } from '../_lib/notify.js';
+import { referralData } from '../_lib/referral.js';
 import { ownerNotify } from '../_lib/owner_notify.js';
 import { capiEvent } from '../_lib/capi.js';
 import { stripe } from '../_lib/stripe.js';
@@ -257,7 +258,7 @@ async function safeNotifyBilling(env, event) {
         };
         // Fire only on invoice.paid (NOT the payment_succeeded twin) and key on the invoice id.
         if (reason === 'subscription_create') {
-          await notify(env, cust, 'order_receipt_first', data, { dedupKey: `receipt_first:${obj.id}` });
+          await notify(env, cust, 'order_receipt_first', { ...data, ...(await referralData(env, cust)) }, { dedupKey: `receipt_first:${obj.id}` });
         } else if ((obj.attempt_count || 0) > 1) {
           // A renewal that succeeded after one or more failed attempts → recovery, not a plain receipt.
           await notify(env, cust, 'payment_recovered', data, { dedupKey: `recovered:${obj.id}` });

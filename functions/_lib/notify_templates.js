@@ -64,6 +64,17 @@ function layout(env, { heading, intro, rows = [], note, cta }) {
 
 const PRORATE_NOTE = 'This change takes effect for this week, prorated — Stripe charges the difference (or credits you) on your card automatically.';
 
+// The referral ask, on the three messages a customer reads when they are happiest (menu drop, delivered,
+// pickup ready). Board 2026-09-14: GT had never once asked for a referral. Call sites pass
+// referral_code and referral_link from referral.js referralData(); with neither present the line is
+// simply absent, so an older caller can never print "undefined".
+function referralNote(d, prefix = '') {
+  if (!d || !d.referral_link || !d.referral_code) return '';
+  const meals = Number(d.referral_meals) > 0 ? Number(d.referral_meals) : 4;
+  return `${prefix}Know someone who would eat this? Send them your link and they get 8 free meals. When their first week is paid, ${meals} free meals come off your bill. ` +
+    `<a href="${d.referral_link}" style="color:${ORANGE};font-weight:600">${d.referral_link}</a> (code ${d.referral_code})`;
+}
+
 // Defensive readers for the three fields that used to render the literal string "undefined" into a
 // customer-facing message when a caller omitted them. Each returns a falsy value the templates can
 // branch on rather than interpolating blindly.
@@ -261,6 +272,7 @@ export const TEMPLATES = {
       heading: 'This week\'s menu is live 🍱',
       intro: `The menu for the week of ${prettyDate(d.weekOf)} just dropped. Head in and pick your meals before the Friday cutoff — if you don\'t, we\'ll repeat last week for you automatically.`,
       cta: { label: 'Pick your meals', href: link(env, '/app/menu/') },
+      note: referralNote(d),
     }),
     sms: `Gainz Train: this week\'s menu is live! Pick your meals before Friday: ` + link(env, '/app/menu/'),
   }),
@@ -352,6 +364,7 @@ export const TEMPLATES = {
     html: layout(env, {
       heading: 'Delivered!',
       intro: `Your meals for the week of ${prettyDate(d.weekOf)} have been delivered. Enjoy — and crush your week. Not seeing them? Just reply and we\'ll sort it out.`,
+      note: referralNote(d),
     }),
     sms: `Gainz Train: your meals have been delivered. Enjoy! 💪`,
   }),
@@ -366,11 +379,26 @@ export const TEMPLATES = {
         heading: 'Ready for pickup 🥡',
         intro: `Your meals for the week of ${prettyDate(d.weekOf)} are packed and waiting. ${pickupSentence(d.weekOf)}`,
         rows: [['Where', p.addressLine], ['When', `Today, ${p.windowLabel}`]],
-        note: 'Can\'t make the window? Reply to this email and we\'ll sort something out.',
+        note: 'Can\'t make the window? Reply to this email and we\'ll sort something out.' + referralNote(d, '<br><br>'),
       }),
       sms: `Gainz Train: your meals are ready! ${p.smsLine}`,
     };
   },
+
+  // The referral launch (board ruling 2026-09-14, Brycen's channel pick 09-15). Marketing class, so the
+  // email carries the unsubscribe footer. The SMS string is used by the owner-run launch script only
+  // (gainz-train/scripts/send_referral_launch_*.py), never by an automated event. GSM-7, one segment.
+  referral_launch: (d, env) => ({
+    subject: 'Your friends eat free, and so do you',
+    html: layout(env, {
+      heading: 'Give 8 meals, get 4 🍱',
+      intro: `You now have a personal Gainz Train link. Send it to a friend: they get <b>8 free meals</b> (2 free every week for 4 weeks), and once their first week is paid, <b>4 free meals come off your next bill</b>. No limit on how many friends.`,
+      rows: d.referral_code ? [['Your code', d.referral_code]] : [],
+      cta: { label: 'Copy your link', href: link(env, '/app/') },
+      note: d.referral_link ? `Your link: <a href="${d.referral_link}" style="color:${ORANGE}">${d.referral_link}</a><br>It works forever. Full terms: <a href="${link(env, '/terms-of-service/#referrals')}" style="color:#7a7270">Section 5a</a>.` : '',
+    }),
+    sms: `Gainz Train: share ${d.referral_link || link(env, '/app/')} Friends get 8 free meals, you get 4 off your bill.`,
+  }),
 
   // ── Pickup logistics announcements (added 2026-08-22, reworked 2026-09-14) ───────────────────────
   // Both events change or restate the collection terms of an order the customer has ALREADY PAID FOR,

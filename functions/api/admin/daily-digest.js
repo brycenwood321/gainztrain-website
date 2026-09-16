@@ -8,6 +8,7 @@ import { one, all, addDaysIso } from '../../_lib/db.js';
 import { upcomingSunday, orderableWeek } from '../../_lib/menu.js';
 import { weeklyListCents, CAPACITY_ALERT_MEALS, CAPACITY_MEALS } from '../../_lib/plans.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
+import { referralStats } from './referrals.js';
 
 const ACTIVE = ['active', 'trialing', 'past_due'];
 const BILLING = ['active', 'trialing'];
@@ -86,6 +87,11 @@ export async function onRequestPost(context) {
     (stops >= STOP_TRIGGER ? ` ⚠️ at or over Jayson's ${STOP_TRIGGER}-stop line` : ''));
   lines.push(`Weekly recurring (list): ${money(wrrCents)}`);
   lines.push(`Net revenue 30d: ${money((rev30?.cents || 0) + (refunds30?.cents || 0))}`);
+  // Referrals, one line, never fatal (same rule as the capacity block below).
+  try {
+    const rs = await referralStats(env, new Date(Date.now() - 30 * 86400000).toISOString());
+    lines.push(`Referrals 30d: ${rs.window.paying} paid a first week (bar ${rs.window.bar}), ${rs.window.attributed} signed up via a link, ${(rs.credits_by_status.pending && rs.credits_by_status.pending.n) || 0} credits pending`);
+  } catch { lines.push('Referrals 30d: could not compute'); }
   lines.push(`Health: ${healthOk ? 'all clear ✅' : `⚠️ ${failed} failed comms, ${stuck} stuck webhooks`}`);
 
   const summary = `Daily digest — ${activeCount?.n || 0} active, ${prod?.meals || 0} meals / ${stops} stops this week` + (healthOk ? '' : ' · ⚠️ HEALTH');

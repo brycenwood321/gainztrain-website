@@ -9,6 +9,7 @@ import { all, one } from '../../_lib/db.js';
 import { reasonLabel } from '../../_lib/reasons.js';
 import { minutesByPerson } from './marketing-time.js';
 import { STOP_TRIGGER } from './daily-digest.js';
+import { referralStats } from './referrals.js';
 
 const money = (c) => `$${((c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
@@ -108,6 +109,19 @@ export async function onRequestPost(context) {
   if (!paid) lines.push('• could not compute (query failed); do not read this as zero');
   else if (!paid.sessions) lines.push('• no paid Utah sessions this week (ad off or nothing tagged)');
   else lines.push(`• ${paid.reached} of ${paid.sessions} paid Utah sessions reached "Continue to payment" = ${(100 * paid.reached / paid.sessions).toFixed(1)}% (baseline 2.0%; keep ≥2%, change one thing at 1–2%, kill <1%)`);
+
+  // Referrals (board ruling 2026-09-14). The keep bar is 5 code-attributed new PAYING customers in 30
+  // days, read on the 2026-10-18 lock; redemptions alone are free to generate and prove nothing.
+  try {
+    const rs = await referralStats(env, new Date(Date.now() - 30 * 86400000).toISOString());
+    lines.push('Referrals, last 30 days:');
+    lines.push(`• ${rs.window.paying} referred friends have PAID a first week (bar ${rs.window.bar} by 2026-10-18); ${rs.window.second_paid_week} reached a second paid week; ${rs.window.attributed} signed up through a link or code`);
+    const cr = rs.credits_by_status || {};
+    lines.push(`• credits to referrers: ${(cr.pending && cr.pending.n) || 0} pending, ${(cr.applied && cr.applied.n) || 0} applied ($${(((cr.applied && cr.applied.cents) || 0) / 100).toFixed(2)} off invoices); ${rs.codes_issued} customers hold a code`);
+    if (rs.attributed.length) lines.push('• ' + rs.attributed.slice(0, 8).map((a) => `${a.friend || '?'} via ${a.referrer || a.code} (${a.paid_weeks} paid wk${a.paid_weeks === 1 ? '' : 's'})`).join('; '));
+  } catch (e) {
+    lines.push(`Referrals: could not compute (${String(e).slice(0, 80)}); do not read this as zero`);
+  }
 
   lines.push('Full report with 7/30/90 day windows: /app/ops → Marketing → Channels.');
   await ownerNotify(env, 'owner_weekly_marketing', summary, { entity: 'system', lines, window: r.window });

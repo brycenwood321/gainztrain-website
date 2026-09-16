@@ -3,6 +3,25 @@
 // The app sells `price-per-meal × quantity(= meal count)` so the Stripe subscription's line
 // quantity IS the meal count, and we also stamp metadata.meals_per_week — both feed the webhook.
 import { stripe } from './stripe.js';
+import { one } from './db.js';
+
+// FUEL8 (2 free meals a week for 4 weeks) is printed on flyers, so it has NO end date in code. From
+// 2026-07-15 to 2026-09-15 it carried a hardcoded expiry of September 1 and silently refused every
+// flyer scan for two weeks while the /menu banner still promised the meals (Brycen, 2026-09-14:
+// "it needs to still be turned on for anybody that uses that code"). The switch is the ops_kv key
+// `promo_flags` ({ fuel8_on: true|false }), owner-writable from the ops Settings tab. A missing key
+// means ON, so a fresh database or a failed read can never turn the flyers off by accident.
+export async function fuel8On(env) {
+  try {
+    const row = await one(env.DB, `SELECT value_json FROM ops_kv WHERE key = 'promo_flags'`);
+    if (!row || !row.value_json) return true;
+    const v = JSON.parse(row.value_json);
+    if (!v || typeof v !== 'object' || !('fuel8_on' in v)) return true;
+    return v.fuel8_on !== false;
+  } catch {
+    return true;
+  }
+}
 
 export const MIN_MEALS = 6;
 export const MAX_MEALS = 16;

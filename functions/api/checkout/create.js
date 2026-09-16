@@ -15,15 +15,15 @@ import { getSessionCustomer } from '../../_lib/auth.js';
 import { stripe } from '../../_lib/stripe.js';
 import { str } from '../../_lib/validate.js';
 import { tierForMeals, ensureStripePrice, ensureDeliveryPrice, ensureFuel8Coupon, MIN_MEALS, MAX_MEALS,
-  sizesEnabled, sizeByKey, perMealCentsFor, ensureStripePriceForCents } from '../../_lib/plans.js';
-import { lookupReferralCode, recordReferral } from '../../_lib/referral.js';
+  sizesEnabled, sizeByKey, perMealCentsFor, ensureStripePriceForCents, fuel8On } from '../../_lib/plans.js';
+import { lookupReferralCode, recordReferral, isReferralShaped } from '../../_lib/referral.js';
 
-// Stripe statuses that mean "this person already has a plan" — block a second subscription.
+// Stripe statuses that mean "this person already has a plan": block a second subscription.
 const LIVE_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid', 'paused']);
 
-// FUEL8 flyer promo: 2 free meals/week for 4 weeks, sized to the customer's tier. Once per customer,
-// ends 2026-09-01 (end of day Mountain). Handled specially below (dynamic tier coupon, not a static code).
-const FUEL8_ENDS_MS = Date.parse('2026-09-01T23:59:59-06:00');
+// FUEL8 flyer promo: 2 free meals/week for 4 weeks, sized to the customer's tier. Once per customer.
+// NO end date in code: the flyers are printed, so the owner switch in ops_kv decides (plans.js fuel8On).
+// Handled specially below (dynamic tier coupon, not a static code).
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -53,24 +53,46 @@ export async function onRequestPost(context) {
   // Optional promo code: must be a PUBLIC (customer-facing) coupon in our table, not expired.
   // Internal comps like OWNERS100 (is_public=0) are blocked here — a customer can't grant themselves
   // a free-forever sub. The code IS the Stripe coupon id; we apply it directly to the Checkout Session.
-  const code = str(body.code).trim().toUpperCase();
+  let code = str(body.code).trim().toUpperCase();
   let couponToApply = null;   // the actual Stripe coupon id we attach to the Checkout Session
   let isFuel8 = false;
-  let referrer = null;        // a customer's referral code (give 2 get 2): no coupon, a pending referral row
+
+  // Referral (board ruling 2026-09-14, unanimous): the referral is NOT a promo code competing for the
+  // one box. It arrives in its own field (`ref`, filled by /start/?ref=CODE), or as a referral-shaped
+  // code typed in the box as before. Either way it records a pending referral row (no Stripe coupon of
+  // its own) and the friend still gets FUEL8 on top while the switch is on. Before this, a friend who
+  // used a referral link had FUEL8 overwritten and traded 8 free meals for 2, and a friend who typed
+  // FUEL8 instead earned the referrer nothing. Both were verified in this file by all three shelves.
+  let referrer = null;
+  let refCode = str(body.ref).trim().toUpperCase();
+  if (!refCode && isReferralShaped(code)) { refCode = code; code = ''; }
+  if (refCode) {
+    referrer = await lookupReferralCode(env, refCode);
+    if (referrer && referrer.id === customer.id) return fail(400, 'invalid_code', 'That is your own referral code.');
+    if (!referrer && !code) return fail(400, 'invalid_code', "That referral code isn't valid.");
+    if (!referrer) refCode = '';
+  }
+
+  // A referred friend with no other code gets FUEL8 automatically (the friend's reward is the live
+  // signup offer, nothing extra). Their own typed FUEL8 is the same path.
+  const fuel8Live = await fuel8On(env);
+  if (referrer && !code && fuel8Live) code = 'FUEL8';
+
   if (code === 'FUEL8') {
     // FUEL8: 2 free meals/week for 4 weeks, sized to THIS order's tier. Special-cased (not a static code).
-    if (Number.isNaN(FUEL8_ENDS_MS) || Date.now() > FUEL8_ENDS_MS) return fail(400, 'code_expired', 'That promo has ended.');
-    // Once per customer — blocks reuse even after a cancel + resubscribe (the double-billing guard below
+    if (!fuel8Live) return fail(400, 'code_expired', 'That promo has ended.');
+    // Once per customer: blocks reuse even after a cancel + resubscribe (the double-billing guard below
     // separately blocks anyone with a currently-active plan).
     const prior = await one(env.DB, `SELECT 1 AS x FROM promo_redemptions WHERE customer_id = ? AND code = 'FUEL8'`, customer.id);
-    if (prior) return fail(400, 'code_used', "You've already used the FUEL8 offer.");
-    couponToApply = await ensureFuel8Coupon(env, tier); // tier-sized coupon = 2 meals off/wk
-    isFuel8 = true;
-  } else if (code && (referrer = await lookupReferralCode(env, code))) {
-    if (referrer.id === customer.id) return fail(400, 'invalid_code', 'That is your own referral code.');
-    // No Stripe discount: the credits land at the lock (referral.js), so the Full Week Guarantee still
-    // applies to this first order (terms 5 forbids stacking it with a first-order discount).
-  } else if (code) {
+    if (prior) {
+      if (!referrer) return fail(400, 'code_used', "You've already used the FUEL8 offer.");
+      code = ''; // a referred friend who already used FUEL8 still checks out; the referrer still earns
+    } else {
+      couponToApply = await ensureFuel8Coupon(env, tier); // tier-sized coupon = 2 meals off/wk
+      isFuel8 = true;
+    }
+  }
+  if (code && code !== 'FUEL8') {
     const c = await one(env.DB, `SELECT code, is_public, expires_at, cap FROM coupons WHERE code = ?`, code);
     if (!c || !c.is_public) return fail(400, 'invalid_code', "That promo code isn't valid.");
     if (c.expires_at && new Date(c.expires_at) < new Date()) return fail(400, 'code_expired', 'That promo code has expired.');
@@ -170,7 +192,7 @@ export async function onRequestPost(context) {
           promo: isFuel8 ? 'FUEL8' : '', // webhook watches this to trim FUEL8 to exactly 4 weeks
         },
       },
-      metadata: { d1_customer_id: customer.id, meals: String(meals), tier: tier.key, delivery_method: deliveryMethod, code: code || '', referral: referrer ? code : '', ...(useSizes ? { size_key: size.key } : {}) },
+      metadata: { d1_customer_id: customer.id, meals: String(meals), tier: tier.key, delivery_method: deliveryMethod, code: code || '', referral: referrer ? refCode : '', ...(useSizes ? { size_key: size.key } : {}) },
       // Don't force a card when nothing is due now (e.g. a 100%-off plan checks out at $0).
       payment_method_collection: 'if_required',
       success_url: `${base}/app/menu/?checkout=success`,
@@ -182,7 +204,7 @@ export async function onRequestPost(context) {
     if (couponToApply) sessionParams.discounts = [{ coupon: couponToApply }];
 
     const session = await stripe(env, 'POST', 'checkout/sessions', sessionParams,
-      `gt_checkout_${customer.id}_${meals}_${deliveryMethod}_${zone}_${code}${useSizes ? `_${size.key}` : ''}`);
+      `gt_checkout_${customer.id}_${meals}_${deliveryMethod}_${zone}_${code}${refCode ? `_${refCode}` : ''}${useSizes ? `_${size.key}` : ''}`);
 
     // Persist the chosen size on the customer (Build 3). Guarded: migration 0026 adds size_key and
     // is not yet applied (D1 error 7500), and this write must never fail a checkout either way.
@@ -191,7 +213,7 @@ export async function onRequestPost(context) {
     }
 
     // Pending referral, only once the session exists. Idempotent; refuses non-new customers.
-    if (referrer) { try { await recordReferral(env, referrer, customer.id, code); } catch { /* never fail a checkout on this */ } }
+    if (referrer) { try { await recordReferral(env, referrer, customer.id, refCode); } catch { /* never fail a checkout on this */ } }
 
     // Persist the delivery choice only AFTER the session is created (not on a validation failure).
     await run(env.DB,

@@ -38,7 +38,7 @@ import { repeatLastWeek, evenSpread } from '../../_lib/substitute.js';
 import { notify } from '../../_lib/notify.js';
 import { ownerNotify } from '../../_lib/owner_notify.js';
 import { stripe } from '../../_lib/stripe.js';
-import { applyCreditsToDraft } from '../../_lib/credits.js';
+import { applyCreditsToDraft, pendingCredits } from '../../_lib/credits.js';
 import { creditReferralIfEarned } from '../../_lib/referral.js';
 import {
   COOKABLE, cookDecision, lockAction, lockPolicies, pickCycleDraft, pickCycleInvoice, chargeOutcome, feedAfterCharge,
@@ -290,6 +290,12 @@ export async function onRequestPost(context) {
         if (order.upchargeCents > 0) {
           await auditRow(env, `subscription:${sub.id}`, 'upcharge_missed_settled', { weekOf, cents: order.upchargeCents, invoiceId });
         }
+        // A pending meal credit cannot go on an invoice Stripe already charged. It stays pending for the
+        // following week; say so in the audit instead of skipping in silence (code map 2026-09-14).
+        try {
+          const held = await pendingCredits(env, sub.id);
+          if (held.length) await auditRow(env, `subscription:${sub.id}`, 'credit_deferred_settled', { weekOf, invoiceId, credits: held.map((c) => ({ id: c.id, kind: c.kind, meals: c.meals })) });
+        } catch { /* audit only */ }
       } else {
         await attachUpchargeToDraft(env, sub, weekOf, order.upchargeCents, draft.id);
         // Meal credits (referral, week-4 bonus) go on THIS draft, before the charge, capped at the draft

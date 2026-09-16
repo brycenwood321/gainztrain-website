@@ -7,6 +7,7 @@ import { requireOwner } from '../../_lib/admin.js';
 import { one, all, run, nowIso } from '../../_lib/db.js';
 import { orderableWeek } from '../../_lib/menu.js';
 import { notify } from '../../_lib/notify.js';
+import { referralData } from '../../_lib/referral.js';
 
 const ANNOUNCE_STATUSES = ['active', 'trialing', 'past_due'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -38,7 +39,7 @@ export async function onRequestPost(context) {
       ...ANNOUNCE_STATUSES);
     for (const sub of subs) {
       const cust = { id: sub.customer_id, email: sub.email, first_name: sub.first_name, ghl_contact_id: sub.ghl_contact_id };
-      const r = await notify(env, cust, 'menu_posted', { weekOf: week }, { dedupKey: `menu_posted:${week}:${cust.id}` });
+      const r = await notify(env, cust, 'menu_posted', { weekOf: week, ...(await referralData(env, cust)) }, { dedupKey: `menu_posted:${week}:${cust.id}` });
       if (r.ok && !r.deduped) announced++;
     }
   }

@@ -402,10 +402,10 @@
         const b = await r.json().catch(() => ({}));
         if (!r.ok || !b.ok || !b.code) { card.classList.add('hidden'); return; }
         card.classList.remove('hidden');
-        const rows = (b.referrals || []).map((x) => `<div class="row"><span class="k">${x.first_name || 'A friend'}</span><span class="v">${x.status === 'credited' ? '2 free meals queued for you' : (x.status === 'pending' ? 'signed up, credits land when their first week is paid' : x.status)}</span></div>`).join('');
-        const credits = (b.credits || []).filter((c) => c.status !== 'void').map((c) => `<div class="row"><span class="k">${c.meals} free meals</span><span class="v">${c.status === 'applied' ? 'applied to the week of ' + (c.week_of || '') : 'lands on your next order'}</span></div>`).join('');
+        const rows = (b.referrals || []).map((x) => `<div class="row"><span class="k">${x.first_name || 'A friend'}</span><span class="v">${x.status === 'credited' ? `${b.meals} free meals queued for you` : (x.status === 'pending' ? 'signed up, your meals land when their first week is paid' : x.status)}</span></div>`).join('');
+        const credits = (b.credits || []).filter((c) => c.status !== 'void').map((c) => `<div class="row"><span class="k">${c.meals} free meals</span><span class="v">${c.status === 'applied' ? 'taken off the week of ' + (c.week_of || '') : 'comes off the next week you order'}</span></div>`).join('');
         el.innerHTML =
-          `<div style="color:var(--black,#1a1614);font-size:.95rem;margin-bottom:.5rem;">Send a friend your code. When their first week is paid, you both get <b>${b.meals} free meals</b> on your next order.</div>` +
+          `<div style="color:var(--black,#1a1614);font-size:.95rem;margin-bottom:.5rem;">Send a friend your link. They get <b>${b.friend_offer || '8 free meals'}</b>. When their first week is paid, <b>${b.meals} free meals</b> come off your next bill.</div>` +
           `<div class="stat" style="font-size:1.6rem;letter-spacing:.06em;">${b.code}</div>` +
           `<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0;">` +
             `<button class="btn" id="refCopy" style="padding:.5rem .9rem;">Copy link</button>` +

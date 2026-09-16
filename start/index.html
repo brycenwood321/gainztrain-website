@@ -187,6 +187,10 @@
           </div>
         </div>
         <div id="loggedInBox" class="loggedin hidden"></div>
+        <!-- A friend's referral (/start/?ref=CODE) lives in its own field, never the promo box, so it can
+             never overwrite FUEL8. The server gives a referred friend FUEL8 automatically. -->
+        <input id="ref" type="hidden" />
+        <div id="refMsg" class="zipmsg"></div>
         <label for="code" style="margin-top:1rem;">Promo code (optional)</label>
         <input id="code" type="text" autocapitalize="characters" placeholder="e.g. FOUNDER25" />
         <div id="codeMsg" class="zipmsg"></div>
@@ -220,13 +224,19 @@
     // Cart persistence: a magic-link login opens a NEW tab (so sessionStorage is empty there) — keep the
     // half-filled cart in localStorage with a 24h TTL so a returning customer never loses their progress.
     const CART_KEY='gt_start_cart';
-    function saveCart(){try{localStorage.setItem(CART_KEY,JSON.stringify({meals,method,size:sizeKey,address:$('address').value,city:$('city').value,zip:$('zip').value,code:$('code').value,ts:Date.now()}));}catch(e){}}
-    // /start/?ref=ZAC-7K2Q (a customer's referral link) lands in the promo box. Wins over a saved cart
-    // code on purpose: the link is the newer intent.
-    function applyRefParam(){try{const ref=(new URLSearchParams(location.search).get('ref')||'').trim().toUpperCase();if(ref){$('code').value=ref;saveCart();}}catch(e){}}
+    function saveCart(){try{localStorage.setItem(CART_KEY,JSON.stringify({meals,method,size:sizeKey,address:$('address').value,city:$('city').value,zip:$('zip').value,code:$('code').value,ref:$('ref').value,ts:Date.now()}));}catch(e){}}
+    // /start/?ref=ZAC-7K2Q (a customer's referral link) lands in the hidden ref field, NOT the promo box
+    // (board ruling 2026-09-14: it used to overwrite a pre-filled FUEL8 and cost the friend 8 meals for 2).
+    // Wins over a saved cart ref on purpose: the link is the newer intent. Shows what the friend gets.
+    async function showRef(ref){const el=$('refMsg');if(!ref){el.className='zipmsg';el.textContent='';return;}
+      try{const r=await api('/api/coupons/validate?code='+encodeURIComponent(ref));
+        if(r.status===200&&r.body.valid===true&&r.body.referral){el.className='zipmsg ok';el.textContent='🎉 '+r.body.label;}
+        else{$('ref').value='';saveCart();el.className='zipmsg bad';el.textContent="That referral link isn't active any more, but you can still sign up.";}
+      }catch(e){el.className='zipmsg';el.textContent='';}}
+    function applyRefParam(){try{const ref=(new URLSearchParams(location.search).get('ref')||'').trim().toUpperCase();if(ref){$('ref').value=ref;saveCart();}if($('ref').value)showRef($('ref').value);}catch(e){}}
     function restoreCart(seedMeals){try{const raw=localStorage.getItem(CART_KEY);if(!raw)return;const c=JSON.parse(raw);
       if(!c||!c.ts||Date.now()-c.ts>864e5){localStorage.removeItem(CART_KEY);return;}
-      if(c.zip)$('zip').value=c.zip;if(c.address)$('address').value=c.address;if(c.city)$('city').value=c.city;if(c.code)$('code').value=c.code;
+      if(c.zip)$('zip').value=c.zip;if(c.address)$('address').value=c.address;if(c.city)$('city').value=c.city;if(c.code)$('code').value=c.code;if(c.ref)$('ref').value=c.ref;
       if(c.size)sizeKey=c.size;
       if(c.method==='delivery')setMethod('delivery');
       if(seedMeals&&Number.isInteger(c.meals))meals=Math.min(MAX,Math.max(MIN,c.meals));
@@ -427,7 +437,7 @@
         }
         // checkout
         const code=($('code').value||'').trim().toUpperCase();
-        const co=await api('/api/checkout/create',{method:'POST',body:JSON.stringify({meals,delivery_method:method,address,city,zip,code,...(SIZES?{size:sizeKey}:{})})});
+        const co=await api('/api/checkout/create',{method:'POST',body:JSON.stringify({meals,delivery_method:method,address,city,zip,code,ref:($('ref').value||'').trim().toUpperCase(),...(SIZES?{size:sizeKey}:{})})});
         if(co.status===200&&co.body.url){clearCart();window.location.href=co.body.url;return;}
         showMsg(co.body.detail||'Could not start checkout. Try again.');reset();
       }catch(e){showMsg('Something went wrong. Try again.');reset();}

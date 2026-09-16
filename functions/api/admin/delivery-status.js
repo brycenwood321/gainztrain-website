@@ -15,6 +15,7 @@ import { all, one, run, nowIso } from '../../_lib/db.js';
 import { upcomingSunday } from '../../_lib/menu.js';
 import { randomToken } from '../../_lib/crypto.js';
 import { notify } from '../../_lib/notify.js';
+import { referralData } from '../../_lib/referral.js';
 
 const VALID = new Set(['prepping', 'out_for_delivery', 'delivered', 'pickup_ready', 'picked_up']);
 const METHOD = { out_for_delivery: 'delivery', delivered: 'delivery', pickup_ready: 'pickup', picked_up: 'pickup' };
@@ -82,7 +83,7 @@ export async function onRequestPost(context) {
       const base = env.APP_BASE_URL || 'https://gainztrainprep.com';
       const trackUrl = r.method === 'delivery' ? `${base}/app/track/?t=${trackingToken}` : null;
       const cust = { id: r.customer_id, email: r.email, first_name: r.first_name, ghl_contact_id: r.ghl_contact_id };
-      const res = await notify(env, cust, ev, { weekOf: r.week_of, method: r.method, trackUrl, eta }, { dedupKey: `delivery:${status}:${r.order_id}` });
+      const res = await notify(env, cust, ev, { weekOf: r.week_of, method: r.method, trackUrl, eta, ...(await referralData(env, cust)) }, { dedupKey: `delivery:${status}:${r.order_id}` });
       if (res.ok && !res.deduped) notified = 1;
     }
     return ok({ summary: { updated: 1, notified }, status, next: nextStatus(r.method, status) });
@@ -124,7 +125,7 @@ export async function onRequestPost(context) {
     if (ev) {
       const trackUrl = r.method === 'delivery' ? `${base}/app/track/?t=${trackingToken}` : null;
       const cust = { id: r.customer_id, email: r.email, first_name: r.first_name, ghl_contact_id: r.ghl_contact_id };
-      const res = await notify(env, cust, ev, { weekOf, method: r.method, trackUrl, eta }, { dedupKey: `delivery:${status}:${r.order_id}` });
+      const res = await notify(env, cust, ev, { weekOf, method: r.method, trackUrl, eta, ...(await referralData(env, cust)) }, { dedupKey: `delivery:${status}:${r.order_id}` });
       if (res.ok && !res.deduped) summary.notified++;
     }
   }

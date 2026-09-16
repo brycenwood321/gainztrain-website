@@ -10,6 +10,7 @@ import { requireAdmin } from '../../_lib/admin.js';
 import { one, all, run, nowIso } from '../../_lib/db.js';
 import { orderableWeek } from '../../_lib/menu.js';
 import { notify } from '../../_lib/notify.js';
+import { referralData } from '../../_lib/referral.js';
 
 // Who gets the "new menu is live" blast: cooking-eligible subs with a real tier (paused excluded).
 const ANNOUNCE_STATUSES = ['active', 'trialing', 'past_due'];
@@ -76,7 +77,7 @@ export async function onRequestPost(context) {
       ...ANNOUNCE_STATUSES);
     for (const sub of subs) {
       const cust = { id: sub.customer_id, email: sub.email, first_name: sub.first_name, ghl_contact_id: sub.ghl_contact_id };
-      const r = await notify(env, cust, 'menu_posted', { weekOf: announceWeek }, { dedupKey: `menu_posted:${announceWeek}:${cust.id}` });
+      const r = await notify(env, cust, 'menu_posted', { weekOf: announceWeek, ...(await referralData(env, cust)) }, { dedupKey: `menu_posted:${announceWeek}:${cust.id}` });
       if (r.ok && !r.deduped) announced++;
     }
   }

@@ -1,19 +1,23 @@
-// Referrals, give 2 get 2. Plan rev 4, 09-28 build.
+// Referrals. Board ruling 2026-09-14 (offers, mealprep, cash shelves) with Brycen's timing call 09-15.
 //
-// Flow: a customer's code (customers.referral_code, e.g. ZAC-7K2Q) is typed into the promo box on
-// /start or arrives as /start/?ref=CODE. checkout/create.js records a PENDING referral row (no Stripe
-// coupon, so the Full Week Guarantee still applies to the new customer's first order and terms 5 is
-// not tripped). When the new customer's FIRST order is paid at a lock, two credits are granted on the
-// credit path (credits.js): 2 meals to the referrer's subscription, 2 meals to the new customer's
-// subscription, each applied at that subscription's next lock. So the referred customer eats their
-// free meals in week two, which is also the week the plan most needs them to still be here.
+// Flow: a customer's code (customers.referral_code, e.g. ZAC-7K2Q) arrives as /start/?ref=CODE (its
+// own field at checkout, NOT the promo box) or is typed into the promo box. checkout/create.js records
+// a PENDING referral row and gives the friend FUEL8 on top while the switch is on: the friend's reward
+// IS the live signup offer. The referral attaches no coupon of its own. When the friend's FIRST order
+// is paid at a lock, the REFERRER is granted REFERRAL_MEALS off their next invoice on the credit path
+// (credits.js): a negative invoice item, money off, not extra food. The friend gets no second credit.
 //
-// Rule: keep if 2 paying customers redeem in 30 days (plan, "Rules, written before the data").
+// Why the referral left the promo box: one box takes one code, so a friend on a referral link had
+// FUEL8 overwritten (8 meals traded for 2) and a friend who typed FUEL8 earned the referrer nothing.
+//
+// Rule: keep if 5 code-attributed new paying customers in 30 days (the plan's 2 was below the 2.6 a
+// month GT already got from friends with no program).
 import { one, all, run, nowIso } from './db.js';
 import { grantCredit } from './credits.js';
 import { ownerNotify } from './owner_notify.js';
 
-export const REFERRAL_MEALS = 2;
+export const REFERRAL_MEALS = 4;
+export const FRIEND_OFFER = '8 free meals, 2 free every week for 4 weeks';   // FUEL8, see plans.js fuel8On
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O/1/I
 
 export function referralCodeFor(firstName, rand = Math.random) {
@@ -66,7 +70,11 @@ export async function recordReferral(env, referrer, referredCustomerId, code) {
 }
 
 // Called by lock-week after a PAID outcome for `sub` (an app-origin subscription of `customerId`).
-// Grants both credits the first time this customer's order is paid, once. Never throws.
+// Grants the referrer's credit the first time this customer's order is paid, once. Never throws.
+// A referrer with no LIVE subscription (active, trialing, past_due or paused) is not granted anything:
+// the row stays pending and is re-checked at this friend's next paid lock, so a referrer who comes
+// back still collects and a credit is never parked on a cancelled subscription id nobody will bill
+// again (Perkins, tested true 2026-09-14: credits.js only ever attaches to a draft).
 export async function creditReferralIfEarned(env, customerId, sub, weekOf) {
   try {
     const ref = await one(env.DB, `SELECT * FROM referrals WHERE referred_customer_id = ? AND status = 'pending'`, customerId);
@@ -75,21 +83,23 @@ export async function creditReferralIfEarned(env, customerId, sub, weekOf) {
       `SELECT COUNT(*) AS n FROM orders WHERE customer_id = ? AND charge_status = 'paid'`, customerId);
     if ((paidOrders?.n || 0) < 1) return null;   // the lock writes charge_status before calling this
     const referrerSub = await one(env.DB,
-      `SELECT id FROM subscriptions WHERE customer_id = ? ORDER BY (status IN ('active','trialing','past_due','paused')) DESC, created_at DESC LIMIT 1`,
+      `SELECT id FROM subscriptions WHERE customer_id = ? AND status IN ('active','trialing','past_due','paused') ORDER BY created_at DESC LIMIT 1`,
       ref.referrer_customer_id);
     if (!referrerSub) {
-      await run(env.DB, `UPDATE referrals SET status='void', void_reason='referrer_has_no_subscription' WHERE id = ?`, ref.id);
+      try {
+        await run(env.DB, `INSERT INTO audit_log (at, actor, entity, action, detail_json) VALUES (?, 'lock', ?, 'referral_held_referrer_inactive', ?)`,
+          nowIso(), `customer:${ref.referrer_customer_id}`, JSON.stringify({ referral_id: ref.id, referred_customer_id: customerId, weekOf }));
+      } catch { /* audit only */ }
       return null;
     }
     const a = await grantCredit(env, { subscriptionId: referrerSub.id, customerId: ref.referrer_customer_id, kind: 'referral_referrer', meals: REFERRAL_MEALS, refId: ref.id });
-    const b = await grantCredit(env, { subscriptionId: sub.id, customerId, kind: 'referral_referred', meals: REFERRAL_MEALS, refId: ref.id });
     await run(env.DB, `UPDATE referrals SET status='credited', credited_at=? WHERE id = ?`, nowIso(), ref.id);
     const names = await all(env.DB, `SELECT id, first_name, email FROM customers WHERE id IN (?, ?)`, ref.referrer_customer_id, customerId);
     const nm = (id) => { const r = names.find((x) => x.id === id); return r ? (r.first_name || r.email) : id; };
     await ownerNotify(env, 'owner_referral_credited',
-      `Referral paid off: ${nm(customerId)} (referred by ${nm(ref.referrer_customer_id)}, code ${ref.code}) paid week ${weekOf}; ${REFERRAL_MEALS} free meals queued for each at their next lock`,
-      { entity: `customer:${customerId}`, referral_id: ref.id, credits: [a, b] });
-    return { referral: ref.id, credits: [a, b] };
+      `Referral paid off: ${nm(customerId)} (referred by ${nm(ref.referrer_customer_id)}, code ${ref.code}) paid week ${weekOf}; ${REFERRAL_MEALS} free meals queued for ${nm(ref.referrer_customer_id)} at their next lock`,
+      { entity: `customer:${customerId}`, referral_id: ref.id, credits: [a] });
+    return { referral: ref.id, credits: [a] };
   } catch (e) {
     try { await ownerNotify(env, 'owner_referral_failed', `Referral credit FAILED for customer ${customerId} week ${weekOf}: ${String(e).slice(0, 120)}`, { entity: `customer:${customerId}` }); } catch { /* nothing */ }
     return null;
@@ -106,10 +116,33 @@ export async function referralSummary(env, customer) {
   const credits = await all(env.DB,
     `SELECT kind, meals, status, week_of FROM subscription_credits WHERE customer_id = ? ORDER BY created_at DESC LIMIT 20`, customer.id);
   return {
-    code, meals: REFERRAL_MEALS,
-    link: code ? `${base}/start/?ref=${encodeURIComponent(code)}` : null,
-    share_text: code ? `Try Gainz Train with me. Use my code ${code} at ${base}/start/?ref=${code} and we both get ${REFERRAL_MEALS} free meals.` : null,
+    code, meals: REFERRAL_MEALS, friend_offer: FRIEND_OFFER,
+    link: code ? referralLink(env, code) : null,
+    share_text: code ? shareText(env, code) : null,
     referrals: rows.map((r) => ({ first_name: r.first_name, status: r.status, created_at: r.created_at, credited_at: r.credited_at })),
     credits,
   };
+}
+
+export function referralLink(env, code) {
+  const base = env.APP_BASE_URL || 'https://gainztrainprep.com';
+  return `${base}/start/?ref=${encodeURIComponent(code)}`;
+}
+
+// One sentence, the whole pitch (offers shelf: name the offer so the right person shows up).
+export function shareText(env, code) {
+  return `Try Gainz Train with me: ${referralLink(env, code)} gets you 8 free meals (2 a week for 4 weeks) and I get 4. Code ${code}.`;
+}
+
+// What a customer message needs to carry the ask: their code and link. Mints the code on first use.
+// Never throws, so a notify call site can spread it without a guard: `{ weekOf, ...(await referralData(env, cust)) }`.
+export async function referralData(env, customer) {
+  try {
+    const row = customer.referral_code ? customer : await one(env.DB, `SELECT id, first_name, referral_code FROM customers WHERE id = ?`, customer.id);
+    const code = row ? await ensureReferralCode(env, row) : null;
+    if (!code) return {};
+    return { referral_code: code, referral_link: referralLink(env, code), referral_meals: REFERRAL_MEALS };
+  } catch {
+    return {};
+  }
 }

@@ -8,10 +8,11 @@ import { json, fail } from '../../_lib/respond.js';
 import { requireStaffOrAdmin, requireOwner } from '../../_lib/admin.js';
 import { one, run, nowIso } from '../../_lib/db.js';
 
-const ALLOWED = new Set(['meal_library', 'custom_ingredients', 'ingredient_library', 'assembly_weights']);
+// promo_flags: { fuel8_on: true|false }, the FUEL8 flyer switch (plans.js fuel8On). Owner-only write.
+const ALLOWED = new Set(['meal_library', 'custom_ingredients', 'ingredient_library', 'assembly_weights', 'promo_flags']);
 // Keys whose WRITES are owner-only (reads stay staff-level so the kitchen shopping list can use them).
 // The ingredient library drives shopping-list quantities + costs, so only owners may edit it.
-const OWNER_WRITE = new Set(['ingredient_library']);
+const OWNER_WRITE = new Set(['ingredient_library', 'promo_flags']);
 // Per-week menu drafts (menu_week_YYYYMMDD) also sync here so the Menu + Ingredients tabs populate on any
 // device (phone), not just the laptop the menu was built on.
 const MENU_DRAFT_RE = /^menu_week_\d{8}$/;

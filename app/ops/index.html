@@ -6085,7 +6085,26 @@
           '<button class="ownv-btn" id="set-zpGo">Add ZIP</button></div><div class="stat-sub" id="set-zpMsg" style="margin-top:.5rem;"></div>' +
           '<div class="stat-sub" style="color:#9a928d;margin-top:.3rem;">Add a ZIP and customers there can check out with delivery right away. Click × to stop serving one.</div></div>';
 
-        el.innerHTML = ownHead("Settings", "Owner controls", "ownRenderSettings") + couponCard + staffCard + zipCard;
+        // PROMO SWITCHES (2026-09-15). FUEL8 is printed on flyers, so it has no end date in code; this is the
+        // only place it turns off. A missing key reads as ON (plans.js fuel8On), so the switch defaults on.
+        let fuel8On = true;
+        try { const pf = await ownGet("/api/admin/ops-store?key=promo_flags"); const v = pf && pf.value; if (v && typeof v === "object" && !Array.isArray(v) && "fuel8_on" in v) fuel8On = v.fuel8_on !== false; } catch (e) {}
+        const promoCard =
+          '<div class="ownv-card"><h2>Flyer offer: FUEL8</h2>' +
+          '<label class="stat-sub" style="display:inline-flex;align-items:center;gap:.5rem;font-size:1rem;"><input type="checkbox" id="set-fuel8" ' + (fuel8On ? "checked" : "") + ' style="width:auto;transform:scale(1.3);">FUEL8 is ON: 2 free meals a week for 4 weeks, once per customer</label>' +
+          '<div class="stat-sub" id="set-fuel8Msg" style="margin-top:.5rem;"></div>' +
+          '<div class="stat-sub" style="color:#9a928d;margin-top:.3rem;">No end date. The flyers and the QR code keep working until you untick this. A referred friend gets FUEL8 automatically while it is on.</div></div>';
+
+        el.innerHTML = ownHead("Settings", "Owner controls", "ownRenderSettings") + promoCard + couponCard + staffCard + zipCard;
+
+        // wire FUEL8 switch
+        document.getElementById("set-fuel8").onchange = async (ev) => {
+          const on = !!ev.target.checked;
+          setMsg("set-fuel8Msg", "Saving…");
+          const r = await ownPost("/api/admin/ops-store", { key: "promo_flags", value: { fuel8_on: on } });
+          if (r && r.ok) { setMsg("set-fuel8Msg", on ? "✓ FUEL8 is ON. Flyer scans and referred friends get the 8 meals." : "✓ FUEL8 is OFF. The code now reads as ended at checkout.", on ? "#16a34a" : "#dc2626"); showToast(on ? "FUEL8 on" : "FUEL8 off"); }
+          else { ev.target.checked = !on; setMsg("set-fuel8Msg", (r && (r.detail || r.error)) || "Failed to save.", "#dc2626"); }
+        };
 
         // wire coupon
         document.getElementById("set-cpGo").onclick = async () => {

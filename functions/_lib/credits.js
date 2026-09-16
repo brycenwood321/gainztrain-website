@@ -52,7 +52,11 @@ export async function applyCreditsToDraft(env, sub, weekOf, draft, auditRow) {
   const credits = await pendingCredits(env, sub.id);
   if (!credits.length) return out;
   const perMeal = perMealCentsFor(env, sub.size_key, sub.meals_per_week) || 0;
-  let remaining = Number(draft.total) || 0;   // cents still owed on the draft
+  // Cents still creditable this week: what is owed on the draft, but never more than this week's MEAL
+  // charges. The draft total also carries the delivery fee and any specialty upcharge, and a credit is
+  // meals off, not delivery off (code map 2026-09-14, cash shelf).
+  const mealCharges = Math.max(0, Math.round(perMeal * (Number(sub.meals_per_week) || 0)));
+  let remaining = Math.min(Number(draft.total) || 0, mealCharges);
   for (const cr of credits) {
     const cents = creditAmountCents(cr.meals, perMeal, remaining);
     if (cents <= 0) { out.skipped++; continue; }   // nothing left to credit against this week; stays pending

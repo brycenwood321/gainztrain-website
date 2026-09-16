@@ -161,3 +161,19 @@ describe('the ask rides three customer messages (source check)', () => {
     assert.ok(sms.length <= 130, `launch SMS is ${sms.length} chars, over one segment once GHL appends STOP`);
   });
 });
+
+describe('the referral code table is on the ops dashboard (source check)', () => {
+  test('the Marketing tab fetches /api/admin/referrals and renders a row per code holder', () => {
+    const ops = read('../app/ops/index.html');
+    const fn = ops.slice(ops.indexOf('async function ownRenderMarketing()'), ops.indexOf('async function ownRenderMarketing()') + 12000);
+    assert.ok(fn.includes('ownGet("/api/admin/referrals")'), 'fetches the endpoint');
+    assert.ok(fn.includes('<h2>Referral codes</h2>'), 'has the card');
+    assert.ok(fn.includes('data-copy-link'), 'has a copy button per link');
+  });
+  test('referralStats exposes customers with code, link and counts', () => {
+    const src = read('../functions/api/admin/referrals.js');
+    assert.match(src, /friends_signed_up/);
+    assert.match(src, /friends_paid/);
+    assert.match(src, /customers: customers\.map/);
+  });
+});

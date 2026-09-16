@@ -5823,7 +5823,7 @@
     async function ownRenderMarketing() {
       const el = document.getElementById("mkt-view"); el.innerHTML = '<div class="ownv-loading">Loading…</div>';
       try {
-        const [a, sp, cr, mt] = await Promise.all([ownGet("/api/admin/attribution"), ownGet("/api/admin/spend"), ownGet("/api/admin/channel-report?days=" + mktDays), ownGet("/api/admin/marketing-time").catch(() => ({ entries: [], totals: [] }))]);
+        const [a, sp, cr, mt, rf] = await Promise.all([ownGet("/api/admin/attribution"), ownGet("/api/admin/spend"), ownGet("/api/admin/channel-report?days=" + mktDays), ownGet("/api/admin/marketing-time").catch(() => ({ entries: [], totals: [] })), ownGet("/api/admin/referrals").catch(() => null)]);
         const timeRows = ((mt.entries) || []).slice(0, 20).map((e) => "<tr><td>" + ownEsc(e.day) + "</td><td>" + ownEsc(e.who) + "</td><td>" + e.minutes + "</td><td>" + ownEsc(e.what || "") + "</td></tr>").join("");
         const timeTotals = ((mt.totals) || []).map((t) => ownEsc(t.who) + " " + (t.last7 || 0) + " min this week, " + (t.last30 || 0) + " in 30d").join(" · ") || "nothing logged yet";
         const num = (v) => (v == null ? "—" : v.toLocaleString());
@@ -5835,8 +5835,23 @@
         const cohortRows = (a.cohort_by_coupon || []).map((c) => "<tr><td>" + ownEsc(c.coupon) + "</td><td>" + num(c.customers) + "</td><td>" + (c.weeks_avg == null ? "—" : c.weeks_avg) + "</td><td>" + num(c.retained_4wk) + "</td><td>" + num(c.canceled) + "</td></tr>").join("");
         const spendRows = ((sp.entries) || []).slice(0, 30).map((e) => "<tr><td>" + ownEsc(e.day) + "</td><td>" + ownEsc(e.channel) + "</td><td>" + ownEsc(e.campaign || "") + "</td><td>" + ownMoney(e.spend_cents) + "</td><td>" + ownEsc(e.notes || "") + "</td></tr>").join("");
         const tbl = (head, rows, empty) => '<div style="overflow-x:auto;"><table><thead><tr>' + head.map((h) => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" + (rows || '<tr><td colspan="' + head.length + '" class="stat-sub" style="padding:1rem .6rem;">' + empty + "</td></tr>") + "</tbody></table></div>";
+        // REFERRAL CODES (2026-09-16, Brycen: "put that table of the refer codes on the ops dashboard").
+        // One row per customer holding a code, best referrers first. The keep bar (5 paid friends by
+        // 2026-10-18) is the line above the table so the number is read every time the tab opens.
+        const rfRows = ((rf && rf.customers) || []).map((c) => "<tr><td><b>" + ownEsc(((c.first_name || "") + " " + (c.last_name || "")).trim() || c.email) + "</b>" +
+          (c.sub_status && c.sub_status !== "active" ? ' <span class="stat-sub">(' + ownEsc(c.sub_status) + ")</span>" : "") + "</td>" +
+          '<td><code style="font-size:1rem;letter-spacing:.05em;">' + ownEsc(c.referral_code) + "</code></td>" +
+          '<td><a href="' + ownEsc(c.link) + '" target="_blank" rel="noopener" style="word-break:break-all;">' + ownEsc(c.link.replace("https://", "")) + "</a> " +
+          '<button class="ing-lib-edit" data-copy-link="' + ownEsc(c.link) + '">Copy</button></td>' +
+          "<td>" + num(c.friends_signed_up) + "</td><td>" + num(c.friends_paid) + "</td><td>" + num(c.meals_pending) + " / " + num(c.meals_applied) + "</td></tr>").join("");
+        const rfSummary = rf && rf.window
+          ? num(rf.window.paying) + " referred friends paid a first week in the last 30 days (bar " + rf.window.bar + " by Oct 18) · " + num(rf.window.attributed) + " signed up through a link · " + num(rf.codes_issued) + " customers hold a code · " + rf.meals_per_referral + " meals off per paid friend"
+          : "could not load referral stats";
+        const referralCard = '<div class="ownv-card"><h2>Referral codes</h2><div class="stat-sub" style="margin-bottom:.6rem;">' + rfSummary + "</div>" +
+          tbl(["Customer", "Code", "Link", "Friends signed up", "Friends paid", "Meals pending / applied"], rfRows, "No codes yet. A code is minted the first time a customer opens their account page or gets the launch email.") + "</div>";
         el.innerHTML = ownHead("Marketing", "Channels + funnel", "ownRenderMarketing") +
           mktChannelsCard(cr) +
+          referralCard +
           '<div class="ownv-card"><h2>Funnel — views → signups → customers → CAC (all time)</h2>' + tbl(["Channel", "Views", "Views 30d", "Signups", "Paying", "Revenue", "Spend", "CPL", "CAC"], funnelRows, "No data yet.") + "</div>" +
           '<div class="ownv-card"><h2>"How did you hear about us?"</h2>' + tbl(["Source", "Signups", "Paying", "Revenue"], selfRows, "Fills in as customers answer at signup.") + "</div>" +
           '<div class="ownv-card"><h2>Retention by offer code</h2>' + tbl(["Coupon", "Customers", "Avg weeks", "4wk+", "Canceled"], cohortRows, "No subscriptions yet.") + "</div>" +
@@ -5855,6 +5870,7 @@
           const r = await ownPost("/api/admin/marketing-time", body);
           if (r.ok) { showToast("Time logged."); ownRenderMarketing(); } else showToast(r.detail || "Could not log time.");
         };
+        el.querySelectorAll("[data-copy-link]").forEach((b) => { b.onclick = async () => { try { await navigator.clipboard.writeText(b.dataset.copyLink); b.textContent = "Copied"; setTimeout(() => (b.textContent = "Copy"), 1500); } catch (e) { showToast(b.dataset.copyLink); } }; });
         document.getElementById("own-spDay").value = new Date().toISOString().slice(0, 10);
         document.getElementById("own-spGo").onclick = async () => {
           const body = { day: document.getElementById("own-spDay").value, channel: document.getElementById("own-spCh").value, campaign: document.getElementById("own-spCamp").value.trim(), spend: parseFloat(document.getElementById("own-spAmt").value) };

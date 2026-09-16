@@ -40,6 +40,18 @@ export async function referralStats(env, sinceIso) {
   for (const r of byStatus) status[r.status] = r.n;
   const credits = {};
   for (const r of creditsByStatus) credits[r.status] = { n: r.n, meals: r.meals, cents: r.cents };
+  // Every customer who holds a code, with how their referrals are doing (the ops Marketing table).
+  const base = env.APP_BASE_URL || 'https://gainztrainprep.com';
+  const customers = await all(env.DB,
+    `SELECT c.id, c.first_name, c.last_name, c.email, c.referral_code,
+            (SELECT COUNT(*) FROM referrals r WHERE r.referrer_customer_id = c.id) AS friends_signed_up,
+            (SELECT COUNT(*) FROM referrals r WHERE r.referrer_customer_id = c.id AND r.status = 'credited') AS friends_paid,
+            (SELECT COALESCE(SUM(meals),0) FROM subscription_credits sc WHERE sc.customer_id = c.id AND sc.kind = 'referral_referrer' AND sc.status = 'pending') AS meals_pending,
+            (SELECT COALESCE(SUM(meals),0) FROM subscription_credits sc WHERE sc.customer_id = c.id AND sc.kind = 'referral_referrer' AND sc.status = 'applied') AS meals_applied,
+            (SELECT s.status FROM subscriptions s WHERE s.customer_id = c.id ORDER BY (s.status IN ('active','trialing','past_due','paused')) DESC, s.created_at DESC LIMIT 1) AS sub_status
+       FROM customers c
+      WHERE c.referral_code IS NOT NULL
+      ORDER BY friends_paid DESC, friends_signed_up DESC, c.first_name`);
   return {
     meals_per_referral: REFERRAL_MEALS,
     codes_issued: codes?.n || 0,
@@ -48,6 +60,7 @@ export async function referralStats(env, sinceIso) {
     window: { since: sinceIso, attributed: attributed.length, paying, second_paid_week: secondWeek, bar: 5 },
     first_paid_by_lock_week: byLockWeek,
     attributed,
+    customers: customers.map((c) => ({ ...c, link: `${base}/start/?ref=${encodeURIComponent(c.referral_code)}` })),
   };
 }
 

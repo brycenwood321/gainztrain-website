@@ -190,7 +190,10 @@ function fmtCutoff(iso) {
   if (!iso) return 'Friday midnight';
   var d = new Date(iso);
   if (!valid(d)) return 'Friday midnight';
-  // The cutoff is Friday 23:59 Mountain; say "Friday 11:59 pm" rather than a midnight that reads as Saturday.
+  // cutoffForWeek() is the exact instant Friday ENDS (Saturday 00:00 Mountain). Formatted as-is that
+  // reads "Saturday 12:00 am", which is wrong to a human (seen live 2026-09-16). An exact hour boundary
+  // is shown as the last minute before it: "Friday 11:59 pm".
+  if (d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0) d = new Date(d.getTime() - 60000);
   return new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'long', hour: 'numeric', minute: '2-digit' }).format(d).replace(' AM', ' am').replace(' PM', ' pm');
 }
 function timeLeft(iso, now) {

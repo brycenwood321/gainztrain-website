@@ -16,7 +16,8 @@ vm.runInContext(src, ctx);
 const homeState = vm.runInContext('homeState', ctx);
 const greeting = vm.runInContext('greeting', ctx);
 
-// Wednesday 2026-09-16 10:00 Mountain (16:00Z). Orderable week 2026-09-20, cutoff Fri 2026-09-19 05:59:59Z.
+// Wednesday 2026-09-16 10:00 Mountain (16:00Z). Orderable week 2026-09-20, cutoff is the REAL instant
+// cutoffForWeek() returns: Sat 2026-09-19 06:00:00Z (Friday midnight MDT), which must read 'Friday 11:59 pm'.
 const WED = Date.parse('2026-09-16T16:00:00Z');
 // Saturday 2026-09-19 09:00 Mountain, the blackout: orderable week rolled to 09-27, the 09-20 order is locked.
 const SAT = Date.parse('2026-09-19T15:00:00Z');
@@ -25,7 +26,7 @@ const SUN = Date.parse('2026-09-20T19:00:00Z');
 
 const sub = (o = {}) => ({ status: 'active', meals_per_week: 10, per_meal_cents: 990, current_period_end: '2026-09-19T07:15:00Z', cancel_at_period_end: false, ...o });
 const me = (o = {}) => ({ customer: { first_name: 'Jake', delivery_method: 'pickup' }, subscription: sub(), orders: [], meal_history: [], open_invoices: 0, pickup: { windowLabel: '10:00 to 10:45 am', addressShort: '149 N State St, Orem' }, ...o });
-const menuOpen = (o = {}) => ({ week_of: '2026-09-20', has_menu: true, locked: false, ordering_closed: false, cutoff: '2026-09-19T05:59:59.999Z', meals_per_week: 10, selections: [], meals: [{ position: 1, name: 'Chicken Bowl' }, { position: 2, name: 'Ziti' }], ...o });
+const menuOpen = (o = {}) => ({ week_of: '2026-09-20', has_menu: true, locked: false, ordering_closed: false, cutoff: '2026-09-19T06:00:00.000Z', meals_per_week: 10, selections: [], meals: [{ position: 1, name: 'Chicken Bowl' }, { position: 2, name: 'Ziti' }], ...o });
 const menuBlackout = { week_of: '2026-09-27', has_menu: false, locked: true, ordering_closed: true, cutoff: '2026-09-26T05:59:59.999Z', meals_per_week: 10, selections: [] };
 
 describe('the nine clean states', () => {

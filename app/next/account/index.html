@@ -145,6 +145,7 @@
     tabbar('account');
     let ME = null, sub = null, tier = 9, method = 'pickup', PLANS = [], SIZES = null, savedSize = 'regular', sizeSel = 'regular';
 
+    function prettyPhone(p) { const d = String(p || '').replace(/\D/g, ''); return d.length === 11 && d[0] === '1' ? `(${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}` : (d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : p); }
     document.querySelectorAll('.acc-head').forEach((h) => h.addEventListener('click', () => h.parentElement.classList.toggle('open')));
     function open(id) { const el = $(id); if (el) { el.classList.add('open'); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }
 
@@ -193,8 +194,8 @@
       $('delV').textContent = method === 'delivery' ? [c.address, c.city].filter(Boolean).join(', ') || 'Delivery' : `Pickup, 149 N State St, Orem`;
       $('address').value = c.address || ''; $('city').value = c.city || ''; $('zip').value = c.zip || '';
       // Profile
-      $('firstName').value = c.first_name || ''; $('lastName').value = c.last_name || ''; $('phone').value = c.phone || '';
-      $('profV').textContent = [c.first_name, c.last_name].filter(Boolean).join(' ') + (c.phone ? ', ' + c.phone : ', no phone yet');
+      $('firstName').value = c.first_name || ''; $('lastName').value = c.last_name || ''; $('phone').value = c.phone ? prettyPhone(c.phone) : '';
+      $('profV').textContent = [c.first_name, c.last_name].filter(Boolean).join(' ') + (c.phone ? ', ' + prettyPhone(c.phone) : ', no phone yet');
       // Billing, history, login
       $('billV').textContent = ME.next_charge && ME.next_charge.will_charge !== false && live && sub.status !== 'paused' ? `Next charge about ${money(ME.next_charge.amount_cents)} on ${fmtDate(ME.next_charge.date)}` : 'Card and invoices';
       $('invoices').innerHTML = (ME.invoices || []).slice(0, 8).map((i) => `<div class="hist"><span class="d">${esc(fmtDate(i.created_at))}</span><span class="r">${money(i.status === 'paid' ? i.amount_paid_cents : i.amount_due_cents)} <span class="pill ${i.status === 'paid' ? 'green' : 'amber'}">${esc(i.status || '')}</span>${i.hosted_invoice_url ? ` <a href="${esc(i.hosted_invoice_url)}" target="_blank" rel="noopener">view</a>` : ''}</span></div>`).join('') || '<div class="sub">No invoices yet.</div>';

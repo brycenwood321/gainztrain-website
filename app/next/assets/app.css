@@ -146,6 +146,7 @@ input:focus, select:focus { outline: none; border-color: var(--orange); }
 .savebar .count b { font-family: var(--head); font-size: 1.35rem; color: var(--ink); }
 .savebar .btn { min-height: 46px; padding: 0 22px; }
 body.has-savebar { padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 84px); }
+body.has-savebar .toast { bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 88px); }
 
 /* ── Account page ── */
 .acc { border-top: 1px solid var(--line); }

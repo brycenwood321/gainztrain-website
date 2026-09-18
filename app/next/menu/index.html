@@ -142,7 +142,8 @@
       try {
         const p = JSON.parse(localStorage.getItem('gt_meal_picks') || 'null');
         if (p && p.week_of === MENU_WEEK && !locked && Array.isArray(p.selections)) {
-          if (!Object.values(qty).some((q) => q > 0)) { const valid = new Set(MENU.map((m) => m.position)); p.selections.forEach((s) => { if (valid.has(s.position)) qty[s.position] = s.qty; }); autoPicks = true; }
+          // Clamp to the plan: a stale set from a bigger plan once produced "9 of 8 picked" with Save disabled.
+          if (!Object.values(qty).some((q) => q > 0)) { const valid = new Set(MENU.map((m) => m.position)); let room = need; p.selections.forEach((s) => { if (valid.has(s.position) && room > 0) { const q = Math.min(s.qty, room); qty[s.position] = q; room -= q; } }); autoPicks = true; }
           else localStorage.removeItem('gt_meal_picks');
         } else if (p && (p.week_of !== MENU_WEEK || locked)) localStorage.removeItem('gt_meal_picks');
       } catch (e) {}

@@ -52,7 +52,7 @@ function homeState(me, menu, now) {
 
   if (s.status === 'paused') {
     out.state = 'paused'; out.headline = 'Paused'; out.sub = 'No meals and no charges until you resume.';
-    out.cta = { label: 'Resume my plan', href: '/app/manage/' }; out.note = endsNote; return out;
+    out.cta = { label: 'Resume my plan', href: '/app/next/account/' }; out.note = endsNote; return out;
   }
   var open = (me.open_invoices || 0) > 0;
   var cardIssue = s.status === 'past_due' || s.status === 'unpaid';
@@ -61,7 +61,7 @@ function homeState(me, menu, now) {
     out.state = open ? 'past_due_hold' : 'past_due_cooks';
     out.headline = 'Card issue';
     out.sub = open ? "Sunday's meals are on hold until your card goes through." : "This week's meals still cook. Update your card so they keep coming.";
-    out.cta = { label: 'Update card', href: '/app/manage/#billing' }; out.note = endsNote;
+    out.cta = { label: 'Update card', href: '/app/next/account/#billing' }; out.note = endsNote;
     return out;
   }
 
@@ -113,7 +113,7 @@ function cancelCard(me, orders, s, asNext) {
     state: 'cancel_scheduled',
     headline: asNext ? 'Next week' : 'Your plan is ending',
     sub: (last ? 'Your last delivery is ' + fmtLong(last) + '. ' : 'No more deliveries after ' + fmtLong(s.current_period_end) + '. ') + 'Changed your mind? You can undo it any time before then.',
-    cta: { label: 'Undo cancellation', href: '/app/manage/' },
+    cta: { label: 'Undo cancellation', href: '/app/next/account/' },
     meals: null,
   };
 }
@@ -141,15 +141,15 @@ function openWeekCard(me, menu, now, asNext) {
   if (sel >= need && need > 0) {
     card.state = 'open_picked'; card.headline = (asNext ? 'Next week: ' : '') + need + ' meals set';
     card.sub = 'For ' + when + '. You can change them until ' + fmtCutoff(menu.cutoff) + '.';
-    card.cta = { label: 'Edit meals', href: '/app/menu/' }; card.meals = mealsFor(me, week, menu);
+    card.cta = { label: 'Edit meals', href: '/app/next/menu/' }; card.meals = mealsFor(me, week, menu);
   } else if (sel > 0) {
     card.state = 'open_partial'; card.headline = sel + ' of ' + need + ' picked';
     card.sub = cut + '. Finish your picks for ' + when + '.';
-    card.cta = { label: 'Finish picking', href: '/app/menu/' };
+    card.cta = { label: 'Finish picking', href: '/app/next/menu/' };
   } else {
     card.state = 'open_unpicked'; card.headline = asNext ? 'Pick next week' : 'Pick your meals';
     card.sub = cut + '. ' + need + ' meals for ' + when + '.';
-    card.cta = { label: 'Pick meals', href: '/app/menu/' };
+    card.cta = { label: 'Pick meals', href: '/app/next/menu/' };
   }
   return card;
 }

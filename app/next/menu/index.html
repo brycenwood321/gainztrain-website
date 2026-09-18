@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Meals | Gainz Train</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="manifest" href="/app/next/manifest.webmanifest" />
+  <meta name="theme-color" content="#ff6b35" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="apple-touch-icon" href="/app/ops/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app/next/assets/app.css" />
+</head>
+<body>
+  <div class="topbar">
+    <a href="/app/next/" class="brand" aria-label="Gainz Train home">GAINZ<span class="t">TRAIN</span></a>
+  </div>
+  <div class="wrap">
+    <div id="skel">
+      <div class="sk" style="height:34px;width:55%;margin:8px 0 6px;">.</div>
+      <div class="sk" style="height:16px;width:80%;margin-bottom:14px;">.</div>
+      <div class="mealcard"><div class="sk thumb">.</div><div class="info"><div class="sk" style="height:20px;width:60%;">.</div><div class="sk" style="height:14px;width:90%;margin-top:8px;">.</div></div></div>
+      <div class="mealcard"><div class="sk thumb">.</div><div class="info"><div class="sk" style="height:20px;width:50%;">.</div><div class="sk" style="height:14px;width:85%;margin-top:8px;">.</div></div></div>
+    </div>
+    <div id="app" class="hidden">
+      <h1 id="title" style="font-size:2rem;margin:6px 0 4px;">Pick your meals</h1>
+      <div class="sub" id="line" style="margin-bottom:14px;"></div>
+      <div id="banner" class="note hidden" style="margin:0 0 14px;"></div>
+      <div id="thisSunday" class="card hidden"></div>
+      <div id="meals"></div>
+    </div>
+    <div id="empty" class="card hidden" style="text-align:center;padding:36px 18px;"></div>
+  </div>
+  <div id="bar" class="savebar hidden">
+    <div class="savebar-inner">
+      <svg class="ring" id="ring" viewBox="0 0 46 46" aria-hidden="true"><circle class="bg" cx="23" cy="23" r="19"></circle><circle class="fg" id="ringFg" cx="23" cy="23" r="19" stroke-dasharray="119.4" stroke-dashoffset="119.4" transform="rotate(-90 23 23)"></circle></svg>
+      <div class="count"><b><span id="sel">0</span> of <span id="need">0</span></b> picked</div>
+      <button class="btn primary" id="saveBtn" disabled style="width:auto;">Save</button>
+    </div>
+  </div>
+
+  <script src="/app/next/assets/app.js"></script>
+  <script src="/app/next/assets/home_state.js"></script>
+  <script>
+    const { api, post, esc, $, toast, tabbar, requireMe, fmtDate } = GT;
+    tabbar('meals');
+    let MENU = null, MENU_WEEK = '', need = 0, locked = false, qty = {}, saved = {};
+
+    function total() { return Object.values(qty).reduce((a, b) => a + b, 0); }
+    function dirty() { return JSON.stringify(qty) !== JSON.stringify(saved); }
+    function refresh() {
+      const t = total();
+      $('sel').textContent = t; $('need').textContent = need;
+      const pct = need ? Math.min(1, t / need) : 0;
+      $('ringFg').setAttribute('stroke-dashoffset', String(119.4 * (1 - pct)));
+      $('ring').classList.toggle('ok', t === need && need > 0);
+      $('saveBtn').disabled = (t !== need) || locked || !dirty();
+      $('saveBtn').textContent = t === need && !dirty() ? 'Saved' : (t < need ? `Pick ${need - t} more` : 'Save');
+      MENU.forEach((m) => {
+        $('qn_' + m.position).textContent = qty[m.position] || 0;
+        $('plus_' + m.position).disabled = locked || t >= need;
+        $('minus_' + m.position).disabled = locked || (qty[m.position] || 0) <= 0;
+      });
+    }
+    function mealImgErr(img, emoji) { const d = document.createElement('div'); d.textContent = emoji || '🍽️'; img.replaceWith(d); }
+    function renderMeals() {
+      $('meals').innerHTML = MENU.map((m) => `
+        <div class="mealcard ${locked ? 'locked' : ''}">
+          <div class="thumb">${m.image ? `<img src="${esc(m.image)}" alt="" loading="lazy" onerror="mealImgErr(this,'${esc(m.emoji || '🍽️')}')">` : esc(m.emoji || '🍽️')}</div>
+          <div class="info">
+            <h3>${esc(m.name)}</h3>
+            <div class="desc">${esc(m.description || '')}</div>
+            <div class="macros"><span><b>${m.calories || '–'}</b> cal</span><span><b>${m.protein || 0}g</b> protein</span><span><b>${m.carbs || 0}g</b> carbs</span><span><b>${m.fat || 0}g</b> fat</span></div>
+            ${m.upcharge_per_meal > 0 ? `<span class="pill orange" style="margin-top:6px;">+$${Number(m.upcharge_per_meal).toFixed(2)} a meal</span>` : ''}
+          </div>
+          <div class="stepper">
+            <button class="stepbtn" id="minus_${m.position}" aria-label="One fewer ${esc(m.name)}">–</button>
+            <span class="qn" id="qn_${m.position}">0</span>
+            <button class="stepbtn" id="plus_${m.position}" aria-label="One more ${esc(m.name)}">+</button>
+          </div>
+        </div>`).join('');
+      MENU.forEach((m) => {
+        $('plus_' + m.position).onclick = () => { if (total() < need && !locked) { qty[m.position] = (qty[m.position] || 0) + 1; refresh(); } };
+        $('minus_' + m.position).onclick = () => { if ((qty[m.position] || 0) > 0) { qty[m.position]--; refresh(); } };
+      });
+    }
+    async function saveSelections() {
+      const selections = MENU.map((m) => ({ position: m.position, qty: qty[m.position] || 0 })).filter((s) => s.qty > 0);
+      return post('/api/meals/select', { week_of: MENU_WEEK, selections });
+    }
+    $('saveBtn').onclick = async () => {
+      $('saveBtn').disabled = true; $('saveBtn').textContent = 'Saving';
+      const r = await saveSelections();
+      if (r.status === 200 && r.body.ok) { saved = JSON.parse(JSON.stringify(qty)); toast(`Saved. ${r.body.total_meals} meals for ${fmtDate(MENU_WEEK, { weekday: 'long' })}.`); refresh(); }
+      else { toast(r.body.detail || 'Could not save. Try again.'); refresh(); }
+    };
+    function showEmpty(html) { $('skel').classList.add('hidden'); $('app').classList.add('hidden'); const e = $('empty'); e.classList.remove('hidden'); e.innerHTML = html; }
+
+    // The week already locked and heading to you (read-only), shown above the picker on Sat/Sun.
+    function renderThisSunday(me) {
+      const wk = me.delivery_week;
+      const order = (me.orders || []).find((o) => o.week_of === wk);
+      const rows = (me.meal_history || []).filter((m) => m.week_of === wk && m.qty > 0);
+      if (!order || !rows.length || wk === me.orderable_week) return;
+      const c = $('thisSunday'); c.classList.remove('hidden');
+      c.innerHTML = `<div class="eyebrow">Locked for ${esc(fmtDate(wk, { weekday: 'long' }))}</div><div class="meals">` +
+        rows.map((r) => `<div class="meal"><div class="ph">🍽️</div><div class="nm">${esc(r.meal_name)}</div><div class="q">×${r.qty}</div></div>`).join('') + '</div>';
+    }
+
+    (async () => {
+      const me = await requireMe(); if (!me) return;
+      const fromCheckout = new URLSearchParams(location.search).get('checkout') === 'success';
+      let status, body;
+      for (let attempt = 0; ; attempt++) {
+        ({ status, body } = await api('/api/menu/current'));
+        if (!(fromCheckout && status === 200 && !body.has_active_sub && attempt < 5)) break;
+        await new Promise((r) => setTimeout(r, 4000));
+      }
+      if (status !== 200) { showEmpty('Could not load the menu. Pull down to refresh.'); return; }
+      if (!body.has_active_sub) { showEmpty('<div class="headline" style="font-size:1.5rem;">No plan yet</div><div class="sub">Pick your meals and we cook them Saturday.</div><a class="btn primary" style="margin-top:14px;" href="/start/">Start a plan</a>'); return; }
+      if (body.paused) { showEmpty('<div class="headline" style="font-size:1.5rem;">Paused</div><div class="sub">Resume your plan to pick meals.</div><a class="btn primary" style="margin-top:14px;" href="/app/next/account/">Resume my plan</a>'); return; }
+      $('skel').classList.add('hidden'); $('app').classList.remove('hidden');
+      renderThisSunday(me);
+      if (body.ordering_closed) {
+        $('title').textContent = 'Ordering opens Sunday';
+        $('line').textContent = 'The new menu drops Sunday. We email you when it is up.';
+        return;
+      }
+      if (!body.has_menu || !body.meals || !body.meals.length) {
+        $('title').textContent = 'Menu coming';
+        $('line').textContent = "Next week's menu is not posted yet. We email you when it is.";
+        return;
+      }
+      MENU = body.meals; MENU_WEEK = body.week_of; need = body.meals_per_week; locked = body.locked;
+      (body.selections || []).forEach((s) => { qty[s.meal_position] = s.qty; });
+      // Meals-first carryover: picks made on the public /menu/ before signup.
+      let autoPicks = false;
+      try {
+        const p = JSON.parse(localStorage.getItem('gt_meal_picks') || 'null');
+        if (p && p.week_of === MENU_WEEK && !locked && Array.isArray(p.selections)) {
+          if (!Object.values(qty).some((q) => q > 0)) { const valid = new Set(MENU.map((m) => m.position)); p.selections.forEach((s) => { if (valid.has(s.position)) qty[s.position] = s.qty; }); autoPicks = true; }
+          else localStorage.removeItem('gt_meal_picks');
+        } else if (p && (p.week_of !== MENU_WEEK || locked)) localStorage.removeItem('gt_meal_picks');
+      } catch (e) {}
+      saved = JSON.parse(JSON.stringify(qty));
+      const when = fmtDate(MENU_WEEK, { weekday: 'long' });
+      if (locked) {
+        $('title').textContent = 'Locked in';
+        $('line').textContent = `These are your meals for ${when}.`;
+      } else {
+        const c = homeState(me, body, Date.now());
+        $('title').textContent = need + ' meals for ' + when;
+        $('line').textContent = (c.sub || '').split('. ')[0] + '.';
+        document.body.classList.add('has-savebar'); $('bar').classList.remove('hidden');
+      }
+      renderMeals(); refresh();
+      if (autoPicks) {
+        if (total() === need) { const r = await saveSelections(); if (r.status === 200 && r.body.ok) { try { localStorage.removeItem('gt_meal_picks'); } catch (e) {} saved = JSON.parse(JSON.stringify(qty)); toast(`Your ${r.body.total_meals} meals are in for ${when}.`); refresh(); } }
+        else toast(`We loaded your picks. Adjust to ${need} meals and save.`);
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Account | Gainz Train</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="manifest" href="/app/next/manifest.webmanifest" />
+  <meta name="theme-color" content="#ff6b35" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="apple-touch-icon" href="/app/ops/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app/next/assets/app.css" />
+</head>
+<body>
+  <div class="topbar">
+    <a href="/app/next/" class="brand" aria-label="Gainz Train home">GAINZ<span class="t">TRAIN</span></a>
+  </div>
+  <div class="wrap">
+    <div id="skel"><div class="sk" style="height:34px;width:45%;margin:8px 0 14px;">.</div><div class="card"><div class="sk" style="height:20px;width:60%;">.</div><div class="sk" style="height:20px;width:50%;margin-top:18px;">.</div><div class="sk" style="height:20px;width:70%;margin-top:18px;">.</div></div></div>
+    <div id="app" class="hidden">
+      <h1 style="font-size:2rem;margin:6px 0 14px;">Account</h1>
+
+      <div class="card" style="padding-top:2px;padding-bottom:2px;" id="planCard">
+        <div class="acc" id="acc-plan">
+          <div class="acc-head"><div><div class="k">Plan</div><div class="v" id="planV"></div></div><span class="chev">⌄</span></div>
+          <div class="acc-body">
+            <div class="row" style="border:none;padding-top:4px;"><span>Meals a week</span>
+              <div class="stepper"><button class="stepbtn" id="tMinus">–</button><span class="qn" id="tMeals">0</span><button class="stepbtn" id="tPlus">+</button></div>
+            </div>
+            <div class="sub" id="tPreview"></div>
+            <div class="acts"><button class="btn primary" id="tSave" disabled>Save meal count</button></div>
+          </div>
+        </div>
+        <div class="acc hidden" id="acc-size">
+          <div class="acc-head"><div><div class="k">Meal size</div><div class="v" id="sizeV"></div></div><span class="chev">⌄</span></div>
+          <div class="acc-body">
+            <div class="sub" style="margin-bottom:8px;">Sets your per-meal price. Portions follow your goal below for now.</div>
+            <div class="toggle" id="sizeOpts"></div>
+            <div class="sub" id="sizePreview"></div>
+            <div class="acts"><button class="btn primary" id="sizeSave" disabled>Save size</button></div>
+          </div>
+        </div>
+        <div class="acc" id="acc-goal">
+          <div class="acc-head"><div><div class="k">Goal and body</div><div class="v" id="goalV"></div></div><span class="chev">⌄</span></div>
+          <div class="acc-body">
+            <div class="sub">Sets your portions and macros. Price stays the same.</div>
+            <label>Goal</label>
+            <select id="goal"><option value="">Choose</option><option value="cut">Cut (lose fat)</option><option value="maintain">Maintain</option><option value="build">Build (gain muscle)</option></select>
+            <label>Sex</label>
+            <select id="sex"><option value="">Choose</option><option value="male">Male</option><option value="female">Female</option></select>
+            <div class="acts"><button class="btn primary" id="goalSave">Save</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding-top:2px;padding-bottom:2px;">
+        <div class="acc" id="acc-delivery">
+          <div class="acc-head"><div><div class="k">Delivery</div><div class="v" id="delV"></div></div><span class="chev">⌄</span></div>
+          <div class="acc-body">
+            <div class="toggle"><div class="opt" id="optPickup">Pickup</div><div class="opt" id="optDelivery">Delivery</div></div>
+            <div class="sub" id="delHint"></div>
+            <div id="addrFields" class="hidden">
+              <label>Street address</label><input id="address" type="text" autocomplete="street-address" />
+              <div class="row2"><div><label>City</label><input id="city" type="text" autocomplete="address-level2" /></div><div><label>Zip</label><input id="zip" type="text" inputmode="numeric" maxlength="5" autocomplete="postal-code" /></div></div>
+            </div>
+            <div class="acts"><button class="btn primary" id="addrSave">Save delivery</button></div>
+          </div>
+        </div>
+        <div class="acc" id="acc-profile">
+          <div class="acc-head"><div><div class="k">Name and phone</div><div class="v" id="profV"></div></div><span class="chev">⌄</span></div>
+          <div class="acc-body">
+            <div class="row2"><div><label>First name</label><input id="firstName" type="text" autocomplete="given-name" /></div><div><label>Last name</label><input id="lastName" type="text" autocomplete="family-name" /></div></div>
+            <label>Phone</label><input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(801) 555-1234" />
+            <div class="acts"><button class="btn primary" id="profSave">Save</button></div>
+          </div>
+        </div>
+        <div class="acc" id="acc-notify">
+          <div class="acc-head"><div><div class="k">Notifications</div><div class="v" id="notV"></div></div><span class="chev">⌄</span></div>
+          <div class="acc-body">
+            <div class="sub" style="margin-bottom:4px;">Receipts, card alerts and order confirmations always send.</div>
+            <label class="ck"><input type="checkbox" id="np_email_account"><span>Email me when my plan changes<small>pause, plan, delivery, goal</small></span></label>
+            <label class="ck"><input type="checkbox" id="np_email_marketing"><span>Email me the weekly menu and reminders</span></label>
+            <label class="ck"><input type="checkbox" id="np_sms"><span>Text me about my order<small>cutoff reminder, locked, on the way, card issues</small></span></label>
+            <label class="ck"><input type="checkbox" id="np_consent"><span>Text me menu drops and deals<small id="consentHint">Needs a phone number on file. Reply STOP any time.</small></span></label>
+            <div class="acts"><button class="btn primary" id="npSave">Save</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding-top:2px;padding-bottom:2px;" id="billing">
+        <div class="acc" id="acc-billing">
+          <div class="acc-head"><div><div class="k">Billing</div><div class="v" id="billV"></div></div><span class="chev">⌄</span></div>
+          <div class="acc-body">
+            <div class="acts"><button class="btn primary" id="cardBtn">Update card and billing</button></div>
+            <div id="invoices" style="margin-top:12px;"></div>
+          </div>
+        </div>
+        <div class="acc" id="acc-history">
+          <div class="acc-head"><div><div class="k">Order history</div><div class="v" id="histV"></div></div><span class="chev">⌄</span></div>
+          <div class="acc-body"><div id="orders"></div></div>
+        </div>
+        <div class="acc" id="acc-login">
+          <div class="acc-head"><div><div class="k">Login</div><div class="v" id="loginV"></div></div><span class="chev">⌄</span></div>
+          <div class="acc-body">
+            <label>New password</label>
+            <input id="newpw" type="password" autocomplete="new-password" placeholder="At least 8 characters" />
+            <div class="acts"><button class="btn primary" id="pwSave">Save password</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="pauseCard">
+        <div class="section-title">Need a break?</div>
+        <div class="sub" id="pauseSub"></div>
+        <div class="acts">
+          <button class="btn ghost" id="pauseBtn">Pause my plan</button>
+          <button class="btn primary" id="resumeBtn">Resume my plan</button>
+          <button class="btn danger" id="cancelBtn">Cancel plan</button>
+        </div>
+      </div>
+      <div class="card hidden" id="reasonCard">
+        <div class="section-title" id="reasonTitle">Before you pause</div>
+        <div class="sub" id="reasonSub"></div>
+        <div class="reasons" id="reasonOpts"></div>
+        <label>Anything else? (optional)</label>
+        <input id="reasonText" type="text" maxlength="280" placeholder="Your words, if you want" />
+        <div class="acts">
+          <button class="btn primary" id="reasonGo">Pause plan</button>
+          <button class="btn ghost" id="reasonSkip">Skip this</button>
+          <button class="btn ghost" id="reasonBack">Never mind</button>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:6px;"><button class="btn ghost" id="logoutBtn" style="min-height:44px;">Log out</button></div>
+    </div>
+    <div id="empty" class="card hidden" style="text-align:center;padding:36px 18px;"></div>
+  </div>
+
+  <script src="/app/next/assets/app.js"></script>
+  <script>
+    const { api, post, money, esc, $, toast, tabbar, requireMe, fmtDate } = GT;
+    tabbar('account');
+    let ME = null, sub = null, tier = 9, method = 'pickup', PLANS = [], SIZES = null, savedSize = 'regular', sizeSel = 'regular';
+
+    document.querySelectorAll('.acc-head').forEach((h) => h.addEventListener('click', () => h.parentElement.classList.toggle('open')));
+    function open(id) { const el = $(id); if (el) { el.classList.add('open'); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }
+
+    function sizeRow(key) { return SIZES ? (SIZES.find((s) => s.key === key) || SIZES.find((s) => s.key === 'regular')) : null; }
+    function sizeBand(key, n) { const s = sizeRow(key); const b = s && (s.bands || []).find((b) => n >= b.min && n <= b.max); return b ? b.per_meal_cents : null; }
+    function perMealCents(n) { if (SIZES) { const c = sizeBand(savedSize, n); if (c != null) return c; } const p = PLANS.find((p) => n >= p.min && n <= p.max); return p ? p.per_meal_cents : (sub ? sub.per_meal_cents || sub.tier_price_cents : 0); }
+    function renderPreview() { const wk = tier * perMealCents(tier); const changed = sub && tier !== sub.meals_per_week; $('tPreview').innerHTML = `${tier} meals × ${money(perMealCents(tier))} = <b>${money(wk)} a week</b>` + (changed ? ' <span style="color:var(--muted)">(new)</span>' : ''); }
+    function renderSizeOpts() {
+      if (!SIZES) return;
+      const meals = (sub && sub.meals_per_week) || tier;
+      $('sizeOpts').innerHTML = SIZES.filter((s) => s.selectable).map((s) => { const c = sizeBand(s.key, meals); return `<div class="opt ${s.key === sizeSel ? 'sel' : ''}" data-size="${s.key}">${esc(s.name)}<small style="display:block;font-weight:400;color:var(--muted);font-size:.78rem;">${c != null ? money(c) + ' a meal' : ''}</small></div>`; }).join('');
+      [...$('sizeOpts').children].forEach((el) => { el.onclick = () => { sizeSel = el.dataset.size; renderSizeOpts(); }; });
+      const c = sizeBand(sizeSel, meals);
+      $('sizePreview').innerHTML = sizeSel === savedSize ? '' : (c != null ? `${meals} meals × ${money(c)} = <b>${money(meals * c)} a week</b> (new)` : '');
+      $('sizeSave').disabled = (sizeSel === savedSize);
+      $('sizeV').textContent = (sizeRow(savedSize) || {}).name || '';
+    }
+    function setMethod(m) { method = m; $('optPickup').classList.toggle('sel', m === 'pickup'); $('optDelivery').classList.toggle('sel', m === 'delivery'); $('addrFields').classList.toggle('hidden', m !== 'delivery'); $('delHint').textContent = m === 'pickup' ? `Free at our Orem kitchen, Sundays ${(ME.pickup && ME.pickup.windowLabel) || ''}.` : 'Sundays. The fee depends on your area.'; }
+
+    async function load() {
+      try { const pr = await api('/api/plans'); if (pr.status === 200 && pr.body.plans) { PLANS = pr.body.plans; if (pr.body.sizes_enabled && Array.isArray(pr.body.sizes)) SIZES = pr.body.sizes; } } catch (e) {}
+      ME = await requireMe(); if (!ME) return;
+      sub = ME.subscription;
+      const c = ME.customer;
+      $('skel').classList.add('hidden');
+      const dead = ['canceled', 'incomplete_expired', 'incomplete'];
+      const live = sub && !dead.includes(sub.status);
+      $('app').classList.remove('hidden');
+
+      // Plan
+      if (live) {
+        const st = sub.status === 'trialing' ? 'active' : sub.status;
+        const per = sub.per_meal_cents || perMealCents(sub.meals_per_week);
+        $('planV').innerHTML = `${sub.meals_per_week} meals a week, ${money(per)} a meal ` + `<span class="pill ${st === 'active' ? 'green' : (st === 'paused' ? 'amber' : 'red')}">${sub.cancel_at_period_end ? 'ending' : st.replace('_', ' ')}</span>` + (sub.coupon_code && sub.discount_active ? ` <span class="pill orange">${esc(sub.coupon_code)}</span>` : '');
+        tier = Math.min(16, Math.max(6, sub.meals_per_week || 9)); $('tMeals').textContent = tier; renderPreview();
+        if (SIZES) { savedSize = c.size_key || 'regular'; sizeSel = savedSize; $('acc-size').classList.remove('hidden'); renderSizeOpts(); }
+      } else {
+        $('planV').innerHTML = sub ? `Your plan is ${esc((sub.status || '').replace('_', ' '))}. <a href="/start/">Start again</a>` : 'No plan yet. <a href="/start/">Start one</a>';
+        $('acc-plan').querySelector('.acc-body').innerHTML = '';
+        $('pauseCard').classList.add('hidden');
+      }
+      $('goalV').textContent = [c.goal ? { cut: 'Cut', maintain: 'Maintain', build: 'Build' }[c.goal] : 'Goal not set', c.sex ? (c.sex === 'male' ? 'male' : 'female') : ''].filter(Boolean).join(', ');
+      $('goal').value = c.goal || ''; $('sex').value = c.sex || '';
+      // Delivery
+      method = c.delivery_method || 'pickup'; setMethod(method);
+      $('delV').textContent = method === 'delivery' ? [c.address, c.city].filter(Boolean).join(', ') || 'Delivery' : `Pickup, 149 N State St, Orem`;
+      $('address').value = c.address || ''; $('city').value = c.city || ''; $('zip').value = c.zip || '';
+      // Profile
+      $('firstName').value = c.first_name || ''; $('lastName').value = c.last_name || ''; $('phone').value = c.phone || '';
+      $('profV').textContent = [c.first_name, c.last_name].filter(Boolean).join(' ') + (c.phone ? ', ' + c.phone : ', no phone yet');
+      // Billing, history, login
+      $('billV').textContent = ME.next_charge && ME.next_charge.will_charge !== false && live && sub.status !== 'paused' ? `Next charge about ${money(ME.next_charge.amount_cents)} on ${fmtDate(ME.next_charge.date)}` : 'Card and invoices';
+      $('invoices').innerHTML = (ME.invoices || []).slice(0, 8).map((i) => `<div class="hist"><span class="d">${esc(fmtDate(i.created_at))}</span><span class="r">${money(i.status === 'paid' ? i.amount_paid_cents : i.amount_due_cents)} <span class="pill ${i.status === 'paid' ? 'green' : 'amber'}">${esc(i.status || '')}</span>${i.hosted_invoice_url ? ` <a href="${esc(i.hosted_invoice_url)}" target="_blank" rel="noopener">view</a>` : ''}</span></div>`).join('') || '<div class="sub">No invoices yet.</div>';
+      const orders = ME.orders || [];
+      $('histV').textContent = orders.length ? `${orders.length} weeks` : 'Nothing yet';
+      $('orders').innerHTML = orders.slice(0, 10).map((o) => { const st = o.delivery_status || o.status || ''; const lbl = { delivered: 'delivered', picked_up: 'picked up', out_for_delivery: 'on the way', pickup_ready: 'ready', prepping: 'cooking' }[st] || (String(o.status || '').includes('skip') ? 'skipped' : 'locked'); return `<div class="hist"><span class="d">${esc(fmtDate(o.week_of, { weekday: 'short' }))}</span><span class="r">${o.total_meals} meals <span class="pill ${lbl === 'delivered' || lbl === 'picked up' ? 'green' : ''}">${lbl}</span></span></div>`; }).join('') || '<div class="sub">Your first week shows here after Saturday.</div>';
+      $('loginV').textContent = c.email;
+      // Pause card
+      if (live) {
+        const st = sub.status;
+        $('pauseBtn').classList.toggle('hidden', st === 'paused');
+        $('resumeBtn').classList.toggle('hidden', st !== 'paused');
+        $('cancelBtn').textContent = sub.cancel_at_period_end ? 'Undo cancellation' : 'Cancel plan';
+        $('pauseSub').textContent = st === 'paused' ? 'Your plan is paused. No meals, no charges.' : (sub.cancel_at_period_end ? `Your plan ends after ${fmtDate(sub.current_period_end)}.` : 'Pause any time. Only unlocked weeks are affected.');
+      }
+      loadPrefs();
+      if (location.hash === '#billing') open('acc-billing');
+    }
+    async function loadPrefs() {
+      const r = await api('/api/account/notification-prefs');
+      const p = (r.body && r.body.prefs) || { email_account: 1, email_marketing: 1, sms_account: 1, sms_marketing: 0 };
+      $('np_email_account').checked = p.email_account !== 0;
+      $('np_email_marketing').checked = p.email_marketing !== 0;
+      $('np_sms').checked = p.sms_account !== 0;
+      $('np_consent').checked = !!(r.body && r.body.sms_consent);
+      $('np_consent').disabled = !(r.body && r.body.has_phone);
+      $('consentHint').textContent = (r.body && r.body.has_phone) ? 'Reply STOP any time.' : 'Add your phone number above first.';
+      $('notV').textContent = [p.email_marketing !== 0 ? 'Weekly menu email' : '', p.sms_account !== 0 ? 'Order texts' : ''].filter(Boolean).join(', ') || 'Essentials only';
+    }
+    async function act(btn, fn, okMsg) {
+      const b = $(btn); const old = b.textContent; b.disabled = true; b.textContent = 'Saving';
+      const r = await fn(); b.disabled = false; b.textContent = old;
+      if (r.status === 200 && r.body.ok !== false) { toast(typeof okMsg === 'function' ? okMsg(r.body) : (okMsg || 'Saved')); await load(); }
+      else toast(r.body.detail || 'Could not save. Try again.');
+    }
+    $('tMinus').onclick = () => { if (tier > 6) { tier--; $('tMeals').textContent = tier; $('tSave').disabled = (tier === sub.meals_per_week); renderPreview(); } };
+    $('tPlus').onclick = () => { if (tier < 16) { tier++; $('tMeals').textContent = tier; $('tSave').disabled = (tier === sub.meals_per_week); renderPreview(); } };
+    $('tSave').onclick = () => act('tSave', () => post('/api/account/tier', { meals: tier }), (b) => b.effective === 'next_week' ? 'Saved. The new count starts next week; this week is locked.' : 'Saved. Pick your meals for the new count.');
+    $('sizeSave').onclick = () => act('sizeSave', () => post('/api/account/size', { size: sizeSel }), (b) => b.effective === 'next_week' ? 'Size saved. New price starts next week.' : 'Size saved.');
+    $('goalSave').onclick = () => act('goalSave', () => post('/api/account/goal', { goal: $('goal').value, sex: $('sex').value }), "Saved. Your macros apply to next week's meals.");
+    $('optPickup').onclick = () => setMethod('pickup'); $('optDelivery').onclick = () => setMethod('delivery');
+    $('addrSave').onclick = () => act('addrSave', () => post('/api/account/address', { delivery_method: method, address: $('address').value, city: $('city').value, zip: $('zip').value }), (b) => b.delivery_method === 'pickup' ? 'Saved. Free pickup in Orem.' : `Saved. Zone ${b.delivery_zone} delivery, ${money(b.delivery_fee_cents)} a week${b.effective === 'next_week' ? ' from next week' : ''}.`);
+    $('profSave').onclick = () => act('profSave', () => post('/api/account/profile', { first_name: $('firstName').value, last_name: $('lastName').value, phone: $('phone').value }), 'Saved');
+    $('npSave').onclick = () => act('npSave', () => post('/api/account/notification-prefs', { email_account: $('np_email_account').checked, email_marketing: $('np_email_marketing').checked, sms_account: $('np_sms').checked, ...($('np_consent').disabled ? {} : { sms_consent: $('np_consent').checked }) }), 'Preferences saved');
+    $('pwSave').onclick = async () => { const pw = $('newpw').value; if (pw.length < 8) { toast('Password must be at least 8 characters.'); return; } await act('pwSave', () => post('/api/auth/set-password', { password: pw }), 'Password updated'); $('newpw').value = ''; };
+    $('cardBtn').onclick = async () => { const b = $('cardBtn'); b.disabled = true; b.textContent = 'Opening'; const r = await post('/api/account/portal'); if (r.body.url) { location.href = r.body.url; return; } b.disabled = false; b.textContent = 'Update card and billing'; toast(r.body.detail || 'Could not open billing.'); };
+    $('logoutBtn').onclick = async () => { await post('/api/auth/logout'); location.href = '/app/next/'; };
+
+    // Mirror of functions/_lib/reasons.js (codes must match; test/reasons.test.mjs fails if the two drift).
+    const REASONS=[['pickup_time','The Sunday pickup time'],['too_much_food','Too much food'],['price','Price'],['menu','The menu'],['delivery','Delivery'],['break','Taking a break (travel, schedule)'],['other','Something else']];
+    let reasonSel = '';
+    function askReason(kind, note) {
+      return new Promise((resolve) => {
+        reasonSel = ''; $('reasonText').value = '';
+        $('reasonTitle').textContent = kind === 'cancel' ? 'Before you cancel' : 'Before you pause';
+        $('reasonSub').textContent = (note || '') + ' One tap so we can fix it if it is on us. Optional.';
+        $('reasonGo').textContent = kind === 'cancel' ? 'Cancel plan' : 'Pause plan';
+        $('reasonGo').className = kind === 'cancel' ? 'btn danger' : 'btn primary';
+        $('reasonOpts').innerHTML = REASONS.map(([c, l]) => `<div class="opt" data-code="${c}">${l}</div>`).join('');
+        [...$('reasonOpts').children].forEach((el) => { el.onclick = () => { reasonSel = el.dataset.code; [...$('reasonOpts').children].forEach((x) => x.classList.toggle('sel', x === el)); }; });
+        const card = $('reasonCard'); card.classList.remove('hidden'); card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const done = (v) => { card.classList.add('hidden'); $('reasonGo').onclick = $('reasonSkip').onclick = $('reasonBack').onclick = null; resolve(v); };
+        $('reasonGo').onclick = () => done({ reason: reasonSel || 'declined', reason_text: $('reasonText').value.trim() });
+        $('reasonSkip').onclick = () => done({ reason: 'declined', reason_text: '' });
+        $('reasonBack').onclick = () => done(null);
+      });
+    }
+    $('pauseBtn').onclick = async () => { const r = await askReason('pause', 'No meals or charges until you resume.'); if (r === null) return; act('pauseBtn', () => post('/api/account/pause', r), 'Paused. No meals or charges until you resume.'); };
+    $('resumeBtn').onclick = () => act('resumeBtn', () => post('/api/account/resume'), 'Welcome back. Your plan is active again.');
+    $('cancelBtn').onclick = async () => {
+      const undo = !!(sub && sub.cancel_at_period_end);
+      let r = {};
+      if (!undo) { const through = sub && sub.current_period_end ? `You keep your meals through ${fmtDate(sub.current_period_end)}. You can undo any time before then.` : 'You can undo any time before it ends.'; r = await askReason('cancel', through); if (r === null) return; }
+      act('cancelBtn', () => post('/api/account/cancel', Object.assign({ undo }, r)), (b) => undo ? 'Cancellation undone. Your plan keeps renewing.' : ('Plan cancelled.' + (b.ends ? ` Meals continue through ${fmtDate(b.ends)}.` : '') + ' Changed your mind? Tap Undo cancellation.'));
+    };
+    load();
+  </script>
+</body>
+</html>

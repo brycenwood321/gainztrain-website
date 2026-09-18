@@ -16,11 +16,13 @@ window.GT = (function () {
     clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
   }
 
-  // Bottom tab bar. ONE definition; each page passes which tab it is. Invite lands in slice two.
+  // Bottom tab bar. ONE definition; each page passes which tab it is. Every tab stays inside the
+  // shell so the bar never disappears (Brycen, 2026-09-17: it vanished on Meals and Account).
   const TABS = [
     { key: 'home', label: 'Home', ic: '🏠', href: '/app/next/' },
-    { key: 'meals', label: 'Meals', ic: '🍽️', href: '/app/menu/' },
-    { key: 'account', label: 'Account', ic: '👤', href: '/app/manage/' },
+    { key: 'meals', label: 'Meals', ic: '🍽️', href: '/app/next/menu/' },
+    { key: 'invite', label: 'Invite', ic: '🎁', href: '/app/next/invite/' },
+    { key: 'account', label: 'Account', ic: '👤', href: '/app/next/account/' },
   ];
   function tabbar(active) {
     const el = document.createElement('nav');
@@ -29,5 +31,13 @@ window.GT = (function () {
     document.body.appendChild(el);
   }
 
-  return { api, post, money, money0, esc, $, toast, tabbar, TABS };
+  // Session boot for the inner pages: /api/me, or send them to Home to log in.
+  async function requireMe() {
+    const r = await api('/api/me');
+    if (r.status !== 200 || !r.body.ok) { location.href = '/app/next/'; return null; }
+    return r.body;
+  }
+  const fmtDate = (iso, opts) => iso ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso + 'T12:00:00Z' : iso).toLocaleDateString('en-US', Object.assign({ timeZone: 'America/Denver', month: 'short', day: 'numeric' }, opts || {})) : '';
+
+  return { api, post, money, money0, esc, $, toast, tabbar, TABS, requireMe, fmtDate };
 })();

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Invite | Gainz Train</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="manifest" href="/app/next/manifest.webmanifest" />
+  <meta name="theme-color" content="#ff6b35" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="apple-touch-icon" href="/app/ops/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app/next/assets/app.css" />
+</head>
+<body>
+  <div class="topbar">
+    <a href="/app/next/" class="brand" aria-label="Gainz Train home">GAINZ<span class="t">TRAIN</span></a>
+  </div>
+  <div class="wrap">
+    <div id="skel"><div class="sk" style="height:34px;width:50%;margin:8px 0 14px;">.</div><div class="card"><div class="sk" style="height:44px;width:60%;">.</div><div class="sk" style="height:50px;margin-top:14px;border-radius:12px;">.</div></div></div>
+    <div id="app" class="hidden">
+      <h1 style="font-size:2rem;margin:6px 0 14px;">Invite a friend</h1>
+      <div class="card hero">
+        <div class="eyebrow">Your code</div>
+        <div class="codebig" id="code"></div>
+        <div class="sub" id="offer"></div>
+        <div class="acts">
+          <button class="btn primary" id="copyBtn" style="flex:1 1 100%;">Copy link</button>
+          <a class="btn ghost" id="textBtn" href="#">Text it</a>
+          <button class="btn ghost" id="shareBtn">Share</button>
+        </div>
+        <div class="linkbox" id="link"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">How it works</div>
+        <div class="hist"><span class="d">1. Send your link</span><span class="r" id="hw1"></span></div>
+        <div class="hist"><span class="d">2. They start a plan</span><span class="r" id="hw2"></span></div>
+        <div class="hist"><span class="d">3. Their first week is paid</span><span class="r" id="hw3"></span></div>
+      </div>
+      <div class="card" id="friendsCard">
+        <div class="section-title">Your friends</div>
+        <div id="friends"></div>
+      </div>
+      <div class="card hidden" id="creditsCard">
+        <div class="section-title">Your free meals</div>
+        <div id="credits"></div>
+      </div>
+    </div>
+    <div id="empty" class="card hidden" style="text-align:center;padding:36px 18px;"></div>
+  </div>
+  <script src="/app/next/assets/app.js"></script>
+  <script>
+    const { esc, $, toast, tabbar, requireMe, fmtDate } = GT;
+    tabbar('invite');
+    (async () => {
+      const me = await requireMe(); if (!me) return;
+      let b = {};
+      try { const r = await fetch('/api/account/referral', { credentials: 'same-origin' }); b = await r.json().catch(() => ({})); if (!r.ok || !b.ok || !b.code) b = null; } catch { b = null; }
+      $('skel').classList.add('hidden');
+      if (!b) {
+        const e = $('empty'); e.classList.remove('hidden');
+        e.innerHTML = me.subscription ? '<div class="headline" style="font-size:1.5rem;">Your code is on its way</div><div class="sub">Invites unlock once your plan is live. Check back after Saturday.</div>' : '<div class="headline" style="font-size:1.5rem;">Start a plan to invite friends</div><div class="sub">Every friend who joins gets free meals, and so do you.</div><a class="btn primary" style="margin-top:14px;" href="/start/">Start a plan</a>';
+        return;
+      }
+      $('app').classList.remove('hidden');
+      $('code').textContent = b.code;
+      $('offer').textContent = `They get ${b.friend_offer || '8 free meals'}. When their first week is paid, ${b.meals || 4} free meals come off your next bill.`;
+      $('link').textContent = b.link;
+      $('hw1').textContent = 'Text, DM, or share it';
+      $('hw2').textContent = `They get ${String(b.friend_offer || '8 free meals').split(',')[0]}`;
+      $('hw3').textContent = `You get ${b.meals || 4} meals off`;
+      $('textBtn').href = 'sms:?&body=' + encodeURIComponent(b.share_text || b.link);
+      $('copyBtn').onclick = async () => { try { await navigator.clipboard.writeText(b.link); toast('Link copied'); } catch { toast(b.link); } };
+      $('shareBtn').onclick = async () => { if (navigator.share) { try { await navigator.share({ title: 'Gainz Train', text: b.share_text || '', url: b.link }); } catch {} } else $('copyBtn').onclick(); };
+      const fr = b.referrals || [];
+      $('friends').innerHTML = fr.length ? fr.map((x) => `<div class="hist"><span class="d">${esc(x.first_name || 'A friend')}</span><span class="r">${x.status === 'credited' ? '<span class="pill green">paid, meals queued</span>' : (x.status === 'pending' ? '<span class="pill amber">signed up</span>' : `<span class="pill">${esc(x.status)}</span>`)}</span></div>`).join('') : '<div class="sub">Nobody yet. Your first friend is one text away.</div>';
+      const cr = (b.credits || []).filter((c) => c.status !== 'void');
+      if (cr.length) { $('creditsCard').classList.remove('hidden'); $('credits').innerHTML = cr.map((c) => `<div class="hist"><span class="d">${c.meals} free meals</span><span class="r">${c.status === 'applied' ? 'taken off ' + esc(fmtDate(c.week_of || '')) : 'comes off your next order'}</span></div>`).join(''); }
+    })();
+  </script>
+</body>
+</html>

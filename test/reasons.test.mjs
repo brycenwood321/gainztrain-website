@@ -13,10 +13,10 @@ describe('reason list', () => {
     assert.ok(REASONS.some((r) => r.code === 'pickup_time'));
     assert.equal(new Set(REASONS.map((r) => r.code)).size, REASONS.length);
   });
-  test('the manage page mirrors the server list exactly, in order', () => {
-    const html = readFileSync(new URL('../app/manage/index.html', import.meta.url), 'utf8');
+  for (const file of ['../app/manage/index.html', '../app/next/account/index.html']) test(`${file} mirrors the server list exactly, in order`, () => {
+    const html = readFileSync(new URL(file, import.meta.url), 'utf8');
     const m = html.match(/const REASONS=\[(.*?)\];/);
-    assert.ok(m, 'REASONS array missing from app/manage/index.html');
+    assert.ok(m, 'REASONS array missing from ' + file);
     const page = [...m[1].matchAll(/\['([a-z_]+)','([^']*)'\]/g)].map((x) => ({ code: x[1], label: x[2].replace(/\\'/g, "'") }));
     assert.deepEqual(page, REASONS);
   });

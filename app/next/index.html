@@ -174,20 +174,20 @@
       const rows = [];
       const pk = me.pickup || {};
       if (c.delivery_method === 'delivery') {
-        rows.push({ k: 'Delivery', v: esc([c.address, c.city].filter(Boolean).join(', ') || 'Address on file'), small: 'Sundays' + (c.delivery_zone ? ', zone ' + c.delivery_zone : ''), act: { label: 'Change', href: '/app/manage/' } });
+        rows.push({ k: 'Delivery', v: esc([c.address, c.city].filter(Boolean).join(', ') || 'Address on file'), small: 'Sundays' + (c.delivery_zone ? ', zone ' + c.delivery_zone : ''), act: { label: 'Change', href: '/app/next/account/' } });
       } else {
-        rows.push({ k: 'Pickup', v: esc(pk.addressShort || 'Orem kitchen'), small: 'Sundays ' + (pk.windowLabel || ''), act: { label: 'Change', href: '/app/manage/' } });
+        rows.push({ k: 'Pickup', v: esc(pk.addressShort || 'Orem kitchen'), small: 'Sundays ' + (pk.windowLabel || ''), act: { label: 'Change', href: '/app/next/account/' } });
       }
       if (s && !['canceled', 'incomplete', 'incomplete_expired'].includes(s.status)) {
         const rate = s.per_meal_cents ? money(s.per_meal_cents) + ' a meal' : '';
-        rows.push({ k: 'Plan', v: s.meals_per_week ? `${s.meals_per_week} meals a week` : 'Plan on file', small: [rate, s.coupon_code && s.discount_active ? s.coupon_code + ' applied' : ''].filter(Boolean).join(', '), act: { label: 'Manage', href: '/app/manage/' } });
+        rows.push({ k: 'Plan', v: s.meals_per_week ? `${s.meals_per_week} meals a week` : 'Plan on file', small: [rate, s.coupon_code && s.discount_active ? s.coupon_code + ' applied' : ''].filter(Boolean).join(', '), act: { label: 'Manage', href: '/app/next/account/' } });
         if (me.next_charge && s.status !== 'paused' && me.next_charge.will_charge !== false) {
           const nc = me.next_charge;
           const bits = [];
           if (nc.coupon) bits.push(nc.coupon + ' applied');
           if (nc.credit_cents) bits.push(money0(nc.credit_cents) + ' in free meals taken off');
           if (nc.upcharge_cents) bits.push('includes specialty meals');
-          rows.push({ k: s.cancel_at_period_end ? 'Last charge' : 'Next charge', v: 'about ' + money(nc.amount_cents) + (nc.date ? ' on ' + fmtDate(nc.date) : ''), small: bits.join(', ') || 'Charged Saturday, cooked Saturday, eaten all week', act: { label: 'Billing', href: '/app/manage/#billing' } });
+          rows.push({ k: s.cancel_at_period_end ? 'Last charge' : 'Next charge', v: 'about ' + money(nc.amount_cents) + (nc.date ? ' on ' + fmtDate(nc.date) : ''), small: bits.join(', ') || 'Charged Saturday, cooked Saturday, eaten all week', act: { label: 'Billing', href: '/app/next/account/#billing' } });
         }
       }
       $('rows').innerHTML = rows.map((r) => `<div class="row"><div><div class="k">${r.k}</div><div class="v">${r.v}${r.small ? `<small>${esc(r.small)}</small>` : ''}</div></div>${r.act ? `<a class="act" href="${r.act.href}">${r.act.label}</a>` : ''}</div>`).join('');

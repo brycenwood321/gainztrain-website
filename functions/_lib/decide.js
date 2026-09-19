@@ -82,6 +82,45 @@ export function cookDecision(sub, cutoff) {
   return { cook: true };
 }
 
+// ---- HOW OLD AN UNPAID INVOICE CAN BE AND STILL BLOCK THE COOK ----------------------------
+// 2026-09-19: Jesús López. A $104.50 invoice from MAY (pre-app, card failed, Stripe gave up on
+// May 23 and turned collection off) sat 'open' for four months. He paused in August, resumed
+// himself on Sep 12, Stripe charged him $84 at 07:16 UTC on Sep 19 for the Sep 20 delivery, and
+// the open-invoice rule above then refused to cook for him: paid, not fed, the exact outcome the
+// bill-at-the-lock rebuild exists to prevent. The rule's purpose is to bound a DEAD CARD (Smart
+// Retries hold past_due about three weeks, so an unbounded rule buys free food every Saturday).
+// A four-month-old invoice is not a live card problem, it is bookkeeping. So the lock only counts
+// open invoices CREATED inside this window before the delivery being locked. Older ones stay
+// visible to the owners in Stripe; they no longer decide who eats.
+export const OPEN_INVOICE_WINDOW_DAYS = 28;
+
+// ISO-8601 string: open invoices created before this do not count against `weekOf`.
+export function openInvoiceSince(weekOf) {
+  const t = Date.parse(`${weekOf}T00:00:00.000Z`);
+  if (!Number.isFinite(t)) throw new Error(`openInvoiceSince: bad weekOf ${weekOf}`);
+  return new Date(t - OPEN_INVOICE_WINDOW_DAYS * 86400e3).toISOString();
+}
+
+// ---- WHICH ROWS A LOCK CALL ACTUALLY WORKS ON ------------------------------------------------
+// 2026-09-19: the 08:00 pass locked 14 of 32 and stopped. lock-week.js took the first `limit` rows
+// of the unlocked list and only THEN asked cookDecision, and a skip writes nothing, so the two
+// customers it refused (one with an open invoice) sat at the head of every batch, every call handled
+// one real customer, and the cron loop hit its call cap with 17 people unlocked. Stripe then charged
+// those 17 itself at 08:15 with no upcharge ($174.50 under-billed) and the 13:00 pass locked them.
+//
+// So: decide the cheap skips over the WHOLE list first, report each of them once, and hand the
+// caller a batch made only of customers this call can actually move. `remaining` counts customers
+// still to be moved, never the ones nothing will ever move.
+export function partitionCookable(subs, cutoffISO, limit) {
+  const skipped = [], cookable = [];
+  for (const sub of subs) {
+    const d = cookDecision(sub, cutoffISO);
+    if (d.cook) cookable.push(sub); else skipped.push({ sub, reason: d.reason, message: d.message });
+  }
+  const batch = cookable.slice(0, Math.max(0, limit));
+  return { skipped, batch, remaining: Math.max(0, cookable.length - batch.length), cookable: cookable.length };
+}
+
 // ---- WHO GOT PAID --------------------------------------------------------------------------
 // Does this PAID invoice actually represent a week of food that got bought?
 //

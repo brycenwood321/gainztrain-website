@@ -41,7 +41,8 @@ import { stripe } from '../../_lib/stripe.js';
 import { applyCreditsToDraft, pendingCredits } from '../../_lib/credits.js';
 import { creditReferralIfEarned } from '../../_lib/referral.js';
 import {
-  COOKABLE, cookDecision, lockAction, lockPolicies, pickCycleDraft, pickCycleInvoice, chargeOutcome, feedAfterCharge,
+  COOKABLE, lockAction, lockPolicies, pickCycleDraft, pickCycleInvoice, chargeOutcome, feedAfterCharge,
+  openInvoiceSince, partitionCookable,
 } from '../../_lib/decide.js';
 
 const DEFAULT_LIMIT = 3;
@@ -206,14 +207,14 @@ export async function onRequestPost(context) {
   const subs = await all(env.DB,
     `SELECT s.id, s.customer_id, s.meals_per_week, s.cancel_at_period_end, s.created_at, s.stripe_subscription_id,
             c.email, c.first_name, c.ghl_contact_id, c.delivery_method, c.stripe_customer_id, c.size_key,
-            (SELECT COUNT(*) FROM invoices i WHERE i.customer_id = s.customer_id AND i.status = 'open') AS open_invoices
+            (SELECT COUNT(*) FROM invoices i WHERE i.customer_id = s.customer_id AND i.status = 'open' AND i.created_at >= ?) AS open_invoices
        FROM subscriptions s
        JOIN customers c ON c.id = s.customer_id
        LEFT JOIN orders o ON o.subscription_id = s.id AND o.week_of = ?
       WHERE s.status IN (${COOKABLE.map(() => '?').join(',')}) AND s.origin = 'app'
         AND o.charge_status IS NULL
       ORDER BY s.created_at`,
-    weekOf, ...COOKABLE);
+    openInvoiceSince(weekOf), weekOf, ...COOKABLE);
 
   // ISO STRING, NOT A DATE. From 2026-08-12 to 2026-09-09 this handed a Date to cookDecision, whose
   // string comparison then coerced both sides to numbers (NaN), so the post-cutoff signup guard never
@@ -223,19 +224,21 @@ export async function onRequestPost(context) {
   const cutoffISO = cutoffForWeek(weekOf).toISOString();
 
   const now = nowIso();
-  const batch = subs.slice(0, limit);
-  const remaining = Math.max(0, subs.length - batch.length);
-  const s = { week_of: weekOf, pass, policies, selected: subs.length, handled: batch.length, remaining,
+  // 1. Cheap guards on the mirror, over the WHOLE list, before the batch is cut. A skipped customer
+  //    writes nothing and would otherwise sit at the head of every batch (2026-09-19: two skips made
+  //    every 08:00 call handle one real customer and the loop gave up with 17 unlocked). Each skip is
+  //    still reported on every call so the owners see it in the pass summary.
+  const part = partitionCookable(subs, cutoffISO, limit);
+  const batch = part.batch;
+  const remaining = part.remaining;
+  const s = { week_of: weekOf, pass, policies, selected: subs.length, cookable: part.cookable, handled: batch.length, remaining,
     paid: [], comp: [], declined_cooked: [], declined_withheld: [], legacy: [], retry: [], voided: [], skipped: [], errors: [] };
+  for (const k of part.skipped) s.skipped.push(k.message);
 
   for (const sub of batch) {
     const who = `${sub.first_name || sub.email} (${sub.email})`;
     try {
       const cust = { id: sub.customer_id, email: sub.email, first_name: sub.first_name, ghl_contact_id: sub.ghl_contact_id };
-
-      // 1. Cheap guards on the mirror.
-      const decision = cookDecision(sub, cutoffISO);
-      if (!decision.cook) { s.skipped.push(decision.message); continue; }
 
       // 2. LIVE Stripe decides paused / canceled / rolled / draft. Never the mirror.
       let live = null, drafts = [];

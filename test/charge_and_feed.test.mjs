@@ -27,6 +27,7 @@ import {
   COOKABLE, cookDecision, invoiceCoversDelivery, paidWeeksFromInvoices,
   paymentCheckReady, emptyScan, notLockedReport, lockNeverRanReport, buildAuditReport,
   lockAction, lockPolicies, LOCK_POLICY_DEFAULTS, pickCycleDraft, pickCycleInvoice, chargeOutcome, feedAfterCharge, livePeriodEndMs,
+  OPEN_INVOICE_WINDOW_DAYS, openInvoiceSince, partitionCookable,
 } from '../functions/_lib/decide.js';
 import { anchorForDelivery, deliveryBoughtBy, anchorOnSameDay, ANCHOR_HOUR_UTC, ANCHOR_MINUTE_UTC } from '../functions/_lib/billing_day.js';
 import { cutoffForWeek } from '../functions/_lib/menu.js';
@@ -822,5 +823,102 @@ describe('bill at the lock: anchor, lock decision, charge outcome', () => {
   test('a Saturday 07:15 renewal still buys TOMORROW\'s Sunday', () => {
     assert.equal(deliveryBoughtBy(new Date('2026-09-12T07:15:30Z'), 'subscription_cycle'), '2026-09-13');
     assert.equal(deliveryBoughtBy(new Date('2026-09-12T08:00:30Z'), 'subscription_cycle'), '2026-09-13');
+  });
+});
+
+
+// ---- 2026-09-19: the lock that stalled at 14 of 32, and the four-month-old invoice ------------
+// Sources: audit_log lock_pass rows for lock:2026-09-20 (14 calls at 08:01 to 08:02 UTC, handled 3,
+// skipped 2, one real customer per call, remaining 30 down to 17, then silence), the 13:00 pass that
+// finished the other 18, 18 upcharge_missed_settled rows totalling $174.50, and Stripe invoice
+// in_1TZgHc (Jesús López, $104.50, May 21 to 28, payment failed, collection off since May 23).
+describe('2026-09-19: skips ate the lock batch, and a May invoice blocked a September customer', () => {
+  const weekOf = '2026-09-20';
+  const cutoffISO = cutoffForWeek(weekOf).toISOString();
+
+  // The unlocked list as lock-week.js selects it, ORDER BY created_at: the two refused rows are the
+  // oldest subscriptions, so they head every batch. 30 real customers behind them.
+  function morningList() {
+    const rows = [
+      sub({ id: 'jesus', email: 'jesuslopez.l672@icloud.com', created_at: '2026-05-31T20:00:00.000Z', open_invoices: 1, meals_per_week: 8 }),
+      sub({ id: 'legacy', email: 'legacy@example.com', created_at: '2026-06-01T00:00:00.000Z', meals_per_week: 0 }),
+    ];
+    for (let i = 1; i <= 30; i++) rows.push(sub({ id: `c${i}`, email: `c${i}@example.com`, created_at: `2026-07-${String(i).padStart(2, '0')}T00:00:00.000Z` }));
+    return rows;
+  }
+
+  // What the endpoint did until 2026-09-19: slice first, decide second. A skip writes no charge
+  // outcome, so it is selected again next call.
+  function oldCall(pool, limit) {
+    const batch = pool.slice(0, limit);
+    const locked = batch.filter((r) => cookDecision(r, cutoffISO).cook);
+    return { locked, remaining: pool.length - batch.length };
+  }
+
+  test('the old slice-then-decide loop locks one customer per call and quits at the 14-call cap', () => {
+    let pool = morningList();
+    let lockedTotal = 0;
+    for (let call = 1; call <= 14; call++) {
+      const r = oldCall(pool, 3);
+      lockedTotal += r.locked.length;
+      const done = new Set(r.locked.map((x) => x.id));
+      pool = pool.filter((x) => !done.has(x.id));
+      assert.equal(r.locked.length, 1, `call ${call} moved exactly one real customer`);
+    }
+    assert.equal(lockedTotal, 14);
+    assert.equal(pool.length - 2, 16, '16 real customers still unlocked when the cap hit (17 on the morning: one was a live skip)');
+  });
+
+  test('partitionCookable decides over the whole list first, so a skip never takes a batch slot', () => {
+    const part = partitionCookable(morningList(), cutoffISO, 3);
+    assert.equal(part.skipped.length, 2);
+    assert.deepEqual(part.skipped.map((k) => k.reason).sort(), ['needs_enrichment', 'unpaid_invoice']);
+    assert.equal(part.batch.length, 3);
+    assert.ok(part.batch.every((r) => r.id.startsWith('c')), 'every batch row is a real customer');
+    assert.equal(part.cookable, 30);
+    assert.equal(part.remaining, 27, 'remaining counts customers a call can still move, never the refused ones');
+  });
+
+  test('with the partition, the same morning reaches remaining 0 in 10 calls, all 30 locked', () => {
+    let pool = morningList();
+    let lockedTotal = 0, calls = 0, remaining = null;
+    while (calls < 14) {
+      calls++;
+      const part = partitionCookable(pool, cutoffISO, 3);
+      lockedTotal += part.batch.length;
+      const done = new Set(part.batch.map((x) => x.id));
+      pool = pool.filter((x) => !done.has(x.id));
+      remaining = part.remaining;
+      if (remaining === 0) break;
+    }
+    assert.equal(remaining, 0);
+    assert.equal(calls, 10);
+    assert.equal(lockedTotal, 30);
+    assert.equal(pool.length, 2, 'only the two refused rows are left, and they are reported, not counted');
+  });
+
+  test('every refused row still carries its message on every call, so the owners see it', () => {
+    const part = partitionCookable(morningList(), cutoffISO, 3);
+    const jesus = part.skipped.find((k) => k.sub.id === 'jesus');
+    assert.match(jesus.message, /unpaid invoice/);
+    assert.match(jesus.message, /jesuslopez\.l672@icloud\.com/);
+  });
+
+  test('an open invoice only blocks the cook inside the retry window; May cannot block September', () => {
+    assert.equal(OPEN_INVOICE_WINDOW_DAYS, 28);
+    const since = openInvoiceSince(weekOf);
+    assert.equal(since, '2026-08-23T00:00:00.000Z', 'hand-computed: 28 days before the 2026-09-20 delivery');
+    // Jesús's row: created_at 2026-05-31 in the mirror, period May 21 to 28 in Stripe. Both are
+    // before the window, so the SQL count that feeds cookDecision would return 0 for him.
+    assert.ok('2026-05-31T20:13:48.488Z' < since, 'the May invoice falls outside the window');
+    // A card that died two Saturdays ago is still inside it.
+    assert.ok('2026-09-05T07:16:00.000Z' >= since, 'a two-week-old failed renewal still blocks');
+    assert.throws(() => openInvoiceSince('nonsense'));
+  });
+
+  test('cookDecision itself is unchanged: an in-window open invoice still withholds', () => {
+    const d = cookDecision(sub({ open_invoices: 1 }), cutoffISO);
+    assert.equal(d.cook, false);
+    assert.equal(d.reason, 'unpaid_invoice');
   });
 });

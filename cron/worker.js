@@ -126,16 +126,47 @@ async function pickupReminderWithVerify(env, week) {
 // pass 2 at 08:30 UTC for anything Stripe had not drafted yet at 08:00. Each call is idempotent: a
 // customer with a charge outcome is never selected again, so a loop that dies mid-way resumes cleanly.
 async function lockWeekLoop(env, pass) {
-  let retries = 0;
-  for (let i = 1; i <= 14; i++) {
+  // 2026-09-19: the cap was 14 calls and the loop trusted the endpoint to make progress. Two skipped
+  // customers sat at the head of every batch, each call moved one real customer, and the loop quit at
+  // 14 with 17 people unlocked and only a console line to say so. Stripe charged those 17 itself at
+  // 08:15 with no upcharge. The endpoint now cuts skips out of the batch before it counts; this loop
+  // keeps its own guard anyway: stop when three calls in a row move nobody, and SAY SO to the owners.
+  const MAX_CALLS = 40;
+  const STALL_CALLS = 3;
+  let retries = 0, remaining = null, stalled = 0, calls = 0;
+  for (let i = 1; i <= MAX_CALLS; i++) {
     const r = await callJson(env, 'POST', `/api/admin/lock-week?limit=3&pass=${pass}`);
-    if (!r) { console.error(`[gainztrain-cron] lock pass ${pass} call ${i}: endpoint failed, stopping (re-run by hand)`); return retries; }
-    console.log(`[gainztrain-cron] lock pass ${pass} call ${i}: ${JSON.stringify(r.counts || {})} remaining ${r.remaining}`);
-    retries += (r.counts && r.counts.retry) || 0;
-    if (!r.remaining) return retries;
+    calls = i;
+    if (!r) {
+      console.error(`[gainztrain-cron] lock pass ${pass} call ${i}: endpoint failed, stopping (re-run by hand)`);
+      await lockAlert(env, pass, `LOCK PASS ${pass} STOPPED: the lock endpoint failed on call ${i}`,
+        [`${remaining == null ? 'unknown' : remaining} customers may still be unlocked.`, 'Run by hand: POST /api/admin/lock-week?limit=3 until remaining is 0.']);
+      return { retries, remaining, stalled: true, calls };
+    }
+    const c = r.counts || {};
+    console.log(`[gainztrain-cron] lock pass ${pass} call ${i}: ${JSON.stringify(c)} remaining ${r.remaining}`);
+    retries += c.retry || 0;
+    const moved = (c.paid || 0) + (c.comp || 0) + (c.declined_cooked || 0) + (c.declined_withheld || 0) + (c.legacy || 0) + (c.voided || 0);
+    stalled = moved > 0 ? 0 : stalled + 1;
+    remaining = r.remaining;
+    if (!r.remaining) return { retries, remaining: 0, stalled: false, calls };
+    if (stalled >= STALL_CALLS) {
+      console.error(`[gainztrain-cron] lock pass ${pass}: ${STALL_CALLS} calls moved nobody, ${remaining} remaining, stopping`);
+      await lockAlert(env, pass, `LOCK PASS ${pass} STALLED: ${STALL_CALLS} calls in a row locked nobody, ${remaining} still unlocked`,
+        ['Something in the batch is being refused on every call (a live skip or a retry).', 'Read the last lock_pass rows in audit_log, then run by hand: POST /api/admin/lock-week?limit=3.']);
+      return { retries, remaining, stalled: true, calls };
+    }
   }
-  console.error(`[gainztrain-cron] lock pass ${pass}: 14 calls and still remaining, check /api/admin/lock-week by hand`);
-  return retries;
+  console.error(`[gainztrain-cron] lock pass ${pass}: ${MAX_CALLS} calls and still remaining, check /api/admin/lock-week by hand`);
+  await lockAlert(env, pass, `LOCK PASS ${pass} INCOMPLETE: ${MAX_CALLS} calls and ${remaining} customers still unlocked`,
+    ['Run by hand: POST /api/admin/lock-week?limit=3 until remaining is 0.']);
+  return { retries, remaining, stalled: false, calls };
+}
+
+// The owners hear about a pass that leaves people behind from the pass itself, not from Jayson at the
+// store or Marissa on the dashboard (both happened 2026-09-19 before anyone in the system said a word).
+async function lockAlert(env, pass, summary, lines) {
+  try { await callJson(env, 'POST', '/api/admin/alert', { summary, lines }); } catch (e) { console.error(`[gainztrain-cron] lock alert failed: ${e}`); }
 }
 
 // Pass 1 at 08:00, then, if anything came back `retry` (Stripe had not drafted it yet, or the charge
@@ -144,11 +175,16 @@ async function lockWeekLoop(env, pass) {
 // cap of 5 cron triggers ACROSS ALL WORKERS (deploy refused a fifth on 2026-09-07), so the earlier
 // plan of a separate 08:30 trigger could not ship. A final pass 3 rides the 13:00 Saturday trigger.
 async function lockWithRetry(env) {
-  const retries = await lockWeekLoop(env, 1);
-  if (retries) {
-    console.log(`[gainztrain-cron] lock pass 1 left ${retries} retry, waiting 5 min for pass 2`);
+  let r = await lockWeekLoop(env, 1);
+  if (r.retries || (r.remaining && !r.stalled)) {
+    console.log(`[gainztrain-cron] lock pass 1 left ${r.retries} retry and ${r.remaining} remaining, waiting 5 min for pass 2`);
     await new Promise((res) => setTimeout(res, 5 * 60 * 1000));
-    await lockWeekLoop(env, 2);
+    r = await lockWeekLoop(env, 2);
+  }
+  if (r.remaining) {
+    await lockAlert(env, 2, `LOCK LEFT ${r.remaining} UNLOCKED after passes 1 and 2`,
+      ['Stripe will charge them itself about an hour after the 07:15 draft, with NO upcharge, and pass 3 at 13:00 UTC will lock from that.',
+       'To get the upcharge on the invoice, run by hand now: POST /api/admin/lock-week?limit=3 until remaining is 0.']);
   }
   await verifyLocked(env);
 }
@@ -216,10 +252,21 @@ export default {
     } else if (hour === 13) {
       // Saturday-only, FIRST: LOCK PASS 3. Same endpoint, idempotent; anyone still without a charge
       // outcome at 13:00 UTC (7am MDT) is handled before the pre-shop audit below judges the week.
-      if (day === SAT) ctx.waitUntil(lockWeekLoop(env, 3));
-      // Daily 13:00 UTC (~7am MDT / 6am MST) — owner morning digest + health probe. Emails the owners
-      // only if OWNER_NOTIFY_ENABLED=true; escalates an SMS if a health signal trips.
-      ctx.waitUntil(hit(env, '/api/admin/daily-digest'));
+      // IN ORDER, NOT IN PARALLEL (2026-09-19): these three were each handed to waitUntil and ran at
+      // once, so the digest said "14 orders / 115 meals" and the audit paged "22 mismatches, no order
+      // at all" for people pass 3 locked ninety seconds later. Jayson and Marissa both read those as
+      // the lock having failed. The lock finishes first; the digest and the audit judge what it left.
+      ctx.waitUntil((async () => {
+        if (day === SAT) { try { await lockWeekLoop(env, 3); } catch (e) { console.error(`[gainztrain-cron] lock pass 3 threw: ${e}`); } }
+        // Daily 13:00 UTC (~7am MDT / 6am MST) — owner morning digest + health probe. Emails the owners
+        // only if OWNER_NOTIFY_ENABLED=true; escalates an SMS if a health signal trips.
+        await hit(env, '/api/admin/daily-digest');
+        // Saturday-only: PRE-SHOP reconciliation, after the lock above. This is the one that catches a
+        // paying customer the kitchen has no order for (Jameson) or an order stuck in 'pending' instead
+        // of 'locked' (Jeferson), i.e. money in, no food out, while Jayson can still act on it. The
+        // post-billing pass at 17:00 UTC catches the money-out-no-money direction.
+        if (day === SAT) await hit(env, '/api/admin/payment-order-audit');
+      })());
       // Refresh customers.last_inbound_* from GHL (plan rev 4, 09-28 build) in passes of 8 until the
       // endpoint reports nothing left; each pass is two GHL reads per customer. Runs AFTER the digest
       // request is issued so a slow GHL cannot delay it; the Monday email reads the cache the next day.
@@ -237,11 +284,6 @@ export default {
       // Idempotent by dedupKey, not by the date maths, so a missed run catches people the next morning
       // rather than skipping them permanently. Add ?dry=1 by hand to see who would be messaged.
       ctx.waitUntil(hit(env, '/api/admin/lifecycle-comms'));
-      // Saturday-only: PRE-SHOP reconciliation, ~2h after the lock and ~2h before billing. This is the
-      // one that catches a paying customer the kitchen has no order for (Jameson) or an order stuck in
-      // 'pending' instead of 'locked' (Jeferson) — i.e. money in, no food out — while Jayson can still
-      // act on it. The post-billing pass at 17:00 UTC catches the money-out-no-money direction.
-      if (day === SAT) ctx.waitUntil(hit(env, '/api/admin/payment-order-audit'));
       // Sunday-only: PICKUP REMINDER, ~7am MDT / 6am MST, hours before the window (functions/_lib/pickup.js).
       // This replaces ~/Library/Scripts/BrycenHQ/gt_pickup_reminder.py, which was deliberately
       // one-shot for 2026-08-23 and therefore sent NOTHING on 08-30 or any Sunday after. Brycen

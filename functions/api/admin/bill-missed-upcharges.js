@@ -34,7 +34,11 @@ export async function onRequestPost(context) {
   const weekOf = url.searchParams.get('week');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(weekOf || '')) return fail(400, 'bad_week', 'Pass ?week=YYYY-MM-DD (the Sunday delivery).');
   const dry = url.searchParams.get('dry') === '1';
-  const limit = Math.max(1, Math.min(50, parseInt(url.searchParams.get('limit') || '', 10) || 25));
+  // BILLED customers per call, not rows looked at. A Pages invocation dies at about 50 subrequests
+  // (D1 reads count) and a billed customer costs about 12; the first live run on 2026-09-19 did 7 and
+  // then failed 9 with "Too many subrequests". Already-billed and comp rows now cost nothing, so the
+  // caller loops this until `billed` and `errors` are both empty, like the lock.
+  const limit = Math.max(1, Math.min(4, parseInt(url.searchParams.get('limit') || '', 10) || 3));
 
   // The missed rows for this week, newest per subscription.
   const missed = await all(env.DB,
@@ -47,27 +51,31 @@ export async function onRequestPost(context) {
     if (subId && d.weekOf === weekOf) bySub.set(subId, { cents: Number(d.cents) || 0, invoiceId: d.invoiceId || null });
   }
 
+  // Two reads up front so a row that will not be billed costs no further subrequests.
+  const billedRows = await all(env.DB,
+    `SELECT entity FROM audit_log WHERE action = 'missed_upcharge_billed' AND detail_json LIKE ?`, `%"weekOf":"${weekOf}"%`);
+  const alreadyBilled = new Set(billedRows.map((r) => String(r.entity || '').replace(/^subscription:/, '')));
+  const orderRows = await all(env.DB, `SELECT subscription_id, status, charge_status FROM orders WHERE week_of = ?`, weekOf);
+  const orderBySub = new Map(orderRows.map((r) => [r.subscription_id, r]));
+
   const memo = upchargeMemo(weekOf);
-  const s = { week_of: weekOf, dry, found: bySub.size, billed: [], skipped: [], errors: [], total_cents: 0 };
-  let handled = 0;
+  const s = { week_of: weekOf, dry, found: bySub.size, billed: [], skipped: [], errors: [], total_cents: 0, remaining: 0 };
   for (const [subId, m] of bySub) {
-    if (handled >= limit) break;
-    handled++;
+    const order = orderBySub.get(subId) || null;
+    const cheap = missedUpchargePlan({ audited: m.cents, order, alreadyRow: alreadyBilled.has(subId) ? { id: 1 } : null, lines: [{ cents: 1 }] });
+    if (!cheap.bill) { s.skipped.push({ sub: subId, reason: cheap.reason, audited_cents: m.cents }); continue; }
+    if (s.billed.length + s.errors.length >= limit) { s.remaining++; continue; }
     try {
       const sub = await one(env.DB,
         `SELECT s.id, s.customer_id, c.email, c.first_name, c.stripe_customer_id, c.ghl_contact_id
            FROM subscriptions s JOIN customers c ON c.id = s.customer_id WHERE s.id = ?`, subId);
       if (!sub) { s.skipped.push({ sub: subId, reason: 'no_subscription' }); continue; }
       const who = `${sub.first_name || sub.email} (${sub.email})`;
-      const order = await one(env.DB, `SELECT status, charge_status FROM orders WHERE subscription_id = ? AND week_of = ?`, subId, weekOf);
-      const alreadyRow = await one(env.DB,
-        `SELECT id FROM audit_log WHERE action = 'missed_upcharge_billed' AND entity = ? AND detail_json LIKE ? LIMIT 1`,
-        `subscription:${subId}`, `%"weekOf":"${weekOf}"%`);
       const sel = await all(env.DB,
         `SELECT meal_position, meal_name, qty, upcharge_per_meal_cents FROM meal_selections WHERE subscription_id = ? AND week_of = ? ORDER BY meal_position`,
         subId, weekOf);
       const lines = upchargeLines(sel);
-      const plan = missedUpchargePlan({ audited: m.cents, order, alreadyRow, lines });
+      const plan = missedUpchargePlan({ audited: m.cents, order, alreadyRow: null, lines });
       if (!plan.bill) { s.skipped.push({ who, reason: plan.reason, audited_cents: m.cents }); continue; }
       if (!sub.stripe_customer_id) { s.skipped.push({ who, reason: 'no_stripe_customer', audited_cents: m.cents }); continue; }
 

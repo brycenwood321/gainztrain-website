@@ -500,6 +500,22 @@ export const TEMPLATES = {
     sms: `Gainz Train: you were charged ${money(d.amount)} for this week's meals. 💪`,
   }),
 
+  // 2026-09-19 one-time cleanup: the specialty upcharge missed when Stripe finalized the weekly invoice
+  // before the lock reached it. Billed as its own invoice; this receipt names every meal it covers.
+  upcharge_receipt: (d, env) => ({
+    subject: `Gainz Train — ${money(d.amount)} specialty upcharge for your ${prettyDate(d.weekOf)} delivery`,
+    html: layout(env, {
+      heading: 'One small charge we missed this morning',
+      intro: `This morning's weekly charge covered your meals, but the specialty upcharge on some of them was left off by mistake on our side. We just charged ${money(d.amount)} for that upcharge only. Here is exactly what it covers:`,
+      rows: [
+        ...((d.meals || []).map((m) => [`${m.qty}x ${m.name}`, money(m.cents)])),
+        ['Total', money(d.amount)],
+      ],
+      note: 'Nothing else about your order changes. Your meals are locked and headed to prep as planned.',
+      cta: d.invoiceUrl ? { label: 'View receipt', href: d.invoiceUrl } : { label: 'Your account', href: link(env, '/app/manage/') },
+    }),
+  }),
+
   payment_failed: (d, env) => ({
     subject: 'Your card was declined — update it to keep your meals',
     html: layout(env, {

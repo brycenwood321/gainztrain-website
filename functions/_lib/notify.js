@@ -16,7 +16,7 @@ import { TEMPLATES } from './notify_templates.js';
 // 'account' = self-service confirmations. 'marketing' = menu drops / reminders / renewal heads-up.
 const PREF_CLASS = {
   welcome: 'critical', password_changed: 'critical',
-  order_receipt_first: 'critical', renewal_receipt: 'critical', payment_failed: 'critical',
+  order_receipt_first: 'critical', renewal_receipt: 'critical', upcharge_receipt: 'critical', payment_failed: 'critical',
   payment_failed_final: 'critical', payment_recovered: 'critical', refund_issued: 'critical',
   subscription_ended: 'critical', card_expiring: 'critical',
   order_confirmed: 'critical', order_updated: 'critical', order_locked: 'critical', order_autofilled: 'critical',
@@ -104,7 +104,7 @@ const CATEGORY = {
   welcome: 'account', password_changed: 'account', paused: 'account', resumed: 'account',
   canceled: 'account', reactivated: 'account', tier_changed: 'account', delivery_changed: 'account',
   goal_changed: 'account',
-  order_receipt_first: 'billing', renewal_receipt: 'billing', payment_failed: 'billing',
+  order_receipt_first: 'billing', renewal_receipt: 'billing', upcharge_receipt: 'billing', payment_failed: 'billing',
   payment_failed_final: 'billing', payment_recovered: 'billing', refund_issued: 'billing',
   subscription_ended: 'billing', renewal_upcoming: 'billing', card_expiring: 'billing',
   first_week_checkin: 'account', checkout_abandoned: 'account', winback: 'account', referral_launch: 'account',
